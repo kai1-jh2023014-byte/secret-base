@@ -55,22 +55,34 @@ dotnet new install Microsoft.WindowsAppSDK.WinUI.CSharp.Templates
 
 Optional: JetBrains Rider 2026.1
 
-## Build
+## Development
+
+### Run
 
 ```powershell
-dotnet build SecretBase.sln -c Debug -p:Platform=x64
+.\run.ps1
 ```
 
-## Test
+In **Rider 2026.1**, use the shared Run/Debug configuration named **Secret Base** (stored in `.run/`, not `.idea/`).
+
+### Build
 
 ```powershell
-dotnet test SecretBase.sln -c Debug
+.\build.ps1
 ```
 
-## Run
+### Test
+
+```powershell
+.\test.ps1
+```
+
+Equivalent `dotnet` commands (same flags the scripts use):
 
 ```powershell
 dotnet run --project src/SecretBase.App/SecretBase.App.csproj -c Debug -p:Platform=x64
+dotnet build SecretBase.sln -c Debug -p:Platform=x64
+dotnet test SecretBase.sln -c Debug
 ```
 
 Use **Exit to Windows Desktop** (or close the window) to leave Secret Base. This only ends the app process.

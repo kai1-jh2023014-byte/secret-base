@@ -12,6 +12,7 @@ obj/
 *.DotSettings.user
 
 ## Rider / JetBrains
+# Keep personal workspace local; shared Run/Debug configs live in `.run/` (committed).
 .idea/
 *.iml
 

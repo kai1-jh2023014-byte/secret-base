@@ -17,3 +17,7 @@
 **Decision:** Ship solution skeleton + empty Desktop host before Clock/Text/Launcher.
 
 **Why:** Establish Core/Platform separation and safe-exit path first so later features cannot accidentally couple to Win32.
+
+## 2026-08-11 — Rider run configuration sharing
+
+See [2026-08-11-rider-run-configuration.md](2026-08-11-rider-run-configuration.md).
