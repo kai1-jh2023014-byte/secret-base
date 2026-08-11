@@ -7,52 +7,47 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d">
 
-    <Grid Padding="48">
-        <Grid.Background>
-            <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                <GradientStop Color="#FF1A2332" Offset="0" />
-                <GradientStop Color="#FF243447" Offset="0.55" />
-                <GradientStop Color="#FF2F4A3C" Offset="1" />
-            </LinearGradientBrush>
-        </Grid.Background>
+    <Grid x:Name="RootGrid">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
 
-        <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="16" MaxWidth="720">
-            <TextBlock
-                x:Name="BrandText"
-                Text="Secret Base"
-                FontSize="56"
-                FontWeight="SemiBold"
-                Foreground="#FFF4F0E6"
-                HorizontalAlignment="Center" />
-            <TextBlock
-                Text="Your personal desktop environment — foundation only (v0.1)"
-                FontSize="18"
-                Foreground="#FFC9D2C5"
-                HorizontalAlignment="Center"
-                TextWrapping="WrapWholeWords"
-                TextAlignment="Center" />
-            <TextBlock
-                x:Name="StatusText"
-                FontSize="13"
-                Foreground="#FF9AA7B2"
-                HorizontalAlignment="Center"
-                TextWrapping="WrapWholeWords"
-                TextAlignment="Center"
-                Margin="0,12,0,0" />
+        <Grid
+            x:Name="TopBar"
+            Padding="20,12"
+            ColumnSpacing="12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <StackPanel Spacing="2">
+                <TextBlock
+                    x:Name="BrandText"
+                    Text="Secret Base"
+                    FontSize="22"
+                    FontWeight="SemiBold"
+                    Foreground="#FFF4F0E6" />
+                <TextBlock
+                    x:Name="StatusText"
+                    FontSize="12"
+                    Foreground="#FF9AA7B2"
+                    TextWrapping="WrapWholeWords" />
+            </StackPanel>
+
             <Button
                 x:Name="ExitButton"
+                Grid.Column="1"
                 Content="Exit to Windows Desktop"
-                HorizontalAlignment="Center"
-                Margin="0,24,0,0"
                 Click="ExitButton_Click"
-                Padding="20,10" />
-            <TextBlock
-                Text="Closing Secret Base does not change Explorer, Taskbar, or Windows settings."
-                FontSize="12"
-                Foreground="#FF7F8B96"
-                HorizontalAlignment="Center"
-                TextWrapping="WrapWholeWords"
-                TextAlignment="Center" />
-        </StackPanel>
+                Padding="16,8"
+                VerticalAlignment="Center" />
+        </Grid>
+
+        <Canvas
+            x:Name="WidgetCanvas"
+            Grid.Row="1"
+            Background="Transparent" />
     </Grid>
 </Page>

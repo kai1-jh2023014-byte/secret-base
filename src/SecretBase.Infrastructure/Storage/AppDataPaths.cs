@@ -1,7 +1,7 @@
 namespace SecretBase.Infrastructure.Storage;
 
 /// <summary>
-/// Resolves Secret Base local data roots. Persistence format (split JSON) lands in a later milestone.
+/// Resolves Secret Base local data roots for split JSON persistence.
 /// </summary>
 public static class AppDataPaths
 {

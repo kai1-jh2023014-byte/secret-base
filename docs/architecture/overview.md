@@ -29,6 +29,8 @@ Highest principle:
 - Closing the window / Exit button ends the process only.
 - No Explorer hooks, no Taskbar replacement, no shell registry mutation.
 
-## Next milestones (not in this commit scope)
+## Next milestones (partially started)
 
-Clock → Text → App Launcher → Drag & Drop → Resize → Persistence → Theme → WebContent
+- ✅ Clock Widget (reference implementation)
+- Text → App Launcher → Drag polish → Theme editor → WebContent
+

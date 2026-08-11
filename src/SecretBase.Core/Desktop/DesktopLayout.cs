@@ -1,12 +1,26 @@
+using SecretBase.Core.Widgets;
+
 namespace SecretBase.Core.Desktop;
 
 /// <summary>
-/// Desktop session state for the active room. Widget instances arrive in a later milestone.
+/// Desktop session state for a Room. Widget instances are UI-agnostic.
 /// </summary>
 public sealed class DesktopLayout
 {
-    public required RoomId RoomId { get; init; }
+    public RoomId RoomId { get; set; } = RoomId.DefaultRoomId;
 
     /// <summary>Schema version for layout JSON migrations.</summary>
-    public int SchemaVersion { get; init; } = 1;
+    public int SchemaVersion { get; set; } = 1;
+
+    public List<WidgetInstance> Widgets { get; set; } = [];
+
+    public static DesktopLayout CreateDefault()
+    {
+        return new DesktopLayout
+        {
+            RoomId = RoomId.DefaultRoomId,
+            SchemaVersion = 1,
+            Widgets = [DefaultWidgetFactory.CreateDefaultClock()]
+        };
+    }
 }

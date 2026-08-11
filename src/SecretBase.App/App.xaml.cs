@@ -1,6 +1,8 @@
 ﻿using Microsoft.UI.Xaml;
 using SecretBase.Core;
+using SecretBase.Core.Time;
 using SecretBase.Infrastructure.Logging;
+using SecretBase.Infrastructure.Persistence;
 using SecretBase.Infrastructure.Storage;
 using SecretBase.Platform.Abstractions;
 using SecretBase.Platform.Windows;
@@ -35,7 +37,15 @@ public partial class App : Application
             "compatibility",
             $"OS={info.OsDescription}; OSVersion={info.OsVersion}; Arch={info.OsArchitecture}; DotNet={info.DotNetVersion}; WASDK={info.WindowsAppSdkPackageVersion}");
 
-        _window = new MainWindow(_logger, _safeExit, info);
+        var pageArgs = new DesktopPageArgs(
+            Logger: _logger,
+            SafeExit: _safeExit,
+            Compatibility: info,
+            LayoutStore: new JsonLayoutStore(),
+            ThemeStore: new JsonThemeStore(),
+            TimeProvider: new SystemTimeProvider());
+
+        _window = new MainWindow(pageArgs);
         _window.Closed += (_, _) =>
         {
             _logger?.Info("lifecycle", "Main window closed. Returning to normal Windows desktop.");

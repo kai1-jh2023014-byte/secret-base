@@ -2,8 +2,8 @@
 
 > Make your PC feel like *your* secret base — a Personal Desktop Environment for Windows.
 
-**v0.1 milestone status:** foundation only.  
-You can launch a Secret Base Desktop window and safely return to the normal Windows desktop. Widgets, persistence, themes, and Web content come next.
+**v0.1 milestone status:** foundation + Clock Widget (reference widget).  
+You can launch Secret Base, see a live clock on the Desktop, move/resize it, and restore layout after restart.
 
 ## Principles
 
@@ -97,21 +97,20 @@ Use **Exit to Windows Desktop** (or close the window) to leave Secret Base. This
   settings\   # reserved
 ```
 
-## Roadmap after this foundation
+## Roadmap after Clock
 
-1. Clock Widget  
-2. Text Widget  
-3. App Launcher Widget  
-4. Drag & Drop  
-5. Resize  
-6. Persistence (JSON)  
-7. Theme system  
-8. Web Content Widget  
+1. Text Widget  
+2. App Launcher Widget  
+3. Drag & Drop polish  
+4. Theme editor UX  
+5. Web Content Widget  
+6. Room switching  
 
 ## Architecture docs
 
 - [Overview](docs/architecture/overview.md)
 - [Tech stack](docs/architecture/tech-stack.md)
+- [Widget architecture](docs/architecture/widget-architecture.md)
 - [Security boundaries](docs/architecture/security-boundaries.md)
 - [Windows Update resilience](docs/architecture/windows-update-resilience.md)
 - [Decision log](docs/decisions/README.md)

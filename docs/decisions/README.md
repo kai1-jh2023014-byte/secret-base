@@ -21,3 +21,9 @@
 ## 2026-08-11 — Rider run configuration sharing
 
 See [2026-08-11-rider-run-configuration.md](2026-08-11-rider-run-configuration.md).
+
+## 2026-08-11 — Clock as reference widget
+
+**Decision:** Implement Clock first with Core models + Infrastructure JSON + Widgets WinUI view + App host chrome.
+
+**Why:** Establishes `WidgetInstance`, theme tokens, layout persistence, and drag/resize host patterns before adding more widget types.
