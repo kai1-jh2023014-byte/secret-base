@@ -1,0 +1,50 @@
+## .NET
+bin/
+obj/
+[Bb]uild/
+[Ll]og/
+[Ll]ogs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+.vs/
+*.DotSettings.user
+
+## Rider / JetBrains
+.idea/
+*.iml
+
+## OS
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+## Secret Base local data (never commit user desktops)
+.secret-base/
+**/AppData/
+
+## Publish / packages
+*.nupkg
+*.snupkg
+publish/
+artifacts/
+
+## Test results
+TestResults/
+coverage/
+*.coverage
+*.coveragexml
+
+## Secrets / credentials (never commit)
+.env
+.env.*
+*.pem
+*.key
+*.pfx
+*.p12
+credentials.json
+**/secrets/
+
+## Cursor / local tooling
+.cursor/
