@@ -8,11 +8,11 @@ It does **not** replace Explorer, the Taskbar, or the Windows shell.
 
 ```text
 Desktop
-  ├── Wallpaper          ← visible through transparent overlay
-  ├── Secret Base Overlay
-  │     ├── Clock Widget ← floating
+  ├── Wallpaper                 ← visible through transparent overlay
+  ├── Secret Base Overlay       ← below other apps (HWND_BOTTOM)
+  │     ├── Clock Widget
   │     └── Text Widget
-  └── Other app windows / Taskbar
+  └── Other application windows / Taskbar
 ```
 
 Normal UX: **widgets only**. No title, status strip, or Exit button on the wallpaper.
@@ -22,15 +22,23 @@ Normal UX: **widgets only**. No title, status strip, or Exit button on the wallp
 | API | Purpose |
 |-----|---------|
 | `OverlappedPresenter.SetBorderAndTitleBar(false, false)` | Remove system border + title bar |
-| `OverlappedPresenter` flags (`IsResizable` / min / max / always-on-top) | Chromeless, non-topmost host |
-| `DisplayArea.GetFromWindowId` + `WorkArea` | Size to the work area (above the Taskbar) |
-| `AppWindow.MoveAndResize` | Apply work-area bounds |
-| `AppWindow.IsShownInSwitchers` | Keep Alt+Tab / taskbar entry for Safe Exit discoverability |
-| `Window.SystemBackdrop = null` | Avoid Mica/Acrylic fill (no opaque system material) |
-| Documented `DwmExtendFrameIntoClientArea` (`dwmapi.dll`) | Allow wallpaper to show through empty client area |
-| Transparent page / canvas brushes | Keep XAML layer clear over the DWM frame |
+| `OverlappedPresenter` flags | Chromeless, non-topmost host |
+| `DisplayArea.WorkArea` + `AppWindow.MoveAndResize` | Fit work area (above Taskbar) |
+| `AppWindow.IsShownInSwitchers` | Keep Alt+Tab discoverability for Safe Exit |
+| Transparent `SystemBackdrop` (ABI cast brush) | Clear host fill for wallpaper |
+| `DwmExtendFrameIntoClientArea` | Documented DWM frame into client |
+| `DwmEnableBlurBehindWindow` + empty region | Documented DWM clear of black client fill |
+| `SetWindowPos(..., HWND_BOTTOM, ...)` | Keep overlay under other top-level apps |
+| Transparent page / canvas brushes | XAML layer stays clear |
 
-All of the above are public Windows App SDK / documented Win32 APIs. They live behind `IDesktopOverlayService` → `AppWindowDesktopOverlayService` in `SecretBase.Platform.Windows`.
+All of the above are public Windows App SDK / documented Win32 APIs in `IDesktopOverlayService` → `AppWindowDesktopOverlayService`.
+
+## Z-order policy
+
+- Overlay is **not** always-on-top.
+- On configure and on each activation, Platform calls documented `SetWindowPos` with `HWND_BOTTOM` + `SWP_NOACTIVATE`.
+- Result: widgets sit above the wallpaper, **under** normal applications.
+- Does **not** use Explorer WorkerW / shell subclassing.
 
 ## UI chrome (widgets-only)
 
@@ -49,20 +57,11 @@ All of the above are public Windows App SDK / documented Win32 APIs. They live b
 - Shell DLL patching / registry shell mutation
 - Admin elevation
 - Replacing the Windows shell
-- Click-through of transparent pixels (follow-up; not in this milestone)
+- Click-through of transparent pixels (follow-up)
 
 ## Click-through limitation (honest)
 
-WinUI 3 does **not** currently expose a first-party “pass clicks through transparent pixels” API.
-
-This milestone therefore:
-
-- Makes the host **visually** transparent / chromeless
-- Fits the **work area** (does not cover the Taskbar)
-- Keeps **IsAlwaysOnTop = false** so other apps stay usable above the overlay
-- Does **not** implement WS_EX_TRANSPARENT / custom `WM_NCHITTEST` hit-testing yet
-
-Empty overlay regions may still receive input while Secret Base is the topmost window in Z-order.
+Empty overlay regions may still receive input while Secret Base occupies that hit-test region. Pixel click-through is deferred.
 
 ## Safe Exit
 

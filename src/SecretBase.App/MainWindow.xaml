@@ -9,6 +9,6 @@
     Title="Secret Base"
     mc:Ignorable="d">
 
-    <!-- No SystemBackdrop material; transparency via DWM + transparent page content. -->
+    <!-- TransparentSystemBackdrop applied in code; paired with DWM in Platform.Windows. -->
     <Frame x:Name="RootFrame" Background="Transparent" />
 </Window>

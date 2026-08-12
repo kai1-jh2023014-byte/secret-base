@@ -1,5 +1,6 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using SecretBase.App.Desktop;
 using SecretBase.Core.Time;
 using SecretBase.Infrastructure.Logging;
 using SecretBase.Infrastructure.Persistence;
@@ -10,25 +11,42 @@ namespace SecretBase.App;
 
 public sealed partial class MainWindow : Window
 {
+    private readonly IDesktopOverlayService _overlayService;
+    private readonly DesktopOverlayTarget _overlayTarget;
+
     public MainWindow(DesktopPageArgs args, IDesktopOverlayService overlayService)
     {
         InitializeComponent();
 
+        _overlayService = overlayService;
+
         // Chromeless content — title bar removed via OverlappedPresenter in Platform.Windows.
         ExtendsContentIntoTitleBar = false;
-        // No SystemBackdrop material. Wallpaper visibility comes from documented DWM frame
-        // extension in Platform.Windows + transparent page/canvas brushes.
-        // (Custom CompositionColorBrush backdrops hit Microsoft.UI vs Windows.UI type conflicts on WASDK 2.3.)
-        SystemBackdrop = null;
+        SystemBackdrop = new TransparentSystemBackdrop();
         AppWindow.SetIcon("Assets/AppIcon.ico");
 
         var hwnd = WindowNative.GetWindowHandle(this);
-        overlayService.ApplyChromelessWorkAreaOverlay(
-            new DesktopOverlayTarget(
-                AppWindowId: AppWindow.Id.Value,
-                WindowHandle: hwnd));
+        _overlayTarget = new DesktopOverlayTarget(
+            AppWindowId: AppWindow.Id.Value,
+            WindowHandle: hwnd);
+
+        _overlayService.ApplyChromelessWorkAreaOverlay(_overlayTarget);
+
+        // When Windows activates us (e.g. click a widget), immediately return to HWND_BOTTOM
+        // so normal applications stay above the desktop overlay layer.
+        Activated += OnActivated;
 
         RootFrame.Navigate(typeof(DesktopPage), args);
+    }
+
+    private void OnActivated(object sender, WindowActivatedEventArgs args)
+    {
+        if (args.WindowActivationState == WindowActivationState.Deactivated)
+        {
+            return;
+        }
+
+        _overlayService.KeepBehindApplicationWindows(_overlayTarget);
     }
 }
 

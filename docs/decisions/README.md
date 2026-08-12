@@ -45,3 +45,9 @@ See [2026-08-11-rider-run-configuration.md](2026-08-11-rider-run-configuration.m
 **Decision:** Hide brand/status/Exit chrome in normal overlay UX; keep Safe Exit via **Ctrl+Shift+Q** and optional debug chrome via **Ctrl+Shift+D**. Soften `WidgetFrame` chrome (hover-emphasized grip/resize).
 
 **Why:** Users should see wallpaper + floating widgets, not an app window. Recovery/exit must remain without putting chrome on the desktop permanently.
+
+## 2026-08-12 — Transparent host + below-apps Z-order
+
+**Decision:** Restore transparent backdrop via WinRT ABI cast (`Microsoft.UI.Composition` brush → `Windows.UI.Composition.CompositionBrush`), keep documented `DwmExtendFrameIntoClientArea` + `DwmEnableBlurBehindWindow` (empty region) to clear black fill, and park the host with documented `SetWindowPos(HWND_BOTTOM)` on configure/activate.
+
+**Why:** `SystemBackdrop = null` alone left a black client. Overlay must sit under other apps without Explorer WorkerW.
