@@ -2,8 +2,8 @@
 
 > Make your PC feel like *your* secret base — a Personal Desktop Environment for Windows.
 
-**v0.1 milestone status:** foundation + Clock + Text + **Desktop Overlay** (chromeless work-area host).  
-Secret Base runs as a borderless overlay above the wallpaper; widgets remain interactive; Exit returns to the normal desktop.
+**v0.1 milestone status:** foundation + Clock + Text + Desktop Overlay (**widgets-only UX**).  
+Wallpaper shows through the host; widgets float on the desktop; Exit via **Ctrl+Shift+Q** (debug chrome: **Ctrl+Shift+D**).
 
 ## Principles
 
@@ -85,7 +85,7 @@ dotnet build SecretBase.sln -c Debug -p:Platform=x64
 dotnet test SecretBase.sln -c Debug
 ```
 
-Use **Exit to Windows Desktop** (or close the window) to leave Secret Base. This only ends the app process.
+Use **Ctrl+Shift+Q** to leave Secret Base (Safe Exit). **Ctrl+Shift+D** toggles developer chrome. Closing the process returns you to the normal Windows desktop.
 
 ## Local data
 

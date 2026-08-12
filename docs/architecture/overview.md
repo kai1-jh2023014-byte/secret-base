@@ -33,7 +33,7 @@ Highest principle:
 
 - ✅ Clock Widget (reference implementation)
 - ✅ Text Widget
-- ✅ Desktop Overlay (chromeless work-area host; public AppWindow APIs)
+- ✅ Desktop Overlay (chromeless work-area host; widgets-only UX)
 - App Launcher → Drag polish → Theme editor → WebContent → Room switching
 - Follow-up: click-through empty overlay regions (public-API-safe approach only)
 

@@ -8,12 +8,14 @@ It does **not** replace Explorer, the Taskbar, or the Windows shell.
 
 ```text
 Desktop
-  ├── Wallpaper
-  ├── Secret Base Overlay   ← chromeless host + widgets
+  ├── Wallpaper          ← visible through transparent overlay
+  ├── Secret Base Overlay
+  │     ├── Clock Widget ← floating
+  │     └── Text Widget
   └── Other app windows / Taskbar
 ```
 
-Widgets should feel like they live on the desktop; the host window should not look like a normal app frame.
+Normal UX: **widgets only**. No title, status strip, or Exit button on the wallpaper.
 
 ## Public APIs used (v0.1 overlay)
 
@@ -29,6 +31,16 @@ Widgets should feel like they live on the desktop; the host window should not lo
 
 All of the above are public Windows App SDK / documented Win32 APIs. They live behind `IDesktopOverlayService` → `AppWindowDesktopOverlayService` in `SecretBase.Platform.Windows`.
 
+## UI chrome (widgets-only)
+
+| Element | Normal UX | Developer recovery |
+|---------|-----------|--------------------|
+| Page / canvas background | Transparent | — |
+| Title / brand text | Hidden | — |
+| Status / widget count | Hidden | **Ctrl+Shift+D** shows debug chrome |
+| Exit button | Hidden | Debug chrome **Exit**, or **Ctrl+Shift+Q** |
+| `WidgetFrame` | Subtle grip + resize (stronger on hover) | Same |
+
 ## Explicitly out of scope / forbidden
 
 - Explorer.exe injection / subclassing / WorkerW tricks
@@ -36,6 +48,7 @@ All of the above are public Windows App SDK / documented Win32 APIs. They live b
 - Shell DLL patching / registry shell mutation
 - Admin elevation
 - Replacing the Windows shell
+- Click-through of transparent pixels (follow-up; not in this milestone)
 
 ## Click-through limitation (honest)
 
@@ -48,14 +61,10 @@ This milestone therefore:
 - Keeps **IsAlwaysOnTop = false** so other apps stay usable above the overlay
 - Does **not** implement WS_EX_TRANSPARENT / custom `WM_NCHITTEST` hit-testing yet
 
-Empty overlay regions may still receive input while Secret Base is the topmost window in Z-order. Improving pass-through without violating the public-API policy is a follow-up.
-
-## UI chrome
-
-- No standard title bar / caption buttons
-- Compact floating **Exit** control on `DesktopPage` (not window chrome)
-- Widget move/resize remains on `WidgetFrame`
+Empty overlay regions may still receive input while Secret Base is the topmost window in Z-order.
 
 ## Safe Exit
 
-Unchanged: Exit ends the Secret Base process only. Windows desktop / Explorer remain intact.
+- **Ctrl+Shift+Q** — always available
+- Debug chrome **Exit** — after **Ctrl+Shift+D**
+- Alt+Tab / taskbar still list Secret Base (process exit leaves Explorer intact)

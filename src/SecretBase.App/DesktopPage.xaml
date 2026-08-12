@@ -8,21 +8,37 @@
     Background="Transparent"
     mc:Ignorable="d">
 
-    <!-- Transparent desktop layer: only widgets + compact chrome should read as UI. -->
+    <!--
+      Widgets-only desktop layer.
+      Debug chrome is Collapsed by default; toggle with Ctrl+Shift+D.
+      Safe Exit: Ctrl+Shift+Q (also available from debug chrome).
+    -->
     <Grid x:Name="RootGrid" Background="Transparent">
+        <Grid.KeyboardAccelerators>
+            <KeyboardAccelerator
+                Key="Q"
+                Modifiers="Control,Shift"
+                Invoked="ExitAccelerator_Invoked" />
+            <KeyboardAccelerator
+                Key="D"
+                Modifiers="Control,Shift"
+                Invoked="DebugChromeAccelerator_Invoked" />
+        </Grid.KeyboardAccelerators>
+
         <Canvas
             x:Name="WidgetCanvas"
             Background="Transparent" />
 
-        <!-- Compact overlay chrome (not a window title bar). -->
+        <!-- Developer / recovery chrome — hidden in normal overlay UX. -->
         <Border
-            x:Name="OverlayChrome"
+            x:Name="DebugChrome"
+            Visibility="Collapsed"
             HorizontalAlignment="Right"
             VerticalAlignment="Top"
             Margin="0,16,16,0"
             Padding="10,8"
             CornerRadius="10"
-            Background="#66243447">
+            Background="#99243447">
             <StackPanel Orientation="Horizontal" Spacing="8">
                 <TextBlock
                     x:Name="StatusText"
@@ -35,7 +51,7 @@
                     Content="Exit"
                     Click="ExitButton_Click"
                     Padding="12,4"
-                    ToolTipService.ToolTip="Exit Secret Base and return to the normal Windows desktop" />
+                    ToolTipService.ToolTip="Exit Secret Base (Ctrl+Shift+Q)" />
             </StackPanel>
         </Border>
     </Grid>

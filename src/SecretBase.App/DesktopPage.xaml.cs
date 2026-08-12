@@ -1,5 +1,6 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Navigation;
 using SecretBase.App.Desktop;
@@ -28,7 +29,9 @@ public sealed partial class DesktopPage : Page
     private ITimeProvider? _timeProvider;
     private DesktopLayout? _layout;
     private ThemeDefinition? _theme;
+    private CompatibilityInfo? _compatibility;
     private readonly List<IDisposable> _widgetDisposables = [];
+    private bool _debugChromeVisible;
 
     public DesktopPage()
     {
@@ -42,6 +45,7 @@ public sealed partial class DesktopPage : Page
 
         if (e.Parameter is not DesktopPageArgs args)
         {
+            ShowDebugChrome(forceVisible: true);
             StatusText.Text = "Desktop failed to start: missing bootstrap args.";
             return;
         }
@@ -51,32 +55,63 @@ public sealed partial class DesktopPage : Page
         _layoutStore = args.LayoutStore;
         _themeStore = args.ThemeStore;
         _timeProvider = args.TimeProvider;
+        _compatibility = args.Compatibility;
 
         _theme = _themeStore.LoadOrCreateDefault();
         _layout = _layoutStore.LoadOrCreateDefault(RoomId.DefaultRoomId);
         EnsureSeedTextWidget(_layout);
 
         ApplyDesktopTheme(_theme);
-        StatusText.Text =
-            $"{AppInfo.Name} · {_layout.Widgets.Count} widgets · v{args.Compatibility.AppVersion}";
+        RefreshDebugStatus();
+        // Normal UX: widgets only — no title / status / Exit chrome on the wallpaper.
+        ShowDebugChrome(forceVisible: false);
 
         RenderWidgets();
         _logger.Info("desktop", $"Overlay desktop shown for room '{_layout.RoomId}' with {_layout.Widgets.Count} widget(s).");
         _logger.Info("widget", "Clock and Text widget hosts ready.");
-        _logger.Info("overlay", "Chromeless desktop overlay active (Explorer/Taskbar untouched).");
+        _logger.Info("overlay", "Widgets-only overlay UX (debug chrome hidden; Ctrl+Shift+Q exit, Ctrl+Shift+D toggle debug).");
     }
 
     private void ApplyDesktopTheme(ThemeDefinition theme)
     {
-        // Overlay root stays transparent so the Windows wallpaper shows through empty space.
         RootGrid.Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
         WidgetCanvas.Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
 
         StatusText.Foreground = ThemePainter.Brush(theme.ForegroundMuted);
         StatusText.FontFamily = new FontFamily(theme.FontFamily);
+        DebugChrome.Background = ThemePainter.Brush(theme.WidgetBackground, ThemePainter.EffectiveWidgetOpacity(theme));
+        DebugChrome.CornerRadius = new CornerRadius(Math.Max(8, theme.CornerRadius / 2));
+    }
 
-        OverlayChrome.Background = ThemePainter.Brush(theme.WidgetBackground, ThemePainter.EffectiveWidgetOpacity(theme));
-        OverlayChrome.CornerRadius = new CornerRadius(Math.Max(8, theme.CornerRadius / 2));
+    private void RefreshDebugStatus()
+    {
+        if (_layout is null || _compatibility is null)
+        {
+            return;
+        }
+
+        StatusText.Text =
+            $"{AppInfo.Name} · {_layout.Widgets.Count} widgets · v{_compatibility.AppVersion} · Ctrl+Shift+Q exit";
+    }
+
+    private void ShowDebugChrome(bool forceVisible)
+    {
+        _debugChromeVisible = forceVisible;
+        DebugChrome.Visibility = forceVisible ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void ToggleDebugChrome()
+    {
+        ShowDebugChrome(!_debugChromeVisible);
+        if (_debugChromeVisible)
+        {
+            RefreshDebugStatus();
+            _logger?.Info("overlay", "Debug chrome shown (Ctrl+Shift+D).");
+        }
+        else
+        {
+            _logger?.Info("overlay", "Debug chrome hidden (Ctrl+Shift+D).");
+        }
     }
 
     private void RenderWidgets()
@@ -148,8 +183,6 @@ public sealed partial class DesktopPage : Page
 
     private void EnsureSeedTextWidget(DesktopLayout layout)
     {
-        // Temporary until Add Widget UI exists: make sure a Text widget is present
-        // without rewriting Clock-only layouts' existing geometry.
         if (layout.Widgets.Any(w => string.Equals(w.Type, WidgetTypes.Text, StringComparison.Ordinal)))
         {
             return;
@@ -185,11 +218,26 @@ public sealed partial class DesktopPage : Page
         }
     }
 
-    private void ExitButton_Click(object sender, RoutedEventArgs e)
+    private void RequestSafeExit(string reason)
     {
         PersistLayoutNow();
-        _logger?.Info("desktop", "User chose Exit to Windows Desktop.");
+        _logger?.Info("desktop", reason);
         _safeExit?.RequestExit();
+    }
+
+    private void ExitButton_Click(object sender, RoutedEventArgs e) =>
+        RequestSafeExit("User chose Exit from debug chrome.");
+
+    private void ExitAccelerator_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        args.Handled = true;
+        RequestSafeExit("User requested Safe Exit via Ctrl+Shift+Q.");
+    }
+
+    private void DebugChromeAccelerator_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        args.Handled = true;
+        ToggleDebugChrome();
     }
 
     private void OnUnloaded(object sender, RoutedEventArgs e)
