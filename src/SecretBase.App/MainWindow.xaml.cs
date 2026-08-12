@@ -1,6 +1,5 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
-using SecretBase.App.Desktop;
 using SecretBase.Core.Time;
 using SecretBase.Infrastructure.Logging;
 using SecretBase.Infrastructure.Persistence;
@@ -17,7 +16,10 @@ public sealed partial class MainWindow : Window
 
         // Chromeless content — title bar removed via OverlappedPresenter in Platform.Windows.
         ExtendsContentIntoTitleBar = false;
-        SystemBackdrop = new TransparentSystemBackdrop();
+        // No SystemBackdrop material. Wallpaper visibility comes from documented DWM frame
+        // extension in Platform.Windows + transparent page/canvas brushes.
+        // (Custom CompositionColorBrush backdrops hit Microsoft.UI vs Windows.UI type conflicts on WASDK 2.3.)
+        SystemBackdrop = null;
         AppWindow.SetIcon("Assets/AppIcon.ico");
 
         var hwnd = WindowNative.GetWindowHandle(this);

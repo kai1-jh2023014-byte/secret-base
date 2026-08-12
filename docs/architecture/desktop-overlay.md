@@ -26,8 +26,9 @@ Normal UX: **widgets only**. No title, status strip, or Exit button on the wallp
 | `DisplayArea.GetFromWindowId` + `WorkArea` | Size to the work area (above the Taskbar) |
 | `AppWindow.MoveAndResize` | Apply work-area bounds |
 | `AppWindow.IsShownInSwitchers` | Keep Alt+Tab / taskbar entry for Safe Exit discoverability |
-| Custom `SystemBackdrop` (transparent brush) | Transparent host backdrop |
+| `Window.SystemBackdrop = null` | Avoid Mica/Acrylic fill (no opaque system material) |
 | Documented `DwmExtendFrameIntoClientArea` (`dwmapi.dll`) | Allow wallpaper to show through empty client area |
+| Transparent page / canvas brushes | Keep XAML layer clear over the DWM frame |
 
 All of the above are public Windows App SDK / documented Win32 APIs. They live behind `IDesktopOverlayService` → `AppWindowDesktopOverlayService` in `SecretBase.Platform.Windows`.
 
