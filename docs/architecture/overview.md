@@ -35,5 +35,5 @@ Highest principle:
 - ✅ Text Widget
 - ✅ Desktop Overlay (chromeless work-area host; public AppWindow APIs)
 - App Launcher → Drag polish → Theme editor → WebContent → Room switching
- → click-through empty regions (follow-up)
+- Follow-up: click-through empty overlay regions (public-API-safe approach only)
 
