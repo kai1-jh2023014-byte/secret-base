@@ -5,6 +5,8 @@
 **v0.1 milestone status:** foundation + Clock Widget (reference widget).  
 You can launch Secret Base, see a live clock on the Desktop, move/resize it, and restore layout after restart.
 
+**AI / developer handoff:** start at [AGENTS.md](AGENTS.md).
+
 ## Principles
 
 1. **Do not break Windows** — overlay app; no Explorer/Taskbar surgery.
@@ -23,7 +25,7 @@ You can launch Secret Base, see a live clock on the Desktop, move/resize it, and
 | Platform | **Windows App SDK 2.3.1** |
 | Web (later) | WebView2 |
 | IDE | Rider 2026.1 / `dotnet` CLI |
-| Persistence (later) | Split JSON under `%LocalAppData%\SecretBase` |
+| Persistence | Split JSON under `%LocalAppData%\SecretBase` |
 
 Details: [docs/architecture/tech-stack.md](docs/architecture/tech-stack.md)
 
