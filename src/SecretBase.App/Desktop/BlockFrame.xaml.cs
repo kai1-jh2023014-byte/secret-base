@@ -23,6 +23,7 @@ public sealed partial class BlockFrame : UserControl
     private readonly ThemeDefinition _theme;
     private readonly ITargetLaunchService _launcher;
     private readonly IFileIconService _icons;
+    private readonly IBlockItemIntakeService _intake;
     private readonly Action _onLayoutCommitted;
     private readonly Action? _onBoundsChanged;
     private readonly Action<Block> _onDeleteRequested;
@@ -44,6 +45,7 @@ public sealed partial class BlockFrame : UserControl
         ThemeDefinition theme,
         ITargetLaunchService launcher,
         IFileIconService icons,
+        IBlockItemIntakeService intake,
         Action onLayoutCommitted,
         Action<Block> onDeleteRequested,
         Action? onBoundsChanged = null,
@@ -54,6 +56,7 @@ public sealed partial class BlockFrame : UserControl
         _theme = theme;
         _launcher = launcher;
         _icons = icons;
+        _intake = intake;
         _onLayoutCommitted = onLayoutCommitted;
         _onDeleteRequested = onDeleteRequested;
         _onBoundsChanged = onBoundsChanged;
@@ -62,9 +65,14 @@ public sealed partial class BlockFrame : UserControl
         Width = block.Size.Width;
         Height = block.Size.Height;
         ApplyTheme(theme);
-        RefreshItems();
+        RefreshItems(arrangeIfNeeded: true);
         SetChromeEmphasis(emphasized: false);
-        SizeChanged += (_, _) => ClampAllItemPlacements();
+        SizeChanged += (_, _) =>
+        {
+            ArrangeItemsEvenly();
+            SyncTilePositionsFromModel();
+            _onBoundsChanged?.Invoke();
+        };
     }
 
     public Guid BlockId => _block.Id;
@@ -83,21 +91,35 @@ public sealed partial class BlockFrame : UserControl
         EmptyHint.Foreground = ThemePainter.Brush(theme.ForegroundMuted);
         EmptyHint.FontFamily = new FontFamily(theme.FontFamily);
         DeleteButton.Foreground = ThemePainter.Brush(theme.ForegroundMuted);
+        ArrangeButton.Foreground = ThemePainter.Brush(theme.ForegroundMuted);
 
         var grip = ThemePainter.ParseColor(theme.WidgetForeground);
         grip.A = 0x28;
         DragBar.Background = new SolidColorBrush(grip);
     }
 
-    private void RefreshItems()
+    private double ContentWidth =>
+        ItemCanvas.ActualWidth > 0 ? ItemCanvas.ActualWidth : Math.Max(BlockItem.TileWidth, _block.Size.Width - 24);
+
+    private double ContentHeight =>
+        ItemCanvas.ActualHeight > 0 ? ItemCanvas.ActualHeight : Math.Max(BlockItem.TileHeight, _block.Size.Height - 60);
+
+    private void ArrangeItemsEvenly()
     {
-        ItemCanvas.Children.Clear();
-        for (var i = 0; i < _block.Items.Count; i++)
+        BlockItemLayout.ArrangeEvenly(_block.Items, ContentWidth, ContentHeight);
+    }
+
+    private void RefreshItems(bool arrangeIfNeeded)
+    {
+        if (arrangeIfNeeded || _block.Items.Any(i => !i.HasPlacement))
         {
-            var item = _block.Items[i];
-            item.EnsurePlacement(i);
-            item.ClampPlacement(ItemCanvas.ActualWidth > 0 ? ItemCanvas.ActualWidth : _block.Size.Width - 24,
-                ItemCanvas.ActualHeight > 0 ? ItemCanvas.ActualHeight : _block.Size.Height - 60);
+            ArrangeItemsEvenly();
+        }
+
+        ItemCanvas.Children.Clear();
+        foreach (var item in _block.Items)
+        {
+            item.ClampPlacement(ContentWidth, ContentHeight);
             ItemCanvas.Children.Add(CreateItemTile(item));
         }
 
@@ -193,13 +215,6 @@ public sealed partial class BlockFrame : UserControl
 
     private void ClampAllItemPlacements()
     {
-        var maxW = ItemCanvas.ActualWidth;
-        var maxH = ItemCanvas.ActualHeight;
-        if (maxW <= 0 || maxH <= 0)
-        {
-            return;
-        }
-
         foreach (var child in ItemCanvas.Children.OfType<FrameworkElement>())
         {
             if (child.Tag is not BlockItem item)
@@ -207,7 +222,21 @@ public sealed partial class BlockFrame : UserControl
                 continue;
             }
 
-            item.ClampPlacement(maxW, maxH);
+            item.ClampPlacement(ContentWidth, ContentHeight);
+            Canvas.SetLeft(child, item.X);
+            Canvas.SetTop(child, item.Y);
+        }
+    }
+
+    private void SyncTilePositionsFromModel()
+    {
+        foreach (var child in ItemCanvas.Children.OfType<FrameworkElement>())
+        {
+            if (child.Tag is not BlockItem item)
+            {
+                continue;
+            }
+
             Canvas.SetLeft(child, item.X);
             Canvas.SetTop(child, item.Y);
         }
@@ -422,7 +451,8 @@ public sealed partial class BlockFrame : UserControl
         _block.ClampSize();
         Width = _block.Size.Width;
         Height = _block.Size.Height;
-        ClampAllItemPlacements();
+        ArrangeItemsEvenly();
+        SyncTilePositionsFromModel();
         _onBoundsChanged?.Invoke();
         e.Handled = true;
     }
@@ -450,6 +480,15 @@ public sealed partial class BlockFrame : UserControl
         e.Handled = true;
     }
 
+    private void ArrangeButton_Click(object sender, RoutedEventArgs e)
+    {
+        ArrangeItemsEvenly();
+        SyncTilePositionsFromModel();
+        _onLayoutCommitted();
+        _onBoundsChanged?.Invoke();
+        _onStatus?.Invoke($"Arranged {_block.Items.Count} icon(s) in '{_block.Name}'.");
+    }
+
     private void DeleteButton_Click(object sender, RoutedEventArgs e) =>
         _onDeleteRequested(_block);
 
@@ -457,8 +496,9 @@ public sealed partial class BlockFrame : UserControl
     {
         if (e.DataView.Contains(StandardDataFormats.StorageItems))
         {
-            e.AcceptedOperation = DataPackageOperation.Copy;
-            e.DragUIOverride.Caption = "Add to Block";
+            // Prefer Move so Explorer can remove Desktop shortcuts after a successful intake move.
+            e.AcceptedOperation = DataPackageOperation.Move | DataPackageOperation.Copy;
+            e.DragUIOverride.Caption = "Move into Block";
             e.DragUIOverride.IsCaptionVisible = true;
         }
         else
@@ -485,8 +525,8 @@ public sealed partial class BlockFrame : UserControl
             return;
         }
 
-        var dropPoint = e.GetPosition(ItemCanvas);
         var added = 0;
+        var moved = 0;
         foreach (var storageItem in items)
         {
             var path = storageItem.Path;
@@ -503,36 +543,68 @@ public sealed partial class BlockFrame : UserControl
                 continue;
             }
 
-            if (_block.Items.Any(i => string.Equals(i.Target, normalized, StringComparison.OrdinalIgnoreCase)))
+            var itemId = Guid.NewGuid();
+            var intake = _intake.TryIntake(normalized, _block.Id, itemId);
+            if (!intake.Succeeded || string.IsNullOrWhiteSpace(intake.TargetPath))
+            {
+                _onStatus?.Invoke(intake.ErrorMessage ?? "Could not add item.");
+                continue;
+            }
+
+            if (!BlockTargetValidator.TryValidate(intake.TargetPath, type, out var target, out var targetError))
+            {
+                _onStatus?.Invoke(targetError);
+                continue;
+            }
+
+            if (_block.Items.Any(i => string.Equals(i.Target, target, StringComparison.OrdinalIgnoreCase)))
             {
                 continue;
             }
 
-            var iconPath = _icons.TryGetCachedIconPath(normalized) ?? string.Empty;
+            // Re-infer type from final target (moved .lnk stays Shortcut).
+            type = BlockTargetValidator.InferType(target, Directory.Exists(target));
+            var iconPath = _icons.TryGetCachedIconPath(target) ?? string.Empty;
             var item = new BlockItem
             {
-                Id = Guid.NewGuid(),
-                Name = BlockTargetValidator.InferDisplayName(normalized),
+                Id = itemId,
+                Name = BlockTargetValidator.InferDisplayName(
+                    intake.MovedFromSource ? normalized : target),
                 Type = type,
-                Target = normalized,
+                Target = target,
                 Icon = iconPath,
-                X = Math.Max(0, dropPoint.X - (BlockItem.TileWidth / 2) + (added * 12)),
-                Y = Math.Max(0, dropPoint.Y - (BlockItem.TileHeight / 2) + (added * 12))
+                X = -1,
+                Y = -1
             };
-            item.ClampPlacement(
-                ItemCanvas.ActualWidth > 0 ? ItemCanvas.ActualWidth : _block.Size.Width - 24,
-                ItemCanvas.ActualHeight > 0 ? ItemCanvas.ActualHeight : _block.Size.Height - 60);
+
+            // Preserve friendly name from original Desktop shortcut file name.
+            if (intake.MovedFromSource)
+            {
+                item.Name = BlockTargetValidator.InferDisplayName(normalized);
+            }
 
             _block.Items.Add(item);
             added++;
+            if (intake.MovedFromSource)
+            {
+                moved++;
+            }
+            else if (!string.IsNullOrWhiteSpace(intake.ErrorMessage))
+            {
+                _onStatus?.Invoke(intake.ErrorMessage);
+            }
         }
 
         if (added > 0)
         {
-            RefreshItems();
+            e.AcceptedOperation = moved > 0 ? DataPackageOperation.Move : DataPackageOperation.Copy;
+            RefreshItems(arrangeIfNeeded: true);
             _onLayoutCommitted();
             _onBoundsChanged?.Invoke();
-            _onStatus?.Invoke($"Added {added} item(s) to '{_block.Name}'. Drag icons to arrange.");
+            var msg = moved > 0
+                ? $"Moved {moved} shortcut(s) into '{_block.Name}' (removed from Desktop)."
+                : $"Linked {added} item(s) into '{_block.Name}'.";
+            _onStatus?.Invoke(msg);
         }
     }
 }

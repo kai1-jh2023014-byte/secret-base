@@ -58,6 +58,34 @@ public class BlockModelTests
     }
 
     [Fact]
+    public void BlockItemLayout_ArrangeEvenly_PlacesThreeItemsInRow()
+    {
+        var items = Enumerable.Range(0, 3)
+            .Select(i => new BlockItem { Name = $"I{i}", Target = $@"C:\a{i}.lnk" })
+            .ToList();
+
+        BlockItemLayout.ArrangeEvenly(items, areaWidth: 320, areaHeight: 200);
+
+        Assert.All(items, i => Assert.True(i.HasPlacement));
+        Assert.True(items[0].X < items[1].X);
+        Assert.True(items[1].X < items[2].X);
+        Assert.Equal(items[0].Y, items[1].Y, 0.01);
+    }
+
+    [Fact]
+    public void BlockItemLayout_ArrangeEvenly_UsesMultipleRows()
+    {
+        var items = Enumerable.Range(0, 4)
+            .Select(i => new BlockItem { Name = $"I{i}", Target = $@"C:\a{i}.lnk" })
+            .ToList();
+
+        BlockItemLayout.ArrangeEvenly(items, areaWidth: 200, areaHeight: 220);
+
+        Assert.True(items[0].Y < items[3].Y || items[0].X != items[3].X);
+        Assert.All(items, i => Assert.True(i.X >= 0 && i.Y >= 0));
+    }
+
+    [Fact]
     public void BlockTargetValidator_AcceptsAbsoluteExe()
     {
         var ok = BlockTargetValidator.TryValidate(

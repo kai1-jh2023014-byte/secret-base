@@ -10,9 +10,9 @@ They are **not** Windows folders and do not replace Explorer.
 |-------|------|
 | **Core** | `Block`, `BlockItem`, `BlockItemType`, `BlockTargetValidator`, `DefaultBlockFactory` |
 | **Infrastructure** | Layout JSON (`blocks` array), schema v1→v2 migration |
-| **Platform.Abstractions** | `ITargetLaunchService`, `IFileIconService` |
-| **Platform.Windows** | `ShellTargetLaunchService` (`UseShellExecute`); `ShellFileIconService` (`SHGetFileInfo` / `ExtractAssociatedIcon` → PNG cache) |
-| **App** | `BlockFrame` UI, Add Block **+** button, drop-target + in-Block drag, composition |
+| **Platform.Abstractions** | `ITargetLaunchService`, `IFileIconService`, `IBlockItemIntakeService` |
+| **Platform.Windows** | Launch; icons; **move Desktop .lnk into block-items storage** |
+| **App** | `BlockFrame` (+ **Grid** arrange, drop/move intake), Add Block **+** button |
 
 Core has no Win32 / WinUI references.
 
@@ -57,11 +57,11 @@ Core has no Win32 / WinUI references.
 
 ## UX (V1)
 
-- Always-visible **+** button (bottom-left) opens Add Block dialog (also Ctrl+Shift+B / debug chrome)
-- Drag Block chrome to move; corner grip to resize; **Del** removes Block
-- Drop `.exe` / `.lnk` / files / folders onto a Block — **real shell icons** via `IFileIconService`
-- Drag icons **inside** the Block to rearrange (persisted `X`/`Y`); click to launch
-- Theme: room `ThemeDefinition` (Block.Theme reserved for later)
+- Always-visible **+** button (bottom-left) opens Add Block dialog
+- Block header **Grid** button arranges icons evenly; also auto-arranges after drop / resize
+- Drop **Desktop shortcuts (.lnk)** → **moved** into `%LocalAppData%\SecretBase\block-items\` (Desktop original removed — no duplicate)
+- Drop Program Files `.exe` → path **link** only (binary is not relocated)
+- Real shell icons via `IFileIconService`; click to launch; drag to fine-tune then **Grid** to re-even
 
 ## Shared with widgets
 

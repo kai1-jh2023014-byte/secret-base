@@ -67,4 +67,5 @@ public sealed record DesktopPageArgs(
     IDesktopOverlayService? Overlay = null,
     DesktopOverlayTarget? OverlayTarget = null,
     ITargetLaunchService? Launcher = null,
-    IFileIconService? Icons = null);
+    IFileIconService? Icons = null,
+    IBlockItemIntakeService? Intake = null);

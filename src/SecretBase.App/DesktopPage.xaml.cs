@@ -33,6 +33,7 @@ public sealed partial class DesktopPage : Page
     private DesktopOverlayTarget? _overlayTarget;
     private ITargetLaunchService? _launcher;
     private IFileIconService? _icons;
+    private IBlockItemIntakeService? _intake;
     private DesktopLayout? _layout;
     private ThemeDefinition? _theme;
     private CompatibilityInfo? _compatibility;
@@ -67,6 +68,7 @@ public sealed partial class DesktopPage : Page
         _overlayTarget = args.OverlayTarget;
         _launcher = args.Launcher;
         _icons = args.Icons;
+        _intake = args.Intake;
 
         _theme = _themeStore.LoadOrCreateDefault();
         _layout = _layoutStore.LoadOrCreateDefault(RoomId.DefaultRoomId);
@@ -181,7 +183,7 @@ public sealed partial class DesktopPage : Page
 
     private void RenderBlocks()
     {
-        if (_layout is null || _theme is null || _launcher is null || _icons is null)
+        if (_layout is null || _theme is null || _launcher is null || _icons is null || _intake is null)
         {
             return;
         }
@@ -194,6 +196,7 @@ public sealed partial class DesktopPage : Page
                 _theme,
                 _launcher,
                 _icons,
+                _intake,
                 onLayoutCommitted: PersistLayoutNow,
                 onDeleteRequested: DeleteBlock,
                 onBoundsChanged: SyncInteractiveInputRegions,
@@ -344,7 +347,7 @@ public sealed partial class DesktopPage : Page
 
     private async Task ShowAddBlockDialogAsync()
     {
-        if (_layout is null || _theme is null || _launcher is null || _icons is null)
+        if (_layout is null || _theme is null || _launcher is null || _icons is null || _intake is null)
         {
             return;
         }
