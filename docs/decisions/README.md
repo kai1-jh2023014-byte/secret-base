@@ -54,9 +54,15 @@ See [2026-08-11-rider-run-configuration.md](2026-08-11-rider-run-configuration.m
 
 ## 2026-08-12 — Widget-shaped input + suppress DWM edge frame
 
-**Decision:** Shape the overlay HWND with documented `SetWindowRgn` (union of widget client rects from App → `IDesktopOverlayService.UpdateInteractiveInputRegions`). Suppress residual Win11 chrome with documented `DwmSetWindowAttribute(DWMWA_BORDER_COLOR, DWMWA_COLOR_NONE)` and `DWMWA_WINDOW_CORNER_PREFERENCE = DWMWCP_DONOTROUND`. Do **not** use `HTTRANSPARENT` for Desktop click-through (same-thread only). Do **not** use WorkerW / Explorer / Taskbar COM.
+**Decision:** Shape the overlay HWND with documented `SetWindowRgn` (union of widget/block client rects from App → `IDesktopOverlayService.UpdateInteractiveInputRegions`). Suppress residual Win11 chrome with documented `DwmSetWindowAttribute(DWMWA_BORDER_COLOR, DWMWA_COLOR_NONE)` and `DWMWA_WINDOW_CORNER_PREFERENCE = DWMWCP_DONOTROUND`. Do **not** use `HTTRANSPARENT` for Desktop click-through (same-thread only). Do **not** use WorkerW / Explorer / Taskbar COM.
 
 **Why:** Users need wallpaper/Desktop/other apps clickable outside widgets; WinUI transparency alone still hit-tests the full work-area HWND. `SetWindowRgn` is public and cross-process. Thin white edges after chromeless presenter are DWM border/corner artifacts, not XAML margins.
 
 See [overlay-input-and-edges.md](../architecture/overlay-input-and-edges.md).
+
+## 2026-08-12 — Block as first-class Desktop room (schema v2)
+
+**Decision:** Add `Block` / `BlockItem` models on `DesktopLayout.Blocks` (schemaVersion **2**). Host UI in App (`BlockFrame`); launch via `ITargetLaunchService` → `ShellTargetLaunchService` (`UseShellExecute` on absolute user-chosen paths). Upgrade v1 layouts by adding an empty `blocks` array without modifying widgets. Do not model Block as a Widget type yet; do not introduce a shared Frame base or registry.
+
+**Why:** “Small rooms on the Desktop” needs nested items and safe launch, which is a different shape from Clock/Text configuration bags. Persistence compatibility for existing Clock/Text layouts is mandatory.
 

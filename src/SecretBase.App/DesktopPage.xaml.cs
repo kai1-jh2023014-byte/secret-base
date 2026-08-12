@@ -5,6 +5,7 @@ using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Navigation;
 using SecretBase.App.Desktop;
 using SecretBase.Core;
+using SecretBase.Core.Blocks;
 using SecretBase.Core.Desktop;
 using SecretBase.Core.Themes;
 using SecretBase.Core.Time;
@@ -30,6 +31,9 @@ public sealed partial class DesktopPage : Page
     private ITimeProvider? _timeProvider;
     private IDesktopOverlayService? _overlay;
     private DesktopOverlayTarget? _overlayTarget;
+    private ITargetLaunchService? _launcher;
+    private IFileIconService? _icons;
+    private IBlockItemIntakeService? _intake;
     private DesktopLayout? _layout;
     private ThemeDefinition? _theme;
     private CompatibilityInfo? _compatibility;
@@ -62,20 +66,31 @@ public sealed partial class DesktopPage : Page
         _compatibility = args.Compatibility;
         _overlay = args.Overlay;
         _overlayTarget = args.OverlayTarget;
+        _launcher = args.Launcher;
+        _icons = args.Icons;
+        _intake = args.Intake;
 
         _theme = _themeStore.LoadOrCreateDefault();
         _layout = _layoutStore.LoadOrCreateDefault(RoomId.DefaultRoomId);
         EnsureSeedTextWidget(_layout);
 
         ApplyDesktopTheme(_theme);
+        StyleAddBlockFab(_theme);
         RefreshDebugStatus();
-        // Normal UX: widgets only — no title / status / Exit chrome on the wallpaper.
         ShowDebugChrome(forceVisible: false);
 
-        RenderWidgets();
-        _logger.Info("desktop", $"Overlay desktop shown for room '{_layout.RoomId}' with {_layout.Widgets.Count} widget(s).");
+        RenderDesktopObjects();
+        _logger.Info("desktop", $"Overlay desktop shown for room '{_layout.RoomId}' with {_layout.Widgets.Count} widget(s), {_layout.Blocks.Count} block(s).");
         _logger.Info("widget", "Clock and Text widget hosts ready.");
-        _logger.Info("overlay", "Widgets-only overlay UX; input regions shaped to widgets (SetWindowRgn).");
+        _logger.Info("block", "Block host ready (use + button to add; drop + drag icons inside a Block).");
+    }
+
+    private void StyleAddBlockFab(ThemeDefinition theme)
+    {
+        AddBlockFab.Background = ThemePainter.Brush(theme.Accent, 0.92);
+        AddBlockFab.Foreground = ThemePainter.Brush(theme.Foreground);
+        AddBlockFab.BorderBrush = ThemePainter.Brush(theme.WidgetForeground, 0.35);
+        AddBlockFab.BorderThickness = new Thickness(1);
     }
 
     private void ApplyDesktopTheme(ThemeDefinition theme)
@@ -97,7 +112,7 @@ public sealed partial class DesktopPage : Page
         }
 
         StatusText.Text =
-            $"{AppInfo.Name} · {_layout.Widgets.Count} widgets · v{_compatibility.AppVersion} · Ctrl+Shift+Q exit";
+            $"{AppInfo.Name} · {_layout.Widgets.Count}w / {_layout.Blocks.Count}b · v{_compatibility.AppVersion}";
     }
 
     private void ShowDebugChrome(bool forceVisible)
@@ -121,13 +136,25 @@ public sealed partial class DesktopPage : Page
         }
     }
 
-    private void RenderWidgets()
+    private void RenderDesktopObjects()
     {
         DisposeWidgets();
         WidgetCanvas.Children.Clear();
         if (_layout is null || _theme is null)
         {
             SyncInteractiveInputRegions();
+            return;
+        }
+
+        RenderWidgets();
+        RenderBlocks();
+        SyncInteractiveInputRegions();
+    }
+
+    private void RenderWidgets()
+    {
+        if (_layout is null || _theme is null)
+        {
             return;
         }
 
@@ -152,8 +179,40 @@ public sealed partial class DesktopPage : Page
             frame.Loaded += (_, _) => SyncInteractiveInputRegions();
             WidgetCanvas.Children.Add(frame);
         }
+    }
 
-        SyncInteractiveInputRegions();
+    private void RenderBlocks()
+    {
+        if (_layout is null || _theme is null || _launcher is null || _icons is null || _intake is null)
+        {
+            return;
+        }
+
+        foreach (var block in _layout.Blocks)
+        {
+            block.ClampSize();
+            var frame = new BlockFrame(
+                block,
+                _theme,
+                _launcher,
+                _icons,
+                _intake,
+                onLayoutCommitted: PersistLayoutNow,
+                onDeleteRequested: DeleteBlock,
+                onBoundsChanged: SyncInteractiveInputRegions,
+                onStatus: message =>
+                {
+                    _logger?.Info("block", message);
+                    if (_debugChromeVisible)
+                    {
+                        StatusText.Text = message;
+                    }
+                });
+            Canvas.SetLeft(frame, block.Position.X);
+            Canvas.SetTop(frame, block.Position.Y);
+            frame.Loaded += (_, _) => SyncInteractiveInputRegions();
+            WidgetCanvas.Children.Add(frame);
+        }
     }
 
     private void SyncInteractiveInputRegions()
@@ -180,6 +239,11 @@ public sealed partial class DesktopPage : Page
             rects.Add(chromeRect);
         }
 
+        if (TryCreateClientRect(AddBlockFab, scale, out var fabRect))
+        {
+            rects.Add(fabRect);
+        }
+
         _overlay.UpdateInteractiveInputRegions(_overlayTarget, rects);
     }
 
@@ -193,7 +257,6 @@ public sealed partial class DesktopPage : Page
             return false;
         }
 
-        // Map element top-left into DesktopPage / client space (same as window client for our host).
         GeneralTransform transform;
         try
         {
@@ -273,6 +336,141 @@ public sealed partial class DesktopPage : Page
         }
     }
 
+    private async void AddBlockButton_Click(object sender, RoutedEventArgs e) =>
+        await ShowAddBlockDialogAsync();
+
+    private async void AddBlockAccelerator_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        args.Handled = true;
+        await ShowAddBlockDialogAsync();
+    }
+
+    private async Task ShowAddBlockDialogAsync()
+    {
+        if (_layout is null || _theme is null || _launcher is null || _icons is null || _intake is null)
+        {
+            return;
+        }
+
+        // ContentDialog lives in the same HWND; expand hit region so the dialog is clickable.
+        AllowFullWindowInput();
+
+        var nameBox = new TextBox
+        {
+            Header = "Name",
+            Text = "DEVELOPMENT",
+            PlaceholderText = "Block name"
+        };
+        var xBox = new NumberBox
+        {
+            Header = "X",
+            Value = 420,
+            Minimum = 0,
+            SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline
+        };
+        var yBox = new NumberBox
+        {
+            Header = "Y",
+            Value = 48,
+            Minimum = 0,
+            SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline
+        };
+        var wBox = new NumberBox
+        {
+            Header = "Width",
+            Value = Block.DefaultWidth,
+            Minimum = Block.MinWidth,
+            SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline
+        };
+        var hBox = new NumberBox
+        {
+            Header = "Height",
+            Value = Block.DefaultHeight,
+            Minimum = Block.MinHeight,
+            SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline
+        };
+
+        var panel = new StackPanel { Spacing = 8 };
+        panel.Children.Add(nameBox);
+        panel.Children.Add(xBox);
+        panel.Children.Add(yBox);
+        panel.Children.Add(wBox);
+        panel.Children.Add(hBox);
+
+        var dialog = new ContentDialog
+        {
+            Title = "Add Block",
+            PrimaryButtonText = "Create",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Primary,
+            Content = panel,
+            XamlRoot = XamlRoot
+        };
+
+        ContentDialogResult result;
+        try
+        {
+            result = await dialog.ShowAsync();
+        }
+        finally
+        {
+            SyncInteractiveInputRegions();
+        }
+
+        if (result != ContentDialogResult.Primary)
+        {
+            return;
+        }
+
+        var block = DefaultBlockFactory.Create(
+            nameBox.Text,
+            _layout.RoomId,
+            xBox.Value,
+            yBox.Value,
+            wBox.Value,
+            hBox.Value);
+
+        // Cascade slightly when creating multiple near the same spot.
+        var offset = _layout.Blocks.Count * 24;
+        block.Position.X = Math.Max(0, block.Position.X + offset);
+        block.Position.Y = Math.Max(0, block.Position.Y + offset);
+
+        _layout.Blocks.Add(block);
+        PersistLayoutNow();
+        RenderDesktopObjects();
+        RefreshDebugStatus();
+        _logger?.Info("block", $"Created Block '{block.Name}' ({block.Id}).");
+    }
+
+    private void AllowFullWindowInput()
+    {
+        if (_overlay is null || _overlayTarget is null || XamlRoot is null)
+        {
+            return;
+        }
+
+        var scale = XamlRoot.RasterizationScale;
+        var width = Math.Max(1, (int)Math.Ceiling(ActualWidth * scale));
+        var height = Math.Max(1, (int)Math.Ceiling(ActualHeight * scale));
+        _overlay.UpdateInteractiveInputRegions(
+            _overlayTarget,
+            [new OverlayInputRect(0, 0, width, height)]);
+    }
+
+    private void DeleteBlock(Block block)
+    {
+        if (_layout is null)
+        {
+            return;
+        }
+
+        _layout.Blocks.RemoveAll(b => b.Id == block.Id);
+        PersistLayoutNow();
+        RenderDesktopObjects();
+        RefreshDebugStatus();
+        _logger?.Info("block", $"Deleted Block '{block.Name}' ({block.Id}).");
+    }
+
     private void PersistLayoutNow()
     {
         if (_layout is null || _layoutStore is null)
@@ -283,7 +481,7 @@ public sealed partial class DesktopPage : Page
         try
         {
             _layoutStore.Save(_layout);
-            _logger?.Info("persistence", $"Layout saved ({_layout.Widgets.Count} widgets).");
+            _logger?.Info("persistence", $"Layout saved ({_layout.Widgets.Count} widgets, {_layout.Blocks.Count} blocks).");
         }
         catch (Exception ex)
         {
