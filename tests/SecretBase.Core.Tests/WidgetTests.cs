@@ -117,10 +117,11 @@ public class WidgetInstanceTests
     public void DesktopLayout_CreateDefault_IncludesClockAndText()
     {
         var layout = DesktopLayout.CreateDefault();
-        Assert.Equal(1, layout.SchemaVersion);
+        Assert.Equal(DesktopLayout.CurrentSchemaVersion, layout.SchemaVersion);
         Assert.Equal(2, layout.Widgets.Count);
         Assert.Equal(WidgetTypes.Clock, layout.Widgets[0].Type);
         Assert.Equal(WidgetTypes.Text, layout.Widgets[1].Type);
+        Assert.Empty(layout.Blocks);
     }
 }
 

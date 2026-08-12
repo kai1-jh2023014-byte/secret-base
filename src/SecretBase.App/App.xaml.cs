@@ -43,7 +43,8 @@ public partial class App : Application
             Compatibility: info,
             LayoutStore: new JsonLayoutStore(),
             ThemeStore: new JsonThemeStore(),
-            TimeProvider: new SystemTimeProvider());
+            TimeProvider: new SystemTimeProvider(),
+            Launcher: new ShellTargetLaunchService());
 
         IDesktopOverlayService overlay = new AppWindowDesktopOverlayService();
         _window = new MainWindow(pageArgs, overlay);
@@ -56,6 +57,6 @@ public partial class App : Application
             }
         };
         _window.Activate();
-        _logger.Info("overlay", "Host activated; widget-shaped input (SetWindowRgn), HWND_BOTTOM Z-order, DWM border suppressed.");
+        _logger.Info("overlay", "Host activated; Blocks + widgets; SetWindowRgn input; HWND_BOTTOM Z-order.");
     }
 }

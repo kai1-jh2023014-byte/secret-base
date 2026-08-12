@@ -9,9 +9,9 @@
     mc:Ignorable="d">
 
     <!--
-      Widgets-only desktop layer.
+      Widgets + Blocks desktop layer.
       Debug chrome is Collapsed by default; toggle with Ctrl+Shift+D.
-      Safe Exit: Ctrl+Shift+Q (also available from debug chrome).
+      Safe Exit: Ctrl+Shift+Q. Add Block: Ctrl+Shift+B.
     -->
     <Grid x:Name="RootGrid" Background="Transparent">
         <Grid.KeyboardAccelerators>
@@ -23,6 +23,10 @@
                 Key="D"
                 Modifiers="Control,Shift"
                 Invoked="DebugChromeAccelerator_Invoked" />
+            <KeyboardAccelerator
+                Key="B"
+                Modifiers="Control,Shift"
+                Invoked="AddBlockAccelerator_Invoked" />
         </Grid.KeyboardAccelerators>
 
         <Canvas
@@ -46,6 +50,12 @@
                     FontSize="11"
                     Foreground="#FF9AA7B2"
                     TextWrapping="NoWrap" />
+                <Button
+                    x:Name="AddBlockButton"
+                    Content="Add Block"
+                    Click="AddBlockButton_Click"
+                    Padding="12,4"
+                    ToolTipService.ToolTip="Create a Block (Ctrl+Shift+B)" />
                 <Button
                     x:Name="ExitButton"
                     Content="Exit"

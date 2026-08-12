@@ -65,4 +65,5 @@ public sealed record DesktopPageArgs(
     IThemeStore ThemeStore,
     ITimeProvider TimeProvider,
     IDesktopOverlayService? Overlay = null,
-    DesktopOverlayTarget? OverlayTarget = null);
+    DesktopOverlayTarget? OverlayTarget = null,
+    ITargetLaunchService? Launcher = null);

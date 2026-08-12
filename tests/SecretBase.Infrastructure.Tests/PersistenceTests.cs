@@ -1,3 +1,5 @@
+using System.Text.Json;
+using SecretBase.Core.Blocks;
 using SecretBase.Core.Desktop;
 using SecretBase.Core.Themes;
 using SecretBase.Core.Widgets;
@@ -32,7 +34,7 @@ public class LayoutPersistenceTests
             store.Save(layout);
             var restored = store.LoadOrCreateDefault(RoomId.DefaultRoomId);
 
-            Assert.Equal(1, restored.SchemaVersion);
+            Assert.Equal(DesktopLayout.CurrentSchemaVersion, restored.SchemaVersion);
             Assert.Equal(2, restored.Widgets.Count);
             var widget = restored.Widgets.Single(w => w.Type == WidgetTypes.Clock);
             Assert.Equal(120, widget.Position.X);
@@ -75,7 +77,7 @@ public class LayoutPersistenceTests
             store.Save(layout);
             var restored = store.LoadOrCreateDefault(RoomId.DefaultRoomId);
 
-            Assert.Equal(1, restored.SchemaVersion);
+            Assert.Equal(DesktopLayout.CurrentSchemaVersion, restored.SchemaVersion);
             var widget = restored.Widgets.Single(w => w.Type == WidgetTypes.Text);
             Assert.Equal(text.Id, widget.Id);
             Assert.Equal(WidgetTypes.Text, widget.Type);
@@ -97,6 +99,101 @@ public class LayoutPersistenceTests
     }
 
     [Fact]
+    public void SaveAndLoad_RestoresBlocksItemsAndGeometry()
+    {
+        var dir = CreateTempDir();
+        try
+        {
+            var store = new JsonLayoutStore(dir);
+            var layout = DesktopLayout.CreateDefault();
+            var block = DefaultBlockFactory.Create("DEVELOPMENT", x: 420, y: 60, width: 380, height: 280);
+            block.Items.Add(new BlockItem
+            {
+                Name = "Cursor",
+                Type = BlockItemType.Application,
+                Target = @"C:\Tools\Cursor\Cursor.exe"
+            });
+            block.Items.Add(new BlockItem
+            {
+                Name = "Repo",
+                Type = BlockItemType.Folder,
+                Target = @"C:\Repos\secret-base"
+            });
+            layout.Blocks.Add(block);
+
+            store.Save(layout);
+            var restored = store.LoadOrCreateDefault(RoomId.DefaultRoomId);
+
+            Assert.Equal(DesktopLayout.CurrentSchemaVersion, restored.SchemaVersion);
+            Assert.Single(restored.Blocks);
+            var loaded = restored.Blocks[0];
+            Assert.Equal(block.Id, loaded.Id);
+            Assert.Equal("DEVELOPMENT", loaded.Name);
+            Assert.Equal(420, loaded.Position.X);
+            Assert.Equal(60, loaded.Position.Y);
+            Assert.Equal(380, loaded.Size.Width);
+            Assert.Equal(280, loaded.Size.Height);
+            Assert.Equal(2, loaded.Items.Count);
+            Assert.Equal(BlockItemType.Application, loaded.Items[0].Type);
+            Assert.Equal(@"C:\Tools\Cursor\Cursor.exe", loaded.Items[0].Target);
+            Assert.Equal(BlockItemType.Folder, loaded.Items[1].Type);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void SaveAndLoad_EmptyBlock_RoundTrips()
+    {
+        var dir = CreateTempDir();
+        try
+        {
+            var store = new JsonLayoutStore(dir);
+            var layout = DesktopLayout.CreateDefault();
+            layout.Blocks.Add(DefaultBlockFactory.Create("EMPTY"));
+            store.Save(layout);
+
+            var restored = store.LoadOrCreateDefault(RoomId.DefaultRoomId);
+            Assert.Single(restored.Blocks);
+            Assert.Empty(restored.Blocks[0].Items);
+            Assert.Equal("EMPTY", restored.Blocks[0].Name);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void SaveAndLoad_MultipleBlocks_PreservesOrderAndIds()
+    {
+        var dir = CreateTempDir();
+        try
+        {
+            var store = new JsonLayoutStore(dir);
+            var layout = DesktopLayout.CreateDefault();
+            var first = DefaultBlockFactory.Create("A");
+            var second = DefaultBlockFactory.Create("B", x: 500, y: 200);
+            layout.Blocks.Add(first);
+            layout.Blocks.Add(second);
+            store.Save(layout);
+
+            var restored = store.LoadOrCreateDefault(RoomId.DefaultRoomId);
+            Assert.Equal(2, restored.Blocks.Count);
+            Assert.Equal(first.Id, restored.Blocks[0].Id);
+            Assert.Equal(second.Id, restored.Blocks[1].Id);
+            Assert.Equal("A", restored.Blocks[0].Name);
+            Assert.Equal("B", restored.Blocks[1].Name);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
     public void LoadMissing_CreatesDefaultClockAndTextLayout()
     {
         var dir = CreateTempDir();
@@ -105,6 +202,8 @@ public class LayoutPersistenceTests
             var store = new JsonLayoutStore(dir);
             var layout = store.LoadOrCreateDefault(RoomId.DefaultRoomId);
             Assert.Equal(2, layout.Widgets.Count);
+            Assert.Empty(layout.Blocks);
+            Assert.Equal(DesktopLayout.CurrentSchemaVersion, layout.SchemaVersion);
             Assert.Contains(layout.Widgets, w => w.Type == WidgetTypes.Clock);
             Assert.Contains(layout.Widgets, w => w.Type == WidgetTypes.Text);
             Assert.True(File.Exists(Path.Combine(dir, "default.layout.json")));
@@ -126,15 +225,67 @@ public class LayoutPersistenceTests
             {
                 RoomId = RoomId.DefaultRoomId,
                 SchemaVersion = 1,
-                Widgets = [DefaultWidgetFactory.CreateDefaultClock()]
+                Widgets = [DefaultWidgetFactory.CreateDefaultClock()],
+                Blocks = []
             };
             store.Save(clockOnly);
 
             var restored = store.LoadOrCreateDefault(RoomId.DefaultRoomId);
-            Assert.Equal(1, restored.SchemaVersion);
+            Assert.Equal(DesktopLayout.CurrentSchemaVersion, restored.SchemaVersion);
             Assert.Single(restored.Widgets);
             Assert.Equal(WidgetTypes.Clock, restored.Widgets[0].Type);
             Assert.Equal(clockOnly.Widgets[0].Id, restored.Widgets[0].Id);
+            Assert.Empty(restored.Blocks);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void LoadLegacySchemaV1Json_WithoutBlocks_PreservesWidgets()
+    {
+        var dir = CreateTempDir();
+        try
+        {
+            var clock = DefaultWidgetFactory.CreateDefaultClock();
+            var text = DefaultWidgetFactory.CreateDefaultText();
+            // Hand-written v1 payload (no blocks property) — must remain loadable.
+            var legacy = $$"""
+                {
+                  "roomId": "default",
+                  "schemaVersion": 1,
+                  "widgets": [
+                    {
+                      "id": "{{clock.Id}}",
+                      "type": "clock",
+                      "position": { "x": 48, "y": 48 },
+                      "size": { "width": 280, "height": 160 },
+                      "roomId": "default",
+                      "configuration": {}
+                    },
+                    {
+                      "id": "{{text.Id}}",
+                      "type": "text",
+                      "position": { "x": 48, "y": 240 },
+                      "size": { "width": 320, "height": 180 },
+                      "roomId": "default",
+                      "configuration": {}
+                    }
+                  ]
+                }
+                """;
+            File.WriteAllText(Path.Combine(dir, "default.layout.json"), legacy);
+
+            var store = new JsonLayoutStore(dir);
+            var restored = store.LoadOrCreateDefault(RoomId.DefaultRoomId);
+
+            Assert.Equal(2, restored.Widgets.Count);
+            Assert.Equal(clock.Id, restored.Widgets[0].Id);
+            Assert.Equal(text.Id, restored.Widgets[1].Id);
+            Assert.Empty(restored.Blocks);
+            Assert.Equal(DesktopLayout.CurrentSchemaVersion, restored.SchemaVersion);
         }
         finally
         {
