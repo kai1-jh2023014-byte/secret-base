@@ -56,6 +56,6 @@ public partial class App : Application
             }
         };
         _window.Activate();
-        _logger.Info("overlay", "Host activated; Z-order kept behind other apps (HWND_BOTTOM), wallpaper via Windows.UI transparent SystemBackdrop + DWM.");
+        _logger.Info("overlay", "Host activated; widget-shaped input (SetWindowRgn), HWND_BOTTOM Z-order, DWM border suppressed.");
     }
 }

@@ -17,6 +17,7 @@ using SecretBase.Platform.Abstractions;
 using SecretBase.Widgets.Clock;
 using SecretBase.Widgets.Text;
 using SecretBase.Widgets.Theming;
+using Windows.Foundation;
 
 namespace SecretBase.App;
 
@@ -27,6 +28,8 @@ public sealed partial class DesktopPage : Page
     private ILayoutStore? _layoutStore;
     private IThemeStore? _themeStore;
     private ITimeProvider? _timeProvider;
+    private IDesktopOverlayService? _overlay;
+    private DesktopOverlayTarget? _overlayTarget;
     private DesktopLayout? _layout;
     private ThemeDefinition? _theme;
     private CompatibilityInfo? _compatibility;
@@ -37,6 +40,7 @@ public sealed partial class DesktopPage : Page
     {
         InitializeComponent();
         Unloaded += OnUnloaded;
+        SizeChanged += (_, _) => SyncInteractiveInputRegions();
     }
 
     protected override void OnNavigatedTo(NavigationEventArgs e)
@@ -56,6 +60,8 @@ public sealed partial class DesktopPage : Page
         _themeStore = args.ThemeStore;
         _timeProvider = args.TimeProvider;
         _compatibility = args.Compatibility;
+        _overlay = args.Overlay;
+        _overlayTarget = args.OverlayTarget;
 
         _theme = _themeStore.LoadOrCreateDefault();
         _layout = _layoutStore.LoadOrCreateDefault(RoomId.DefaultRoomId);
@@ -69,7 +75,7 @@ public sealed partial class DesktopPage : Page
         RenderWidgets();
         _logger.Info("desktop", $"Overlay desktop shown for room '{_layout.RoomId}' with {_layout.Widgets.Count} widget(s).");
         _logger.Info("widget", "Clock and Text widget hosts ready.");
-        _logger.Info("overlay", "Widgets-only overlay UX (debug chrome hidden; Ctrl+Shift+Q exit, Ctrl+Shift+D toggle debug).");
+        _logger.Info("overlay", "Widgets-only overlay UX; input regions shaped to widgets (SetWindowRgn).");
     }
 
     private void ApplyDesktopTheme(ThemeDefinition theme)
@@ -98,6 +104,7 @@ public sealed partial class DesktopPage : Page
     {
         _debugChromeVisible = forceVisible;
         DebugChrome.Visibility = forceVisible ? Visibility.Visible : Visibility.Collapsed;
+        SyncInteractiveInputRegions();
     }
 
     private void ToggleDebugChrome()
@@ -120,6 +127,7 @@ public sealed partial class DesktopPage : Page
         WidgetCanvas.Children.Clear();
         if (_layout is null || _theme is null)
         {
+            SyncInteractiveInputRegions();
             return;
         }
 
@@ -133,11 +141,76 @@ public sealed partial class DesktopPage : Page
                 continue;
             }
 
-            var frame = new WidgetFrame(instance, content, _theme, PersistLayoutNow);
+            var frame = new WidgetFrame(
+                instance,
+                content,
+                _theme,
+                onLayoutCommitted: PersistLayoutNow,
+                onBoundsChanged: SyncInteractiveInputRegions);
             Canvas.SetLeft(frame, instance.Position.X);
             Canvas.SetTop(frame, instance.Position.Y);
+            frame.Loaded += (_, _) => SyncInteractiveInputRegions();
             WidgetCanvas.Children.Add(frame);
         }
+
+        SyncInteractiveInputRegions();
+    }
+
+    private void SyncInteractiveInputRegions()
+    {
+        if (_overlay is null || _overlayTarget is null || XamlRoot is null)
+        {
+            return;
+        }
+
+        var scale = XamlRoot.RasterizationScale;
+        var rects = new List<OverlayInputRect>();
+
+        foreach (var child in WidgetCanvas.Children.OfType<FrameworkElement>())
+        {
+            if (TryCreateClientRect(child, scale, out var rect))
+            {
+                rects.Add(rect);
+            }
+        }
+
+        if (_debugChromeVisible && DebugChrome.Visibility == Visibility.Visible
+            && TryCreateClientRect(DebugChrome, scale, out var chromeRect))
+        {
+            rects.Add(chromeRect);
+        }
+
+        _overlay.UpdateInteractiveInputRegions(_overlayTarget, rects);
+    }
+
+    private bool TryCreateClientRect(FrameworkElement element, double scale, out OverlayInputRect rect)
+    {
+        rect = default;
+        var width = element.ActualWidth > 0 ? element.ActualWidth : element.Width;
+        var height = element.ActualHeight > 0 ? element.ActualHeight : element.Height;
+        if (double.IsNaN(width) || double.IsNaN(height) || width <= 0 || height <= 0)
+        {
+            return false;
+        }
+
+        // Map element top-left into DesktopPage / client space (same as window client for our host).
+        GeneralTransform transform;
+        try
+        {
+            transform = element.TransformToVisual(RootGrid);
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+
+        var topLeft = transform.TransformPoint(new Point(0, 0));
+        var x = (int)Math.Floor(topLeft.X * scale);
+        var y = (int)Math.Floor(topLeft.Y * scale);
+        var w = Math.Max(1, (int)Math.Ceiling(width * scale));
+        var h = Math.Max(1, (int)Math.Ceiling(height * scale));
+        rect = new OverlayInputRect(x, y, w, h);
+        return true;
     }
 
     private UIElement? CreateWidgetContent(WidgetInstance instance)

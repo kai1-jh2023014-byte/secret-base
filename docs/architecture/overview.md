@@ -34,6 +34,6 @@ Highest principle:
 - ✅ Clock Widget (reference implementation)
 - ✅ Text Widget
 - ✅ Desktop Overlay (chromeless work-area host; widgets-only UX)
+- ✅ Widget-shaped input (`SetWindowRgn`) + DWM edge suppress (see overlay-input-and-edges.md)
 - App Launcher → Drag polish → Theme editor → WebContent → Room switching
-- Follow-up: click-through empty overlay regions (public-API-safe approach only)
 

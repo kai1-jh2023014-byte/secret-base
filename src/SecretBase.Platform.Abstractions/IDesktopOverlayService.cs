@@ -20,4 +20,13 @@ public interface IDesktopOverlayService
     /// desktop wallpaper layer. Does not use Explorer WorkerW or shell hooks.
     /// </summary>
     void KeepBehindApplicationWindows(DesktopOverlayTarget target);
+
+    /// <summary>
+    /// Restricts the overlay HWND shape/hit-test to the union of <paramref name="rects"/>
+    /// via documented <c>SetWindowRgn</c>. Empty/outside areas pass input to Desktop and
+    /// other apps. Rects are client-relative physical pixels supplied by the App layer.
+    /// </summary>
+    void UpdateInteractiveInputRegions(
+        DesktopOverlayTarget target,
+        IReadOnlyList<OverlayInputRect> rects);
 }

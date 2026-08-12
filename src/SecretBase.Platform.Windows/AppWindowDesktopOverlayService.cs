@@ -44,6 +44,7 @@ public sealed class AppWindowDesktopOverlayService : IDesktopOverlayService
         if (target.WindowHandle != nint.Zero)
         {
             TryEnableTransparentFrame(target.WindowHandle);
+            TrySuppressSystemEdgeChrome(target.WindowHandle);
             TrySubclassEraseBackground(target.WindowHandle);
             KeepBehindApplicationWindows(target);
         }
@@ -65,6 +66,64 @@ public sealed class AppWindowDesktopOverlayService : IDesktopOverlayService
             0,
             0,
             NativeMethods.SwpNomove | NativeMethods.SwpNosize | NativeMethods.SwpNoactivate);
+    }
+
+    public void UpdateInteractiveInputRegions(
+        DesktopOverlayTarget target,
+        IReadOnlyList<OverlayInputRect> rects)
+    {
+        if (target.WindowHandle == nint.Zero)
+        {
+            return;
+        }
+
+        // Documented user32 SetWindowRgn: window shape = interactive widgets only.
+        // Outside the region, input goes to Desktop / other processes (cross-process).
+        // After a successful SetWindowRgn, the system owns the HRGN — do not DeleteObject it.
+        nint combined = NativeMethods.CreateRectRgn(0, 0, 0, 0);
+        if (combined == nint.Zero)
+        {
+            return;
+        }
+
+        try
+        {
+            foreach (var rect in rects)
+            {
+                if (rect.Width <= 0 || rect.Height <= 0)
+                {
+                    continue;
+                }
+
+                var left = rect.X;
+                var top = rect.Y;
+                var right = rect.X + rect.Width;
+                var bottom = rect.Y + rect.Height;
+                var piece = NativeMethods.CreateRectRgn(left, top, right, bottom);
+                if (piece == nint.Zero)
+                {
+                    continue;
+                }
+
+                _ = NativeMethods.CombineRgn(combined, combined, piece, NativeMethods.RgnOr);
+                _ = NativeMethods.DeleteObject(piece);
+            }
+
+            if (!NativeMethods.SetWindowRgn(target.WindowHandle, combined, redraw: true))
+            {
+                _ = NativeMethods.DeleteObject(combined);
+            }
+
+            // Ownership transferred to the system on success.
+            combined = nint.Zero;
+        }
+        finally
+        {
+            if (combined != nint.Zero)
+            {
+                _ = NativeMethods.DeleteObject(combined);
+            }
+        }
     }
 
     private static void TryEnableTransparentFrame(nint hwnd)
@@ -100,6 +159,26 @@ public sealed class AppWindowDesktopOverlayService : IDesktopOverlayService
                 _ = NativeMethods.DeleteObject(hrgn);
             }
         }
+    }
+
+    private static void TrySuppressSystemEdgeChrome(nint hwnd)
+    {
+        // Win11+: suppress the thin DWM border that remains after SetBorderAndTitleBar(false,false).
+        // https://learn.microsoft.com/windows/win32/api/dwmapi/ne-dwmapi-dwmwindowattribute
+        var colorNone = NativeMethods.DwmwaColorNone;
+        _ = NativeMethods.DwmSetWindowAttribute(
+            hwnd,
+            NativeMethods.DwmwaBorderColor,
+            ref colorNone,
+            sizeof(uint));
+
+        // Avoid rounded-corner anti-alias halo on a work-area transparent host.
+        var corner = NativeMethods.DwmwcpDoNotRound;
+        _ = NativeMethods.DwmSetWindowAttribute(
+            hwnd,
+            NativeMethods.DwmwaWindowCornerPreference,
+            ref corner,
+            sizeof(uint));
     }
 
     private static void TrySubclassEraseBackground(nint hwnd)
@@ -140,6 +219,7 @@ public sealed class AppWindowDesktopOverlayService : IDesktopOverlayService
         else if (uMsg == NativeMethods.WmDwmCompositionChanged)
         {
             TryEnableTransparentFrame(hWnd);
+            TrySuppressSystemEdgeChrome(hWnd);
             return 0;
         }
 
@@ -174,6 +254,14 @@ public sealed class AppWindowDesktopOverlayService : IDesktopOverlayService
         public const uint WmEraseBkgnd = 0x0014;
         public const uint WmDwmCompositionChanged = 0x031E;
         public const nuint EraseSubclassId = 1;
+
+        // DWMWINDOWATTRIBUTE (Win11 Build 22000+)
+        public const uint DwmwaWindowCornerPreference = 33;
+        public const uint DwmwaBorderColor = 34;
+        public const uint DwmwaColorNone = 0xFFFFFFFE;
+        public const uint DwmwcpDoNotRound = 1;
+
+        public const int RgnOr = 2;
 
         [StructLayout(LayoutKind.Sequential)]
         public struct MARGINS
@@ -218,8 +306,18 @@ public sealed class AppWindowDesktopOverlayService : IDesktopOverlayService
         [DllImport("dwmapi.dll")]
         public static extern int DwmEnableBlurBehindWindow(nint hwnd, ref DwmBlurBehind pBlurBehind);
 
+        [DllImport("dwmapi.dll")]
+        public static extern int DwmSetWindowAttribute(
+            nint hwnd,
+            uint dwAttribute,
+            ref uint pvAttribute,
+            int cbAttribute);
+
         [DllImport("gdi32.dll")]
         public static extern nint CreateRectRgn(int x1, int y1, int x2, int y2);
+
+        [DllImport("gdi32.dll")]
+        public static extern int CombineRgn(nint hrgnDest, nint hrgnSrc1, nint hrgnSrc2, int iMode);
 
         [DllImport("gdi32.dll")]
         public static extern nint CreateSolidBrush(uint colorRef);
@@ -232,6 +330,9 @@ public sealed class AppWindowDesktopOverlayService : IDesktopOverlayService
 
         [DllImport("user32.dll")]
         public static extern int FillRect(nint hDC, ref Rect lprc, nint hbr);
+
+        [DllImport("user32.dll", SetLastError = true)]
+        public static extern bool SetWindowRgn(nint hWnd, nint hRgn, bool redraw);
 
         [DllImport("user32.dll", SetLastError = true)]
         public static extern bool SetWindowPos(

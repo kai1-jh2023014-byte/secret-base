@@ -8,14 +8,14 @@ It does **not** replace Explorer, the Taskbar, or the Windows shell.
 
 ```text
 Desktop
-  ├── Wallpaper                 ← visible through transparent overlay
-  ├── Secret Base Overlay       ← below other apps (HWND_BOTTOM)
-  │     ├── Clock Widget
-  │     └── Text Widget
+  ├── Wallpaper / Desktop icons     ← receive input outside widget regions
+  ├── Secret Base Overlay           ← HWND shaped to widgets only (SetWindowRgn)
+  │     ├── Clock Widget            ← receives input
+  │     └── Text Widget             ← receives input
   └── Other application windows / Taskbar
 ```
 
-Normal UX: **widgets only**. No title, status strip, or Exit button on the wallpaper.
+Normal UX: **widgets only**. Transparent/empty areas pass input to Windows. No title, status strip, or Exit button on the wallpaper.
 
 ## Public APIs used (v0.1 overlay)
 
@@ -28,11 +28,23 @@ Normal UX: **widgets only**. No title, status strip, or Exit button on the wallp
 | Transparent `SystemBackdrop` (`Windows.UI.Composition` brush) | Clear host fill for wallpaper |
 | `DwmExtendFrameIntoClientArea` | Documented DWM frame into client |
 | `DwmEnableBlurBehindWindow` + empty region | Documented DWM glass clear |
+| `DwmSetWindowAttribute(DWMWA_BORDER_COLOR, COLOR_NONE)` | Suppress Win11 thin white frame |
+| `DwmSetWindowAttribute(DWMWA_WINDOW_CORNER_PREFERENCE, DONOTROUND)` | Avoid corner AA halo |
 | `SetWindowSubclass` + `WM_ERASEBKGND` FillRect | Skip opaque client erase (black→glass) |
+| `SetWindowRgn` (union of widget client rects) | Cross-process click-through outside widgets |
 | `SetWindowPos(..., HWND_BOTTOM, ...)` | Keep overlay under other top-level apps |
 | Transparent page / canvas brushes | XAML layer stays clear |
 
 All of the above are public Windows App SDK / documented Win32 APIs in `IDesktopOverlayService` → `AppWindowDesktopOverlayService`.
+
+Investigation notes: [overlay-input-and-edges.md](overlay-input-and-edges.md).
+
+## Input policy (widgets vs Desktop)
+
+- App computes widget (+ optional debug chrome) client rects in physical pixels.
+- Platform applies documented `SetWindowRgn` so the HWND shape is the union of those rects.
+- Outside the region, Explorer / other apps receive mouse input (cross-process).
+- `WM_NCHITTEST` / `HTTRANSPARENT` alone is **not** used for Desktop passthrough (same-thread limitation per Win32 docs).
 
 ## Z-order policy
 
@@ -58,14 +70,16 @@ All of the above are public Windows App SDK / documented Win32 APIs in `IDesktop
 - Shell DLL patching / registry shell mutation
 - Admin elevation
 - Replacing the Windows shell
-- Click-through of transparent pixels (follow-up)
 
-## Click-through limitation (honest)
+## Known limitations (honest)
 
-Empty overlay regions may still receive input while Secret Base occupies that hit-test region. Pixel click-through is deferred.
+- Hit regions are axis-aligned (widget corner radius is visual only).
+- Keyboard accelerators need focus (click a widget or Alt+Tab) after interacting with the Desktop.
+- Host still sizes to primary `WorkArea` (multi-monitor follow-up).
+- Win10 may ignore Win11-only DWM border attributes (harmless).
 
 ## Safe Exit
 
-- **Ctrl+Shift+Q** — always available
+- **Ctrl+Shift+Q** — when Secret Base has keyboard focus
 - Debug chrome **Exit** — after **Ctrl+Shift+D**
 - Alt+Tab / taskbar still list Secret Base (process exit leaves Explorer intact)

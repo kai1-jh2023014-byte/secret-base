@@ -18,19 +18,26 @@ public sealed partial class WidgetFrame : UserControl
 {
     private readonly WidgetInstance _instance;
     private readonly ThemeDefinition _theme;
-    private readonly Action _onChanged;
+    private readonly Action _onLayoutCommitted;
+    private readonly Action? _onBoundsChanged;
 
     private bool _dragging;
     private bool _resizing;
     private bool _pointerInside;
     private Point _lastPoint;
 
-    public WidgetFrame(WidgetInstance instance, UIElement content, ThemeDefinition theme, Action onChanged)
+    public WidgetFrame(
+        WidgetInstance instance,
+        UIElement content,
+        ThemeDefinition theme,
+        Action onLayoutCommitted,
+        Action? onBoundsChanged = null)
     {
         InitializeComponent();
         _instance = instance;
         _theme = theme;
-        _onChanged = onChanged;
+        _onLayoutCommitted = onLayoutCommitted;
+        _onBoundsChanged = onBoundsChanged;
 
         ContentHost.Child = content;
         Width = instance.Size.Width;
@@ -105,6 +112,7 @@ public sealed partial class WidgetFrame : UserControl
         Canvas.SetTop(this, newY);
         _instance.Position.X = newX;
         _instance.Position.Y = newY;
+        _onBoundsChanged?.Invoke();
         e.Handled = true;
     }
 
@@ -126,7 +134,8 @@ public sealed partial class WidgetFrame : UserControl
         }
 
         SetChromeEmphasis(emphasized: _pointerInside);
-        _onChanged();
+        _onBoundsChanged?.Invoke();
+        _onLayoutCommitted();
         e.Handled = true;
     }
 
@@ -161,6 +170,7 @@ public sealed partial class WidgetFrame : UserControl
         _instance.Size.Clamp(_theme.WidgetMinWidth, _theme.WidgetMinHeight);
         Width = _instance.Size.Width;
         Height = _instance.Size.Height;
+        _onBoundsChanged?.Invoke();
         e.Handled = true;
     }
 
@@ -182,7 +192,8 @@ public sealed partial class WidgetFrame : UserControl
         }
 
         SetChromeEmphasis(emphasized: _pointerInside);
-        _onChanged();
+        _onBoundsChanged?.Invoke();
+        _onLayoutCommitted();
         e.Handled = true;
     }
 }

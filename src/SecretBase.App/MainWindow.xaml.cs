@@ -37,7 +37,13 @@ public sealed partial class MainWindow : Window
         // so normal applications stay above the desktop overlay layer.
         Activated += OnActivated;
 
-        RootFrame.Navigate(typeof(DesktopPage), args);
+        // Page needs overlay target to push widget hit regions (SetWindowRgn) after layout.
+        var pageArgs = args with
+        {
+            Overlay = _overlayService,
+            OverlayTarget = _overlayTarget
+        };
+        RootFrame.Navigate(typeof(DesktopPage), pageArgs);
     }
 
     private void OnActivated(object sender, WindowActivatedEventArgs args)
@@ -57,4 +63,6 @@ public sealed record DesktopPageArgs(
     CompatibilityInfo Compatibility,
     ILayoutStore LayoutStore,
     IThemeStore ThemeStore,
-    ITimeProvider TimeProvider);
+    ITimeProvider TimeProvider,
+    IDesktopOverlayService? Overlay = null,
+    DesktopOverlayTarget? OverlayTarget = null);
