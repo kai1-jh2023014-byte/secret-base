@@ -66,4 +66,5 @@ public sealed record DesktopPageArgs(
     ITimeProvider TimeProvider,
     IDesktopOverlayService? Overlay = null,
     DesktopOverlayTarget? OverlayTarget = null,
-    ITargetLaunchService? Launcher = null);
+    ITargetLaunchService? Launcher = null,
+    IFileIconService? Icons = null);

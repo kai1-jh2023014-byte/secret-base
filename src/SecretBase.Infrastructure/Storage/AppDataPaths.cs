@@ -30,6 +30,7 @@ public static class AppDataPaths
     public static string ThemesDirectory => Ensure("themes");
     public static string LayoutsDirectory => Ensure("layouts");
     public static string SettingsDirectory => Ensure("settings");
+    public static string IconsDirectory => Ensure("icons");
 
     private static string Ensure(string relative)
     {

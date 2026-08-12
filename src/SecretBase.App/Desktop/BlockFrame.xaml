@@ -10,7 +10,7 @@
     Drop="Root_Drop"
     mc:Ignorable="d">
 
-    <!-- Desktop "room": drag / resize chrome + item grid. -->
+    <!-- Desktop "room": drag / resize chrome + movable item canvas. -->
     <Grid
         x:Name="RootGrid"
         Background="Transparent"
@@ -43,7 +43,7 @@
         <Border
             x:Name="Surface"
             Grid.Row="1"
-            Padding="12,8,12,12"
+            Padding="10,6,10,10"
             CornerRadius="0,0,12,12">
             <Grid>
                 <Grid.RowDefinitions>
@@ -51,7 +51,7 @@
                     <RowDefinition Height="*" />
                 </Grid.RowDefinitions>
 
-                <Grid Grid.Row="0" Margin="0,0,0,8">
+                <Grid Grid.Row="0" Margin="0,0,0,6">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
@@ -73,55 +73,24 @@
                         ToolTipService.ToolTip="Delete Block" />
                 </Grid>
 
-                <ScrollViewer
+                <Canvas
+                    x:Name="ItemCanvas"
                     Grid.Row="1"
-                    VerticalScrollBarVisibility="Auto"
-                    HorizontalScrollBarVisibility="Disabled">
-                    <GridView
-                        x:Name="ItemsGrid"
-                        SelectionMode="None"
-                        IsItemClickEnabled="True"
-                        ItemClick="ItemsGrid_ItemClick"
-                        XYFocusKeyboardNavigation="Enabled">
-                        <GridView.ItemTemplate>
-                            <DataTemplate>
-                                <StackPanel
-                                    Width="88"
-                                    Spacing="4"
-                                    Padding="4">
-                                    <Border
-                                        Width="40"
-                                        Height="40"
-                                        CornerRadius="8"
-                                        HorizontalAlignment="Center"
-                                        Background="#33FFFFFF">
-                                        <TextBlock
-                                            Text="{Binding Glyph}"
-                                            FontSize="18"
-                                            HorizontalAlignment="Center"
-                                            VerticalAlignment="Center" />
-                                    </Border>
-                                    <TextBlock
-                                        Text="{Binding Name}"
-                                        FontSize="11"
-                                        TextAlignment="Center"
-                                        TextWrapping="WrapWholeWords"
-                                        TextTrimming="CharacterEllipsis"
-                                        MaxLines="2" />
-                                </StackPanel>
-                            </DataTemplate>
-                        </GridView.ItemTemplate>
-                    </GridView>
-                </ScrollViewer>
+                    Background="Transparent"
+                    AllowDrop="True"
+                    DragOver="Root_DragOver"
+                    Drop="Root_Drop" />
 
                 <TextBlock
                     x:Name="EmptyHint"
                     Grid.Row="1"
-                    Text="Drop apps or shortcuts here"
+                    Text="Drop apps or shortcuts here — then drag to arrange"
                     FontSize="12"
                     Opacity="0.65"
                     HorizontalAlignment="Center"
                     VerticalAlignment="Center"
+                    TextAlignment="Center"
+                    TextWrapping="Wrap"
                     IsHitTestVisible="False" />
             </Grid>
         </Border>

@@ -10,8 +10,8 @@
 
     <!--
       Widgets + Blocks desktop layer.
-      Debug chrome is Collapsed by default; toggle with Ctrl+Shift+D.
-      Safe Exit: Ctrl+Shift+Q. Add Block: Ctrl+Shift+B.
+      Add Block: always-visible icon button (+).
+      Debug chrome: Ctrl+Shift+D. Safe Exit: Ctrl+Shift+Q.
     -->
     <Grid x:Name="RootGrid" Background="Transparent">
         <Grid.KeyboardAccelerators>
@@ -32,6 +32,22 @@
         <Canvas
             x:Name="WidgetCanvas"
             Background="Transparent" />
+
+        <!-- Always-visible Add Block affordance (not keyboard-only). -->
+        <Button
+            x:Name="AddBlockFab"
+            Width="48"
+            Height="48"
+            Margin="16,16"
+            HorizontalAlignment="Left"
+            VerticalAlignment="Bottom"
+            Content="+"
+            FontSize="28"
+            FontWeight="SemiBold"
+            Padding="0"
+            CornerRadius="14"
+            Click="AddBlockButton_Click"
+            ToolTipService.ToolTip="Add Block" />
 
         <!-- Developer / recovery chrome — hidden in normal overlay UX. -->
         <Border
@@ -55,7 +71,7 @@
                     Content="Add Block"
                     Click="AddBlockButton_Click"
                     Padding="12,4"
-                    ToolTipService.ToolTip="Create a Block (Ctrl+Shift+B)" />
+                    ToolTipService.ToolTip="Create a Block" />
                 <Button
                     x:Name="ExitButton"
                     Content="Exit"

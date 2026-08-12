@@ -95,8 +95,9 @@ public sealed class JsonLayoutStore : ILayoutStore
             }
 
             block.ClampSize();
-            foreach (var item in block.Items)
+            for (var i = 0; i < block.Items.Count; i++)
             {
+                var item = block.Items[i];
                 if (item.Id == Guid.Empty)
                 {
                     item.Id = Guid.NewGuid();
@@ -105,6 +106,7 @@ public sealed class JsonLayoutStore : ILayoutStore
                 item.Name ??= string.Empty;
                 item.Target ??= string.Empty;
                 item.Icon ??= string.Empty;
+                item.EnsurePlacement(i);
             }
         }
     }

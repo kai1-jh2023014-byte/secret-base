@@ -111,13 +111,17 @@ public class LayoutPersistenceTests
             {
                 Name = "Cursor",
                 Type = BlockItemType.Application,
-                Target = @"C:\Tools\Cursor\Cursor.exe"
+                Target = @"C:\Tools\Cursor\Cursor.exe",
+                X = 12,
+                Y = 20
             });
             block.Items.Add(new BlockItem
             {
                 Name = "Repo",
                 Type = BlockItemType.Folder,
-                Target = @"C:\Repos\secret-base"
+                Target = @"C:\Repos\secret-base",
+                X = 110,
+                Y = 20
             });
             layout.Blocks.Add(block);
 
@@ -136,6 +140,8 @@ public class LayoutPersistenceTests
             Assert.Equal(2, loaded.Items.Count);
             Assert.Equal(BlockItemType.Application, loaded.Items[0].Type);
             Assert.Equal(@"C:\Tools\Cursor\Cursor.exe", loaded.Items[0].Target);
+            Assert.Equal(12, loaded.Items[0].X);
+            Assert.Equal(20, loaded.Items[0].Y);
             Assert.Equal(BlockItemType.Folder, loaded.Items[1].Type);
         }
         finally

@@ -32,6 +32,7 @@ public sealed partial class DesktopPage : Page
     private IDesktopOverlayService? _overlay;
     private DesktopOverlayTarget? _overlayTarget;
     private ITargetLaunchService? _launcher;
+    private IFileIconService? _icons;
     private DesktopLayout? _layout;
     private ThemeDefinition? _theme;
     private CompatibilityInfo? _compatibility;
@@ -65,19 +66,29 @@ public sealed partial class DesktopPage : Page
         _overlay = args.Overlay;
         _overlayTarget = args.OverlayTarget;
         _launcher = args.Launcher;
+        _icons = args.Icons;
 
         _theme = _themeStore.LoadOrCreateDefault();
         _layout = _layoutStore.LoadOrCreateDefault(RoomId.DefaultRoomId);
         EnsureSeedTextWidget(_layout);
 
         ApplyDesktopTheme(_theme);
+        StyleAddBlockFab(_theme);
         RefreshDebugStatus();
         ShowDebugChrome(forceVisible: false);
 
         RenderDesktopObjects();
         _logger.Info("desktop", $"Overlay desktop shown for room '{_layout.RoomId}' with {_layout.Widgets.Count} widget(s), {_layout.Blocks.Count} block(s).");
         _logger.Info("widget", "Clock and Text widget hosts ready.");
-        _logger.Info("block", "Block host ready (Ctrl+Shift+B to add; drop files/shortcuts onto a Block).");
+        _logger.Info("block", "Block host ready (use + button to add; drop + drag icons inside a Block).");
+    }
+
+    private void StyleAddBlockFab(ThemeDefinition theme)
+    {
+        AddBlockFab.Background = ThemePainter.Brush(theme.Accent, 0.92);
+        AddBlockFab.Foreground = ThemePainter.Brush(theme.Foreground);
+        AddBlockFab.BorderBrush = ThemePainter.Brush(theme.WidgetForeground, 0.35);
+        AddBlockFab.BorderThickness = new Thickness(1);
     }
 
     private void ApplyDesktopTheme(ThemeDefinition theme)
@@ -170,7 +181,7 @@ public sealed partial class DesktopPage : Page
 
     private void RenderBlocks()
     {
-        if (_layout is null || _theme is null || _launcher is null)
+        if (_layout is null || _theme is null || _launcher is null || _icons is null)
         {
             return;
         }
@@ -182,6 +193,7 @@ public sealed partial class DesktopPage : Page
                 block,
                 _theme,
                 _launcher,
+                _icons,
                 onLayoutCommitted: PersistLayoutNow,
                 onDeleteRequested: DeleteBlock,
                 onBoundsChanged: SyncInteractiveInputRegions,
@@ -222,6 +234,11 @@ public sealed partial class DesktopPage : Page
             && TryCreateClientRect(DebugChrome, scale, out var chromeRect))
         {
             rects.Add(chromeRect);
+        }
+
+        if (TryCreateClientRect(AddBlockFab, scale, out var fabRect))
+        {
+            rects.Add(fabRect);
         }
 
         _overlay.UpdateInteractiveInputRegions(_overlayTarget, rects);
@@ -327,7 +344,7 @@ public sealed partial class DesktopPage : Page
 
     private async Task ShowAddBlockDialogAsync()
     {
-        if (_layout is null || _theme is null || _launcher is null)
+        if (_layout is null || _theme is null || _launcher is null || _icons is null)
         {
             return;
         }

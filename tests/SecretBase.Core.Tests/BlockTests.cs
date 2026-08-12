@@ -38,18 +38,23 @@ public class BlockModelTests
     }
 
     [Fact]
-    public void BlockItem_CanHoldApplicationTarget()
+    public void BlockItem_EnsurePlacement_AssignsGridSlot()
     {
-        var item = new BlockItem
-        {
-            Name = "Cursor",
-            Type = BlockItemType.Application,
-            Target = @"C:\Tools\Cursor\Cursor.exe",
-            Icon = string.Empty
-        };
+        var item = new BlockItem { Name = "A", Target = @"C:\a.exe" };
+        Assert.False(item.HasPlacement);
+        item.EnsurePlacement(4);
+        Assert.True(item.HasPlacement);
+        Assert.Equal(8 + (4 % 3) * (BlockItem.TileWidth + 8), item.X);
+        Assert.Equal(8 + (4 / 3) * (BlockItem.TileHeight + 8), item.Y);
+    }
 
-        Assert.Equal(BlockItemType.Application, item.Type);
-        Assert.Equal(@"C:\Tools\Cursor\Cursor.exe", item.Target);
+    [Fact]
+    public void BlockItem_ClampPlacement_KeepsInsideBounds()
+    {
+        var item = new BlockItem { X = 5000, Y = 5000 };
+        item.ClampPlacement(200, 180);
+        Assert.True(item.X <= 200 - BlockItem.TileWidth);
+        Assert.True(item.Y <= 180 - BlockItem.TileHeight);
     }
 
     [Fact]

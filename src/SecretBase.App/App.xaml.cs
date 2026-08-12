@@ -44,7 +44,8 @@ public partial class App : Application
             LayoutStore: new JsonLayoutStore(),
             ThemeStore: new JsonThemeStore(),
             TimeProvider: new SystemTimeProvider(),
-            Launcher: new ShellTargetLaunchService());
+            Launcher: new ShellTargetLaunchService(),
+            Icons: new ShellFileIconService(AppDataPaths.IconsDirectory));
 
         IDesktopOverlayService overlay = new AppWindowDesktopOverlayService();
         _window = new MainWindow(pageArgs, overlay);

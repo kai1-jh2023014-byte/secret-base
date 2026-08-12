@@ -3,6 +3,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Media.Imaging;
 using SecretBase.Core.Blocks;
 using SecretBase.Core.Themes;
 using SecretBase.Platform.Abstractions;
@@ -14,14 +15,14 @@ using Windows.Storage;
 namespace SecretBase.App.Desktop;
 
 /// <summary>
-/// Desktop Block chrome: move / resize / name / delete / item grid + drop targets.
-/// Mirrors <see cref="WidgetFrame"/> patterns without shared base (one impl first).
+/// Desktop Block chrome: move / resize / name / delete / movable item icons + drop targets.
 /// </summary>
 public sealed partial class BlockFrame : UserControl
 {
     private readonly Block _block;
     private readonly ThemeDefinition _theme;
     private readonly ITargetLaunchService _launcher;
+    private readonly IFileIconService _icons;
     private readonly Action _onLayoutCommitted;
     private readonly Action? _onBoundsChanged;
     private readonly Action<Block> _onDeleteRequested;
@@ -32,10 +33,17 @@ public sealed partial class BlockFrame : UserControl
     private bool _pointerInside;
     private Point _lastPoint;
 
+    private BlockItem? _activeItem;
+    private FrameworkElement? _activeTile;
+    private bool _itemDragging;
+    private Point _itemLastPoint;
+    private Point _itemPressPoint;
+
     public BlockFrame(
         Block block,
         ThemeDefinition theme,
         ITargetLaunchService launcher,
+        IFileIconService icons,
         Action onLayoutCommitted,
         Action<Block> onDeleteRequested,
         Action? onBoundsChanged = null,
@@ -45,6 +53,7 @@ public sealed partial class BlockFrame : UserControl
         _block = block;
         _theme = theme;
         _launcher = launcher;
+        _icons = icons;
         _onLayoutCommitted = onLayoutCommitted;
         _onDeleteRequested = onDeleteRequested;
         _onBoundsChanged = onBoundsChanged;
@@ -55,6 +64,7 @@ public sealed partial class BlockFrame : UserControl
         ApplyTheme(theme);
         RefreshItems();
         SetChromeEmphasis(emphasized: false);
+        SizeChanged += (_, _) => ClampAllItemPlacements();
     }
 
     public Guid BlockId => _block.Id;
@@ -81,11 +91,223 @@ public sealed partial class BlockFrame : UserControl
 
     private void RefreshItems()
     {
-        var vms = _block.Items
-            .Select(ItemVm.From)
-            .ToList();
-        ItemsGrid.ItemsSource = vms;
-        EmptyHint.Visibility = vms.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        ItemCanvas.Children.Clear();
+        for (var i = 0; i < _block.Items.Count; i++)
+        {
+            var item = _block.Items[i];
+            item.EnsurePlacement(i);
+            item.ClampPlacement(ItemCanvas.ActualWidth > 0 ? ItemCanvas.ActualWidth : _block.Size.Width - 24,
+                ItemCanvas.ActualHeight > 0 ? ItemCanvas.ActualHeight : _block.Size.Height - 60);
+            ItemCanvas.Children.Add(CreateItemTile(item));
+        }
+
+        EmptyHint.Visibility = _block.Items.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private FrameworkElement CreateItemTile(BlockItem item)
+    {
+        var label = new TextBlock
+        {
+            Text = string.IsNullOrWhiteSpace(item.Name) ? "Item" : item.Name,
+            FontSize = 11,
+            TextAlignment = TextAlignment.Center,
+            TextWrapping = TextWrapping.WrapWholeWords,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            MaxLines = 2,
+            Foreground = ThemePainter.Brush(_theme.WidgetForeground),
+            FontFamily = new FontFamily(_theme.FontFamily)
+        };
+
+        var iconHost = new Border
+        {
+            Width = 40,
+            Height = 40,
+            CornerRadius = new CornerRadius(8),
+            HorizontalAlignment = HorizontalAlignment.Center,
+            Background = new SolidColorBrush(Windows.UI.Color.FromArgb(0x33, 0xFF, 0xFF, 0xFF))
+        };
+
+        var iconPath = !string.IsNullOrWhiteSpace(item.Icon) && File.Exists(item.Icon)
+            ? item.Icon
+            : _icons.TryGetCachedIconPath(item.Target);
+
+        if (!string.IsNullOrWhiteSpace(iconPath) && File.Exists(iconPath))
+        {
+            item.Icon = iconPath;
+            iconHost.Child = new Image
+            {
+                Source = new BitmapImage(new Uri(iconPath)),
+                Stretch = Stretch.Uniform,
+                Width = 36,
+                Height = 36
+            };
+        }
+        else
+        {
+            iconHost.Child = new TextBlock
+            {
+                Text = item.Type switch
+                {
+                    BlockItemType.Application => "APP",
+                    BlockItemType.Shortcut => "LNK",
+                    BlockItemType.Folder => "DIR",
+                    _ => "FILE"
+                },
+                FontSize = 10,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                Foreground = ThemePainter.Brush(_theme.ForegroundMuted)
+            };
+        }
+
+        var stack = new StackPanel
+        {
+            Width = BlockItem.TileWidth,
+            Spacing = 4,
+            Padding = new Thickness(2)
+        };
+        stack.Children.Add(iconHost);
+        stack.Children.Add(label);
+
+        var tile = new Border
+        {
+            Width = BlockItem.TileWidth,
+            Height = BlockItem.TileHeight,
+            Background = new SolidColorBrush(Windows.UI.Color.FromArgb(0x22, 0xFF, 0xFF, 0xFF)),
+            CornerRadius = new CornerRadius(8),
+            Child = stack,
+            Tag = item,
+            CanDrag = false
+        };
+
+        tile.PointerPressed += ItemTile_PointerPressed;
+        tile.PointerMoved += ItemTile_PointerMoved;
+        tile.PointerReleased += ItemTile_PointerReleased;
+        tile.PointerCaptureLost += ItemTile_PointerCaptureLost;
+        ToolTipService.SetToolTip(tile, $"{item.Name}\n{item.Target}\nDrag to move · Click to open");
+
+        Canvas.SetLeft(tile, item.X);
+        Canvas.SetTop(tile, item.Y);
+        return tile;
+    }
+
+    private void ClampAllItemPlacements()
+    {
+        var maxW = ItemCanvas.ActualWidth;
+        var maxH = ItemCanvas.ActualHeight;
+        if (maxW <= 0 || maxH <= 0)
+        {
+            return;
+        }
+
+        foreach (var child in ItemCanvas.Children.OfType<FrameworkElement>())
+        {
+            if (child.Tag is not BlockItem item)
+            {
+                continue;
+            }
+
+            item.ClampPlacement(maxW, maxH);
+            Canvas.SetLeft(child, item.X);
+            Canvas.SetTop(child, item.Y);
+        }
+    }
+
+    private void ItemTile_PointerPressed(object sender, PointerRoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement tile || tile.Tag is not BlockItem item)
+        {
+            return;
+        }
+
+        if (e.GetCurrentPoint(tile).Properties.PointerUpdateKind is not PointerUpdateKind.LeftButtonPressed)
+        {
+            return;
+        }
+
+        _activeTile = tile;
+        _activeItem = item;
+        _itemDragging = false;
+        _itemPressPoint = e.GetCurrentPoint(ItemCanvas).Position;
+        _itemLastPoint = _itemPressPoint;
+        tile.CapturePointer(e.Pointer);
+        e.Handled = true;
+    }
+
+    private void ItemTile_PointerMoved(object sender, PointerRoutedEventArgs e)
+    {
+        if (_activeTile is null || _activeItem is null || sender is not FrameworkElement tile)
+        {
+            return;
+        }
+
+        var point = e.GetCurrentPoint(ItemCanvas).Position;
+        if (!_itemDragging)
+        {
+            var dx = point.X - _itemPressPoint.X;
+            var dy = point.Y - _itemPressPoint.Y;
+            if ((dx * dx) + (dy * dy) < 25)
+            {
+                return;
+            }
+
+            _itemDragging = true;
+        }
+
+        var moveX = point.X - _itemLastPoint.X;
+        var moveY = point.Y - _itemLastPoint.Y;
+        _itemLastPoint = point;
+
+        _activeItem.X = Canvas.GetLeft(tile) + moveX;
+        _activeItem.Y = Canvas.GetTop(tile) + moveY;
+        _activeItem.ClampPlacement(ItemCanvas.ActualWidth, ItemCanvas.ActualHeight);
+        Canvas.SetLeft(tile, _activeItem.X);
+        Canvas.SetTop(tile, _activeItem.Y);
+        e.Handled = true;
+    }
+
+    private void ItemTile_PointerReleased(object sender, PointerRoutedEventArgs e) =>
+        EndItemPointer(sender, e, captureLost: false);
+
+    private void ItemTile_PointerCaptureLost(object sender, PointerRoutedEventArgs e) =>
+        EndItemPointer(sender, e, captureLost: true);
+
+    private void EndItemPointer(object sender, PointerRoutedEventArgs e, bool captureLost)
+    {
+        if (_activeTile is null || _activeItem is null)
+        {
+            return;
+        }
+
+        var item = _activeItem;
+        var dragged = _itemDragging;
+        if (!captureLost && sender is UIElement el)
+        {
+            el.ReleasePointerCapture(e.Pointer);
+        }
+
+        _activeTile = null;
+        _activeItem = null;
+        _itemDragging = false;
+
+        if (dragged)
+        {
+            _onLayoutCommitted();
+            _onBoundsChanged?.Invoke();
+        }
+        else
+        {
+            var result = _launcher.TryLaunch(new TargetLaunchRequest(
+                Target: item.Target,
+                ItemType: item.Type.ToString(),
+                DisplayName: item.Name));
+            if (!result.Succeeded)
+            {
+                _onStatus?.Invoke(result.ErrorMessage ?? "Launch failed.");
+            }
+        }
+
+        e.Handled = true;
     }
 
     private void SetChromeEmphasis(bool emphasized)
@@ -200,6 +422,7 @@ public sealed partial class BlockFrame : UserControl
         _block.ClampSize();
         Width = _block.Size.Width;
         Height = _block.Size.Height;
+        ClampAllItemPlacements();
         _onBoundsChanged?.Invoke();
         e.Handled = true;
     }
@@ -229,24 +452,6 @@ public sealed partial class BlockFrame : UserControl
 
     private void DeleteButton_Click(object sender, RoutedEventArgs e) =>
         _onDeleteRequested(_block);
-
-    private void ItemsGrid_ItemClick(object sender, ItemClickEventArgs e)
-    {
-        if (e.ClickedItem is not ItemVm vm)
-        {
-            return;
-        }
-
-        var result = _launcher.TryLaunch(new TargetLaunchRequest(
-            Target: vm.Target,
-            ItemType: vm.Type.ToString(),
-            DisplayName: vm.Name));
-
-        if (!result.Succeeded)
-        {
-            _onStatus?.Invoke(result.ErrorMessage ?? "Launch failed.");
-        }
-    }
 
     private void Root_DragOver(object sender, DragEventArgs e)
     {
@@ -280,6 +485,7 @@ public sealed partial class BlockFrame : UserControl
             return;
         }
 
+        var dropPoint = e.GetPosition(ItemCanvas);
         var added = 0;
         foreach (var storageItem in items)
         {
@@ -289,18 +495,7 @@ public sealed partial class BlockFrame : UserControl
                 continue;
             }
 
-            var isDirectory = storageItem is StorageFolder
-                             || (storageItem is StorageFile && Directory.Exists(path));
-            // StorageFile for folders is rare; prefer StorageFolder check.
-            if (storageItem is StorageFolder)
-            {
-                isDirectory = true;
-            }
-            else if (storageItem is StorageFile)
-            {
-                isDirectory = false;
-            }
-
+            var isDirectory = storageItem is StorageFolder;
             var type = BlockTargetValidator.InferType(path, isDirectory);
             if (!BlockTargetValidator.TryValidate(path, type, out var normalized, out var error))
             {
@@ -313,14 +508,22 @@ public sealed partial class BlockFrame : UserControl
                 continue;
             }
 
-            _block.Items.Add(new BlockItem
+            var iconPath = _icons.TryGetCachedIconPath(normalized) ?? string.Empty;
+            var item = new BlockItem
             {
                 Id = Guid.NewGuid(),
                 Name = BlockTargetValidator.InferDisplayName(normalized),
                 Type = type,
                 Target = normalized,
-                Icon = string.Empty
-            });
+                Icon = iconPath,
+                X = Math.Max(0, dropPoint.X - (BlockItem.TileWidth / 2) + (added * 12)),
+                Y = Math.Max(0, dropPoint.Y - (BlockItem.TileHeight / 2) + (added * 12))
+            };
+            item.ClampPlacement(
+                ItemCanvas.ActualWidth > 0 ? ItemCanvas.ActualWidth : _block.Size.Width - 24,
+                ItemCanvas.ActualHeight > 0 ? ItemCanvas.ActualHeight : _block.Size.Height - 60);
+
+            _block.Items.Add(item);
             added++;
         }
 
@@ -329,31 +532,7 @@ public sealed partial class BlockFrame : UserControl
             RefreshItems();
             _onLayoutCommitted();
             _onBoundsChanged?.Invoke();
-            _onStatus?.Invoke($"Added {added} item(s) to '{_block.Name}'.");
+            _onStatus?.Invoke($"Added {added} item(s) to '{_block.Name}'. Drag icons to arrange.");
         }
-    }
-
-    private sealed class ItemVm
-    {
-        public required string Name { get; init; }
-        public required string Target { get; init; }
-        public required BlockItemType Type { get; init; }
-        public required string Glyph { get; init; }
-
-        public static ItemVm From(BlockItem item) => new()
-        {
-            Name = string.IsNullOrWhiteSpace(item.Name) ? "Item" : item.Name,
-            Target = item.Target,
-            Type = item.Type,
-            Glyph = GlyphFor(item.Type)
-        };
-
-        private static string GlyphFor(BlockItemType type) => type switch
-        {
-            BlockItemType.Application => "APP",
-            BlockItemType.Shortcut => "LNK",
-            BlockItemType.Folder => "DIR",
-            _ => "FILE"
-        };
     }
 }

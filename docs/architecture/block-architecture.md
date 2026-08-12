@@ -10,9 +10,9 @@ They are **not** Windows folders and do not replace Explorer.
 |-------|------|
 | **Core** | `Block`, `BlockItem`, `BlockItemType`, `BlockTargetValidator`, `DefaultBlockFactory` |
 | **Infrastructure** | Layout JSON (`blocks` array), schema v1→v2 migration |
-| **Platform.Abstractions** | `ITargetLaunchService` / request+result DTOs |
-| **Platform.Windows** | `ShellTargetLaunchService` (`Process.Start` + `UseShellExecute`) |
-| **App** | `BlockFrame` UI, Add Block dialog, drop-target wiring, composition |
+| **Platform.Abstractions** | `ITargetLaunchService`, `IFileIconService` |
+| **Platform.Windows** | `ShellTargetLaunchService` (`UseShellExecute`); `ShellFileIconService` (`SHGetFileInfo` / `ExtractAssociatedIcon` → PNG cache) |
+| **App** | `BlockFrame` UI, Add Block **+** button, drop-target + in-Block drag, composition |
 
 Core has no Win32 / WinUI references.
 
@@ -57,10 +57,10 @@ Core has no Win32 / WinUI references.
 
 ## UX (V1)
 
-- **Ctrl+Shift+B** or debug chrome **Add Block** → name / position / size dialog
+- Always-visible **+** button (bottom-left) opens Add Block dialog (also Ctrl+Shift+B / debug chrome)
 - Drag Block chrome to move; corner grip to resize; **Del** removes Block
-- Drop `.exe` / `.lnk` / files / folders onto a Block to add items
-- Click item → Platform launches that path
+- Drop `.exe` / `.lnk` / files / folders onto a Block — **real shell icons** via `IFileIconService`
+- Drag icons **inside** the Block to rearrange (persisted `X`/`Y`); click to launch
 - Theme: room `ThemeDefinition` (Block.Theme reserved for later)
 
 ## Shared with widgets
