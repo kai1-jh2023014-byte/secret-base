@@ -25,10 +25,10 @@ Normal UX: **widgets only**. No title, status strip, or Exit button on the wallp
 | `OverlappedPresenter` flags | Chromeless, non-topmost host |
 | `DisplayArea.WorkArea` + `AppWindow.MoveAndResize` | Fit work area (above Taskbar) |
 | `AppWindow.IsShownInSwitchers` | Keep Alt+Tab discoverability for Safe Exit |
-| `SystemBackdrop = null` | Avoid WASDK 2.3 custom-backdrop FailFast |
+| Transparent `SystemBackdrop` (`Windows.UI.Composition` brush) | Clear host fill for wallpaper |
 | `DwmExtendFrameIntoClientArea` | Documented DWM frame into client |
-| `DwmEnableBlurBehindWindow` + empty region | Documented DWM clear of black client fill |
-| `SetWindowSubclass` + `WM_ERASEBKGND` → 1 | Skip default black client erase |
+| `DwmEnableBlurBehindWindow` + empty region | Documented DWM glass clear |
+| `SetWindowSubclass` + `WM_ERASEBKGND` FillRect | Skip opaque client erase (black→glass) |
 | `SetWindowPos(..., HWND_BOTTOM, ...)` | Keep overlay under other top-level apps |
 | Transparent page / canvas brushes | XAML layer stays clear |
 

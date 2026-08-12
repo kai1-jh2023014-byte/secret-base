@@ -9,6 +9,6 @@
     Title="Secret Base"
     mc:Ignorable="d">
 
-    <!-- SystemBackdrop left null; wallpaper visibility via DWM in Platform.Windows. -->
+    <!-- TransparentSystemBackdrop (Windows.UI.Composition) + DWM in Platform.Windows. -->
     <Frame x:Name="RootFrame" Background="Transparent" />
 </Window>

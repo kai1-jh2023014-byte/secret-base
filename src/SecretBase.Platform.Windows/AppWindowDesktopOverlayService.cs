@@ -15,9 +15,10 @@ public sealed class AppWindowDesktopOverlayService : IDesktopOverlayService
     // https://learn.microsoft.com/windows/win32/api/winuser/nf-winuser-setwindowpos
     private static readonly nint HwndBottom = 1;
 
-    // Keep subclass proc alive for the process lifetime (GC would unregister the hook).
+    // Keep subclass proc / GDI brush alive for the process lifetime.
     private static NativeMethods.SubclassProc? s_eraseSubclassProc;
     private static readonly HashSet<nint> s_subclassedHwnds = [];
+    private static nint s_blackBrush;
 
     public void ApplyChromelessWorkAreaOverlay(DesktopOverlayTarget target)
     {
@@ -68,7 +69,7 @@ public sealed class AppWindowDesktopOverlayService : IDesktopOverlayService
 
     private static void TryEnableTransparentFrame(nint hwnd)
     {
-        // Public dwmapi: extend frame into client so empty regions can be see-through.
+        // Public dwmapi: extend frame into client (full client glass for wallpaper visibility).
         var margins = new NativeMethods.MARGINS
         {
             cxLeftWidth = -1,
@@ -78,8 +79,8 @@ public sealed class AppWindowDesktopOverlayService : IDesktopOverlayService
         };
         _ = NativeMethods.DwmExtendFrameIntoClientArea(hwnd, ref margins);
 
-        // Public dwmapi: empty blur region clears the black client fill WinUI otherwise paints
-        // when SystemBackdrop is null (custom CompositionBrush backdrop FailFasts on WASDK 2.3).
+        // Public dwmapi: empty blur region + transparent Windows.UI SystemBackdrop clears
+        // the opaque black client WinUI paints by default.
         var hrgn = NativeMethods.CreateRectRgn(-2, -2, -1, -1);
         try
         {
@@ -108,6 +109,12 @@ public sealed class AppWindowDesktopOverlayService : IDesktopOverlayService
             return;
         }
 
+        if (s_blackBrush == nint.Zero)
+        {
+            // COLORREF 0 (black) + DWM glass → see-through; WinUIEx TransparentTintBackdrop pattern.
+            s_blackBrush = NativeMethods.CreateSolidBrush(0);
+        }
+
         s_eraseSubclassProc ??= EraseBackgroundSubclass;
         if (!NativeMethods.SetWindowSubclass(hwnd, s_eraseSubclassProc, NativeMethods.EraseSubclassId, 0))
         {
@@ -123,13 +130,36 @@ public sealed class AppWindowDesktopOverlayService : IDesktopOverlayService
         nuint uIdSubclass,
         nuint dwRefData)
     {
-        // Documented: returning nonzero tells Windows the background was erased — skips black fill.
         if (uMsg == NativeMethods.WmEraseBkgnd)
         {
-            return 1;
+            if (TryClearClient(hWnd, wParam))
+            {
+                return 1;
+            }
+        }
+        else if (uMsg == NativeMethods.WmDwmCompositionChanged)
+        {
+            TryEnableTransparentFrame(hWnd);
+            return 0;
         }
 
         return NativeMethods.DefSubclassProc(hWnd, uMsg, wParam, lParam);
+    }
+
+    private static bool TryClearClient(nint hwnd, nint hdc)
+    {
+        if (!NativeMethods.GetClientRect(hwnd, out var rect))
+        {
+            return false;
+        }
+
+        if (s_blackBrush == nint.Zero)
+        {
+            s_blackBrush = NativeMethods.CreateSolidBrush(0);
+        }
+
+        _ = NativeMethods.FillRect(hdc, ref rect, s_blackBrush);
+        return true;
     }
 
     private static class NativeMethods
@@ -142,6 +172,7 @@ public sealed class AppWindowDesktopOverlayService : IDesktopOverlayService
         public const uint DwmBbBlurRegion = 0x00000002;
 
         public const uint WmEraseBkgnd = 0x0014;
+        public const uint WmDwmCompositionChanged = 0x031E;
         public const nuint EraseSubclassId = 1;
 
         [StructLayout(LayoutKind.Sequential)]
@@ -164,6 +195,15 @@ public sealed class AppWindowDesktopOverlayService : IDesktopOverlayService
             public bool fTransitionOnMaximized;
         }
 
+        [StructLayout(LayoutKind.Sequential)]
+        public struct Rect
+        {
+            public int left;
+            public int top;
+            public int right;
+            public int bottom;
+        }
+
         public delegate nint SubclassProc(
             nint hWnd,
             uint uMsg,
@@ -182,7 +222,16 @@ public sealed class AppWindowDesktopOverlayService : IDesktopOverlayService
         public static extern nint CreateRectRgn(int x1, int y1, int x2, int y2);
 
         [DllImport("gdi32.dll")]
+        public static extern nint CreateSolidBrush(uint colorRef);
+
+        [DllImport("gdi32.dll")]
         public static extern int DeleteObject(nint hObject);
+
+        [DllImport("user32.dll")]
+        public static extern bool GetClientRect(nint hWnd, out Rect lpRect);
+
+        [DllImport("user32.dll")]
+        public static extern int FillRect(nint hDC, ref Rect lprc, nint hbr);
 
         [DllImport("user32.dll", SetLastError = true)]
         public static extern bool SetWindowPos(

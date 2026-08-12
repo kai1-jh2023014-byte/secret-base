@@ -49,3 +49,6 @@ credentials.json
 
 ## Cursor / local tooling
 .cursor/
+
+# Mono registry noise from cross-platform builds
+**/.mono/
