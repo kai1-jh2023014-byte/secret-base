@@ -2,38 +2,83 @@ using Microsoft.UI.Input;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
+using Microsoft.UI.Xaml.Media;
 using SecretBase.Core.Themes;
 using SecretBase.Core.Widgets;
+using SecretBase.Widgets.Theming;
 using Windows.Foundation;
 
 namespace SecretBase.App.Desktop;
 
 /// <summary>
-/// Host chrome for a widget instance: drag move + corner resize. Persists via callbacks.
+/// Host chrome for a widget instance: drag move + corner resize.
+/// Kept visually light so widgets feel like floating desktop objects.
 /// </summary>
 public sealed partial class WidgetFrame : UserControl
 {
     private readonly WidgetInstance _instance;
     private readonly ThemeDefinition _theme;
-    private readonly Action _onChanged;
+    private readonly Action _onLayoutCommitted;
+    private readonly Action? _onBoundsChanged;
 
     private bool _dragging;
     private bool _resizing;
+    private bool _pointerInside;
     private Point _lastPoint;
 
-    public WidgetFrame(WidgetInstance instance, UIElement content, ThemeDefinition theme, Action onChanged)
+    public WidgetFrame(
+        WidgetInstance instance,
+        UIElement content,
+        ThemeDefinition theme,
+        Action onLayoutCommitted,
+        Action? onBoundsChanged = null)
     {
         InitializeComponent();
         _instance = instance;
         _theme = theme;
-        _onChanged = onChanged;
+        _onLayoutCommitted = onLayoutCommitted;
+        _onBoundsChanged = onBoundsChanged;
 
         ContentHost.Child = content;
         Width = instance.Size.Width;
         Height = instance.Size.Height;
+        ApplyFloatingChrome(theme);
+        SetChromeEmphasis(emphasized: false);
     }
 
     public Guid WidgetId => _instance.Id;
+
+    private void ApplyFloatingChrome(ThemeDefinition theme)
+    {
+        var radius = Math.Max(8, theme.CornerRadius);
+        DragBar.CornerRadius = new CornerRadius(radius, radius, 0, 0);
+        // Soft grip tint derived from theme foreground — still nearly transparent.
+        var grip = ThemePainter.ParseColor(theme.WidgetForeground);
+        grip.A = 0x28;
+        DragBar.Background = new SolidColorBrush(grip);
+    }
+
+    private void SetChromeEmphasis(bool emphasized)
+    {
+        var opacity = emphasized || _dragging || _resizing ? 0.95 : 0.35;
+        DragBar.Opacity = opacity;
+        ResizeHandle.Opacity = opacity;
+    }
+
+    private void RootGrid_PointerEntered(object sender, PointerRoutedEventArgs e)
+    {
+        _pointerInside = true;
+        SetChromeEmphasis(emphasized: true);
+    }
+
+    private void RootGrid_PointerExited(object sender, PointerRoutedEventArgs e)
+    {
+        _pointerInside = false;
+        if (!_dragging && !_resizing)
+        {
+            SetChromeEmphasis(emphasized: false);
+        }
+    }
 
     private void DragArea_PointerPressed(object sender, PointerRoutedEventArgs e)
     {
@@ -43,6 +88,7 @@ public sealed partial class WidgetFrame : UserControl
         }
 
         _dragging = true;
+        SetChromeEmphasis(emphasized: true);
         _lastPoint = e.GetCurrentPoint((UIElement)Parent).Position;
         ((UIElement)sender).CapturePointer(e.Pointer);
         e.Handled = true;
@@ -66,6 +112,7 @@ public sealed partial class WidgetFrame : UserControl
         Canvas.SetTop(this, newY);
         _instance.Position.X = newX;
         _instance.Position.Y = newY;
+        _onBoundsChanged?.Invoke();
         e.Handled = true;
     }
 
@@ -86,7 +133,9 @@ public sealed partial class WidgetFrame : UserControl
             ((UIElement)sender).ReleasePointerCapture(e.Pointer);
         }
 
-        _onChanged();
+        SetChromeEmphasis(emphasized: _pointerInside);
+        _onBoundsChanged?.Invoke();
+        _onLayoutCommitted();
         e.Handled = true;
     }
 
@@ -98,6 +147,7 @@ public sealed partial class WidgetFrame : UserControl
         }
 
         _resizing = true;
+        SetChromeEmphasis(emphasized: true);
         _lastPoint = e.GetCurrentPoint((UIElement)Parent).Position;
         ((UIElement)sender).CapturePointer(e.Pointer);
         e.Handled = true;
@@ -120,6 +170,7 @@ public sealed partial class WidgetFrame : UserControl
         _instance.Size.Clamp(_theme.WidgetMinWidth, _theme.WidgetMinHeight);
         Width = _instance.Size.Width;
         Height = _instance.Size.Height;
+        _onBoundsChanged?.Invoke();
         e.Handled = true;
     }
 
@@ -140,7 +191,9 @@ public sealed partial class WidgetFrame : UserControl
             ((UIElement)sender).ReleasePointerCapture(e.Pointer);
         }
 
-        _onChanged();
+        SetChromeEmphasis(emphasized: _pointerInside);
+        _onBoundsChanged?.Invoke();
+        _onLayoutCommitted();
         e.Handled = true;
     }
 }

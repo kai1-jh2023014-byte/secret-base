@@ -27,3 +27,36 @@ See [2026-08-11-rider-run-configuration.md](2026-08-11-rider-run-configuration.m
 **Decision:** Implement Clock first with Core models + Infrastructure JSON + Widgets WinUI view + App host chrome.
 
 **Why:** Establishes `WidgetInstance`, theme tokens, layout persistence, and drag/resize host patterns before adding more widget types.
+
+## 2026-08-12 — Text Widget reuses WidgetFrame (no registry yet)
+
+**Decision:** Add Text as a second built-in type (`WidgetTypes.Text`) with Core configuration + `TextWidgetView`, wired in `DesktopPage` beside Clock. No widget registry / plugin framework.
+
+**Why:** A second concrete widget clarifies shared vs type-specific boundaries; abstract only after more types prove the pattern. Until Add Widget UI exists, Desktop may seed a missing Text instance on load.
+
+## 2026-08-12 — Desktop Overlay via public AppWindow APIs
+
+**Decision:** Evolve the host into a chromeless work-area overlay using `OverlappedPresenter.SetBorderAndTitleBar`, `DisplayArea.WorkArea`, transparent `SystemBackdrop`, and documented `DwmExtendFrameIntoClientArea`. Keep configuration in `IDesktopOverlayService` / `Platform.Windows`.
+
+**Why:** Move toward “PC as secret base” without replacing Explorer/Taskbar. Defer pixel click-through until a public-API-safe approach is proven; do not use Explorer WorkerW or undocumented shell hooks.
+
+## 2026-08-12 — Widgets-only overlay UX
+
+**Decision:** Hide brand/status/Exit chrome in normal overlay UX; keep Safe Exit via **Ctrl+Shift+Q** and optional debug chrome via **Ctrl+Shift+D**. Soften `WidgetFrame` chrome (hover-emphasized grip/resize).
+
+**Why:** Users should see wallpaper + floating widgets, not an app window. Recovery/exit must remain without putting chrome on the desktop permanently.
+
+## 2026-08-12 — Transparent host + below-apps Z-order
+
+**Decision:** Use a custom `SystemBackdrop` backed by `Windows.UI.Composition.Compositor.CreateColorBrush(transparent)` (after ensuring `Windows.System.DispatcherQueue`), plus documented `DwmExtendFrameIntoClientArea`, `DwmEnableBlurBehindWindow` (empty region), and `SetWindowSubclass` `WM_ERASEBKGND` FillRect(black). Park the host with documented `SetWindowPos(HWND_BOTTOM)` on configure/activate. Do **not** ABI-cast `Microsoft.UI.Composition` brushes onto `ICompositionSupportsSystemBackdrop.SystemBackdrop`.
+
+**Why:** Microsoft.UI→Windows.UI brush casts FailFast on WASDK 2.3; `SystemBackdrop = null` alone leaves an opaque black client. Overlay must sit under other apps without Explorer WorkerW.
+
+## 2026-08-12 — Widget-shaped input + suppress DWM edge frame
+
+**Decision:** Shape the overlay HWND with documented `SetWindowRgn` (union of widget client rects from App → `IDesktopOverlayService.UpdateInteractiveInputRegions`). Suppress residual Win11 chrome with documented `DwmSetWindowAttribute(DWMWA_BORDER_COLOR, DWMWA_COLOR_NONE)` and `DWMWA_WINDOW_CORNER_PREFERENCE = DWMWCP_DONOTROUND`. Do **not** use `HTTRANSPARENT` for Desktop click-through (same-thread only). Do **not** use WorkerW / Explorer / Taskbar COM.
+
+**Why:** Users need wallpaper/Desktop/other apps clickable outside widgets; WinUI transparency alone still hit-tests the full work-area HWND. `SetWindowRgn` is public and cross-process. Thin white edges after chromeless presenter are DWM border/corner artifacts, not XAML margins.
+
+See [overlay-input-and-edges.md](../architecture/overlay-input-and-edges.md).
+

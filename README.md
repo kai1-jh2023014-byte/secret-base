@@ -2,8 +2,8 @@
 
 > Make your PC feel like *your* secret base — a Personal Desktop Environment for Windows.
 
-**v0.1 milestone status:** foundation + Clock Widget (reference widget).  
-You can launch Secret Base, see a live clock on the Desktop, move/resize it, and restore layout after restart.
+**v0.1 milestone status:** foundation + Clock + Text + Desktop Overlay (**widgets-only UX**).  
+Wallpaper shows through the host; widgets float on the desktop; Exit via **Ctrl+Shift+Q** (debug chrome: **Ctrl+Shift+D**).
 
 ## Principles
 
@@ -85,7 +85,7 @@ dotnet build SecretBase.sln -c Debug -p:Platform=x64
 dotnet test SecretBase.sln -c Debug
 ```
 
-Use **Exit to Windows Desktop** (or close the window) to leave Secret Base. This only ends the app process.
+Use **Ctrl+Shift+Q** to leave Secret Base (Safe Exit). **Ctrl+Shift+D** toggles developer chrome. Closing the process returns you to the normal Windows desktop.
 
 ## Local data
 
@@ -97,20 +97,20 @@ Use **Exit to Windows Desktop** (or close the window) to leave Secret Base. This
   settings\   # reserved
 ```
 
-## Roadmap after Clock
+## Roadmap after Text
 
-1. Text Widget  
-2. App Launcher Widget  
-3. Drag & Drop polish  
-4. Theme editor UX  
-5. Web Content Widget  
-6. Room switching  
+1. App Launcher Widget  
+2. Drag & Drop polish  
+3. Theme editor UX  
+4. Web Content Widget  
+5. Room switching  
 
 ## Architecture docs
 
 - [Overview](docs/architecture/overview.md)
 - [Tech stack](docs/architecture/tech-stack.md)
 - [Widget architecture](docs/architecture/widget-architecture.md)
+- [Desktop overlay](docs/architecture/desktop-overlay.md)
 - [Security boundaries](docs/architecture/security-boundaries.md)
 - [Windows Update resilience](docs/architecture/windows-update-resilience.md)
 - [Decision log](docs/decisions/README.md)

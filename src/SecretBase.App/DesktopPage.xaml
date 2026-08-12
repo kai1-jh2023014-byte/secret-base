@@ -5,49 +5,54 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    Background="Transparent"
     mc:Ignorable="d">
 
-    <Grid x:Name="RootGrid">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="*" />
-        </Grid.RowDefinitions>
-
-        <Grid
-            x:Name="TopBar"
-            Padding="20,12"
-            ColumnSpacing="12">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="Auto" />
-            </Grid.ColumnDefinitions>
-
-            <StackPanel Spacing="2">
-                <TextBlock
-                    x:Name="BrandText"
-                    Text="Secret Base"
-                    FontSize="22"
-                    FontWeight="SemiBold"
-                    Foreground="#FFF4F0E6" />
-                <TextBlock
-                    x:Name="StatusText"
-                    FontSize="12"
-                    Foreground="#FF9AA7B2"
-                    TextWrapping="WrapWholeWords" />
-            </StackPanel>
-
-            <Button
-                x:Name="ExitButton"
-                Grid.Column="1"
-                Content="Exit to Windows Desktop"
-                Click="ExitButton_Click"
-                Padding="16,8"
-                VerticalAlignment="Center" />
-        </Grid>
+    <!--
+      Widgets-only desktop layer.
+      Debug chrome is Collapsed by default; toggle with Ctrl+Shift+D.
+      Safe Exit: Ctrl+Shift+Q (also available from debug chrome).
+    -->
+    <Grid x:Name="RootGrid" Background="Transparent">
+        <Grid.KeyboardAccelerators>
+            <KeyboardAccelerator
+                Key="Q"
+                Modifiers="Control,Shift"
+                Invoked="ExitAccelerator_Invoked" />
+            <KeyboardAccelerator
+                Key="D"
+                Modifiers="Control,Shift"
+                Invoked="DebugChromeAccelerator_Invoked" />
+        </Grid.KeyboardAccelerators>
 
         <Canvas
             x:Name="WidgetCanvas"
-            Grid.Row="1"
             Background="Transparent" />
+
+        <!-- Developer / recovery chrome — hidden in normal overlay UX. -->
+        <Border
+            x:Name="DebugChrome"
+            Visibility="Collapsed"
+            HorizontalAlignment="Right"
+            VerticalAlignment="Top"
+            Margin="0,16,16,0"
+            Padding="10,8"
+            CornerRadius="10"
+            Background="#99243447">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <TextBlock
+                    x:Name="StatusText"
+                    VerticalAlignment="Center"
+                    FontSize="11"
+                    Foreground="#FF9AA7B2"
+                    TextWrapping="NoWrap" />
+                <Button
+                    x:Name="ExitButton"
+                    Content="Exit"
+                    Click="ExitButton_Click"
+                    Padding="12,4"
+                    ToolTipService.ToolTip="Exit Secret Base (Ctrl+Shift+Q)" />
+            </StackPanel>
+        </Border>
     </Grid>
 </Page>
