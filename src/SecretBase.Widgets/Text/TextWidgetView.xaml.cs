@@ -122,22 +122,22 @@ public sealed partial class TextWidgetView : UserControl
             return;
         }
 
-        // Escape cancels. Ctrl+Enter commits (Enter alone inserts a newline for notes).
+        // Escape cancels. Commit is Ctrl+Enter (accelerator) or focus loss.
         if (e.Key == VirtualKey.Escape)
         {
             ExitEditMode(commit: false);
             e.Handled = true;
+        }
+    }
+
+    private void EditBox_CommitAccelerator(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        if (!_isEditing)
+        {
             return;
         }
 
-        var ctrl = Microsoft.UI.Input.InputKeyboardSource
-            .GetKeyStateForCurrentThread(VirtualKey.Control)
-            .HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
-
-        if (e.Key == VirtualKey.Enter && ctrl)
-        {
-            ExitEditMode(commit: true);
-            e.Handled = true;
-        }
+        ExitEditMode(commit: true);
+        args.Handled = true;
     }
 }
