@@ -2,8 +2,8 @@
 
 > Make your PC feel like *your* secret base — a Personal Desktop Environment for Windows.
 
-**v0.1 milestone status:** foundation + Clock Widget + Text Widget.  
-You can launch Secret Base, see Clock and Text on the Desktop, move/resize them, edit Text (double-click), and restore layout after restart.
+**v0.1 milestone status:** foundation + Clock + Text + **Desktop Overlay** (chromeless work-area host).  
+Secret Base runs as a borderless overlay above the wallpaper; widgets remain interactive; Exit returns to the normal desktop.
 
 ## Principles
 
@@ -110,6 +110,7 @@ Use **Exit to Windows Desktop** (or close the window) to leave Secret Base. This
 - [Overview](docs/architecture/overview.md)
 - [Tech stack](docs/architecture/tech-stack.md)
 - [Widget architecture](docs/architecture/widget-architecture.md)
+- [Desktop overlay](docs/architecture/desktop-overlay.md)
 - [Security boundaries](docs/architecture/security-boundaries.md)
 - [Windows Update resilience](docs/architecture/windows-update-resilience.md)
 - [Decision log](docs/decisions/README.md)

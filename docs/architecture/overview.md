@@ -13,8 +13,8 @@ Highest principle:
 | `SecretBase.App` | WinUI shell, Desktop host UI, composition root |
 | `SecretBase.Core` | Domain models (Desktop/Room/Security). No Windows API calls |
 | `SecretBase.Infrastructure` | Logging, AppData paths, JSON layout/theme persistence |
-| `SecretBase.Platform.Abstractions` | OS-facing contracts (`ICompatibilityService`, `ISafeExitService`) |
-| `SecretBase.Platform.Windows` | Windows adapter implementations only |
+| `SecretBase.Platform.Abstractions` | OS-facing contracts (`ICompatibilityService`, `ISafeExitService`, `IDesktopOverlayService`) |
+| `SecretBase.Platform.Windows` | Windows adapter implementations only (AppWindow overlay, Safe Exit, compatibility) |
 | `SecretBase.Widgets` | Built-in widget views (Clock, Text) + theme painting helpers |
 
 ## Why this split
@@ -33,5 +33,7 @@ Highest principle:
 
 - ✅ Clock Widget (reference implementation)
 - ✅ Text Widget
+- ✅ Desktop Overlay (chromeless work-area host; public AppWindow APIs)
 - App Launcher → Drag polish → Theme editor → WebContent → Room switching
+ → click-through empty regions (follow-up)
 

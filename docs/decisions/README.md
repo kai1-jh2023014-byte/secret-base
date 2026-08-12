@@ -33,3 +33,9 @@ See [2026-08-11-rider-run-configuration.md](2026-08-11-rider-run-configuration.m
 **Decision:** Add Text as a second built-in type (`WidgetTypes.Text`) with Core configuration + `TextWidgetView`, wired in `DesktopPage` beside Clock. No widget registry / plugin framework.
 
 **Why:** A second concrete widget clarifies shared vs type-specific boundaries; abstract only after more types prove the pattern. Until Add Widget UI exists, Desktop may seed a missing Text instance on load.
+
+## 2026-08-12 — Desktop Overlay via public AppWindow APIs
+
+**Decision:** Evolve the host into a chromeless work-area overlay using `OverlappedPresenter.SetBorderAndTitleBar`, `DisplayArea.WorkArea`, transparent `SystemBackdrop`, and documented `DwmExtendFrameIntoClientArea`. Keep configuration in `IDesktopOverlayService` / `Platform.Windows`.
+
+**Why:** Move toward “PC as secret base” without replacing Explorer/Taskbar. Defer pixel click-through until a public-API-safe approach is proven; do not use Explorer WorkerW or undocumented shell hooks.
