@@ -48,6 +48,6 @@ See [2026-08-11-rider-run-configuration.md](2026-08-11-rider-run-configuration.m
 
 ## 2026-08-12 — Transparent host + below-apps Z-order
 
-**Decision:** Restore transparent backdrop via WinRT ABI cast (`Microsoft.UI.Composition` brush → `Windows.UI.Composition.CompositionBrush`), keep documented `DwmExtendFrameIntoClientArea` + `DwmEnableBlurBehindWindow` (empty region) to clear black fill, and park the host with documented `SetWindowPos(HWND_BOTTOM)` on configure/activate.
+**Decision:** Keep `SystemBackdrop = null` (custom transparent `SystemBackdrop` with Microsoft.UI↔Windows.UI CompositionBrush ABI cast FailFasts the process on WASDK 2.3). Clear the client with documented `DwmExtendFrameIntoClientArea`, `DwmEnableBlurBehindWindow` (empty region), and `SetWindowSubclass` handling `WM_ERASEBKGND`. Park the host with documented `SetWindowPos(HWND_BOTTOM)` on configure/activate.
 
-**Why:** `SystemBackdrop = null` alone left a black client. Overlay must sit under other apps without Explorer WorkerW.
+**Why:** Process must stay alive; wallpaper visibility comes from DWM + erase subclass, not an unsupported Composition ABI cast. Overlay must sit under other apps without Explorer WorkerW.

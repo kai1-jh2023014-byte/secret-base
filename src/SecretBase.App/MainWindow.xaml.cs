@@ -1,6 +1,5 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
-using SecretBase.App.Desktop;
 using SecretBase.Core.Time;
 using SecretBase.Infrastructure.Logging;
 using SecretBase.Infrastructure.Persistence;
@@ -21,8 +20,10 @@ public sealed partial class MainWindow : Window
         _overlayService = overlayService;
 
         // Chromeless content — title bar removed via OverlappedPresenter in Platform.Windows.
+        // Do NOT assign a custom SystemBackdrop: WASDK 2.3 ABI cast between Microsoft.UI and
+        // Windows.UI CompositionBrush projections FailFasts the process on connect.
         ExtendsContentIntoTitleBar = false;
-        SystemBackdrop = new TransparentSystemBackdrop();
+        SystemBackdrop = null;
         AppWindow.SetIcon("Assets/AppIcon.ico");
 
         var hwnd = WindowNative.GetWindowHandle(this);

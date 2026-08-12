@@ -19,8 +19,10 @@
 ## Overlay presentation
 
 Chromeless work-area overlay is configured via public `AppWindow` / `OverlappedPresenter` APIs
-(see [desktop-overlay.md](desktop-overlay.md)). Transparency uses a custom `SystemBackdrop` plus
-documented `DwmExtendFrameIntoClientArea`. This is still an overlay process — never a shell substitute.
+(see [desktop-overlay.md](desktop-overlay.md)). Transparency uses documented
+`DwmExtendFrameIntoClientArea` / `DwmEnableBlurBehindWindow` plus `WM_ERASEBKGND` subclassing
+(no custom `SystemBackdrop` — that FailFasts on WASDK 2.3). This is still an overlay process —
+never a shell substitute.
 
 ## Recovery story
 

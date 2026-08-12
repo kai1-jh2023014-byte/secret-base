@@ -15,6 +15,10 @@ public sealed class AppWindowDesktopOverlayService : IDesktopOverlayService
     // https://learn.microsoft.com/windows/win32/api/winuser/nf-winuser-setwindowpos
     private static readonly nint HwndBottom = 1;
 
+    // Keep subclass proc alive for the process lifetime (GC would unregister the hook).
+    private static NativeMethods.SubclassProc? s_eraseSubclassProc;
+    private static readonly HashSet<nint> s_subclassedHwnds = [];
+
     public void ApplyChromelessWorkAreaOverlay(DesktopOverlayTarget target)
     {
         var windowId = new WindowId(target.AppWindowId);
@@ -39,6 +43,7 @@ public sealed class AppWindowDesktopOverlayService : IDesktopOverlayService
         if (target.WindowHandle != nint.Zero)
         {
             TryEnableTransparentFrame(target.WindowHandle);
+            TrySubclassEraseBackground(target.WindowHandle);
             KeepBehindApplicationWindows(target);
         }
     }
@@ -73,8 +78,8 @@ public sealed class AppWindowDesktopOverlayService : IDesktopOverlayService
         };
         _ = NativeMethods.DwmExtendFrameIntoClientArea(hwnd, ref margins);
 
-        // Public dwmapi: empty blur region clears the black client fill WinUI otherwise paints.
-        // Same documented approach used by transparent WinUI host samples (not Explorer hooks).
+        // Public dwmapi: empty blur region clears the black client fill WinUI otherwise paints
+        // when SystemBackdrop is null (custom CompositionBrush backdrop FailFasts on WASDK 2.3).
         var hrgn = NativeMethods.CreateRectRgn(-2, -2, -1, -1);
         try
         {
@@ -96,6 +101,37 @@ public sealed class AppWindowDesktopOverlayService : IDesktopOverlayService
         }
     }
 
+    private static void TrySubclassEraseBackground(nint hwnd)
+    {
+        if (!s_subclassedHwnds.Add(hwnd))
+        {
+            return;
+        }
+
+        s_eraseSubclassProc ??= EraseBackgroundSubclass;
+        if (!NativeMethods.SetWindowSubclass(hwnd, s_eraseSubclassProc, NativeMethods.EraseSubclassId, 0))
+        {
+            s_subclassedHwnds.Remove(hwnd);
+        }
+    }
+
+    private static nint EraseBackgroundSubclass(
+        nint hWnd,
+        uint uMsg,
+        nint wParam,
+        nint lParam,
+        nuint uIdSubclass,
+        nuint dwRefData)
+    {
+        // Documented: returning nonzero tells Windows the background was erased — skips black fill.
+        if (uMsg == NativeMethods.WmEraseBkgnd)
+        {
+            return 1;
+        }
+
+        return NativeMethods.DefSubclassProc(hWnd, uMsg, wParam, lParam);
+    }
+
     private static class NativeMethods
     {
         public const uint SwpNosize = 0x0001;
@@ -104,6 +140,9 @@ public sealed class AppWindowDesktopOverlayService : IDesktopOverlayService
 
         public const uint DwmBbEnable = 0x00000001;
         public const uint DwmBbBlurRegion = 0x00000002;
+
+        public const uint WmEraseBkgnd = 0x0014;
+        public const nuint EraseSubclassId = 1;
 
         [StructLayout(LayoutKind.Sequential)]
         public struct MARGINS
@@ -124,6 +163,14 @@ public sealed class AppWindowDesktopOverlayService : IDesktopOverlayService
             [MarshalAs(UnmanagedType.Bool)]
             public bool fTransitionOnMaximized;
         }
+
+        public delegate nint SubclassProc(
+            nint hWnd,
+            uint uMsg,
+            nint wParam,
+            nint lParam,
+            nuint uIdSubclass,
+            nuint dwRefData);
 
         [DllImport("dwmapi.dll")]
         public static extern int DwmExtendFrameIntoClientArea(nint hwnd, ref MARGINS pMarInset);
@@ -146,5 +193,16 @@ public sealed class AppWindowDesktopOverlayService : IDesktopOverlayService
             int cx,
             int cy,
             uint uFlags);
+
+        // https://learn.microsoft.com/windows/win32/api/commctrl/nf-commctrl-setwindowsubclass
+        [DllImport("comctl32.dll", SetLastError = true)]
+        public static extern bool SetWindowSubclass(
+            nint hWnd,
+            SubclassProc pfnSubclass,
+            nuint uIdSubclass,
+            nuint dwRefData);
+
+        [DllImport("comctl32.dll")]
+        public static extern nint DefSubclassProc(nint hWnd, uint uMsg, nint wParam, nint lParam);
     }
 }
