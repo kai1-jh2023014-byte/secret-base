@@ -9,10 +9,12 @@ using SecretBase.Core.Themes;
 using SecretBase.Core.Time;
 using SecretBase.Core.Widgets;
 using SecretBase.Core.Widgets.Clock;
+using SecretBase.Core.Widgets.Text;
 using SecretBase.Infrastructure.Logging;
 using SecretBase.Infrastructure.Persistence;
 using SecretBase.Platform.Abstractions;
 using SecretBase.Widgets.Clock;
+using SecretBase.Widgets.Text;
 using SecretBase.Widgets.Theming;
 
 namespace SecretBase.App;
@@ -52,6 +54,7 @@ public sealed partial class DesktopPage : Page
 
         _theme = _themeStore.LoadOrCreateDefault();
         _layout = _layoutStore.LoadOrCreateDefault(RoomId.DefaultRoomId);
+        EnsureSeedTextWidget(_layout);
 
         ApplyDesktopTheme(_theme);
         BrandText.Text = AppInfo.Name;
@@ -61,7 +64,7 @@ public sealed partial class DesktopPage : Page
 
         RenderWidgets();
         _logger.Info("desktop", $"Desktop shown for room '{_layout.RoomId}' with {_layout.Widgets.Count} widget(s).");
-        _logger.Info("widget", "Clock widget host ready.");
+        _logger.Info("widget", "Clock and Text widget hosts ready.");
     }
 
     private void ApplyDesktopTheme(ThemeDefinition theme)
@@ -126,7 +129,47 @@ public sealed partial class DesktopPage : Page
             return view;
         }
 
+        if (instance.Type == WidgetTypes.Text)
+        {
+            var config = TextWidgetConfiguration.FromDictionary(instance.Configuration);
+            instance.Configuration = config.ToDictionary();
+
+            var view = new TextWidgetView();
+            view.Initialize(config, updated =>
+            {
+                instance.Configuration = updated.ToDictionary();
+                PersistLayoutNow();
+            });
+            if (_theme is not null)
+            {
+                view.ApplyTheme(_theme);
+            }
+
+            return view;
+        }
+
         return null;
+    }
+
+    private void EnsureSeedTextWidget(DesktopLayout layout)
+    {
+        // Temporary until Add Widget UI exists: make sure a Text widget is present
+        // without rewriting Clock-only layouts' existing geometry.
+        if (layout.Widgets.Any(w => string.Equals(w.Type, WidgetTypes.Text, StringComparison.Ordinal)))
+        {
+            return;
+        }
+
+        layout.Widgets.Add(DefaultWidgetFactory.CreateDefaultText(layout.RoomId));
+        try
+        {
+            _layoutStore?.Save(layout);
+            _logger?.Info("widget", "Seeded default Text widget (no Add Widget UI yet).");
+        }
+        catch (Exception ex)
+        {
+            _logger?.Error("persistence", "Failed to save layout after seeding Text widget.", ex);
+        }
     }
 
     private void PersistLayoutNow()

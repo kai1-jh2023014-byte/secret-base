@@ -20,7 +20,12 @@ public sealed class DesktopLayout
         {
             RoomId = RoomId.DefaultRoomId,
             SchemaVersion = 1,
-            Widgets = [DefaultWidgetFactory.CreateDefaultClock()]
+            // First-run seed (no Add Widget UI yet): Clock + Text.
+            Widgets =
+            [
+                DefaultWidgetFactory.CreateDefaultClock(),
+                DefaultWidgetFactory.CreateDefaultText()
+            ]
         };
     }
 }
