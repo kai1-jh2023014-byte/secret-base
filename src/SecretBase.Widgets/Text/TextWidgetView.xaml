@@ -32,7 +32,14 @@
                 VerticalContentAlignment="Top"
                 FontSize="18"
                 LostFocus="EditBox_LostFocus"
-                KeyDown="EditBox_KeyDown" />
+                KeyDown="EditBox_KeyDown">
+                <TextBox.KeyboardAccelerators>
+                    <KeyboardAccelerator
+                        Key="Enter"
+                        Modifiers="Control"
+                        Invoked="EditBox_CommitAccelerator" />
+                </TextBox.KeyboardAccelerators>
+            </TextBox>
         </Grid>
     </Border>
 </UserControl>
