@@ -9,10 +9,12 @@ using SecretBase.Core.Themes;
 using SecretBase.Core.Time;
 using SecretBase.Core.Widgets;
 using SecretBase.Core.Widgets.Clock;
+using SecretBase.Core.Widgets.Text;
 using SecretBase.Infrastructure.Logging;
 using SecretBase.Infrastructure.Persistence;
 using SecretBase.Platform.Abstractions;
 using SecretBase.Widgets.Clock;
+using SecretBase.Widgets.Text;
 using SecretBase.Widgets.Theming;
 
 namespace SecretBase.App;
@@ -52,33 +54,29 @@ public sealed partial class DesktopPage : Page
 
         _theme = _themeStore.LoadOrCreateDefault();
         _layout = _layoutStore.LoadOrCreateDefault(RoomId.DefaultRoomId);
+        EnsureSeedTextWidget(_layout);
 
         ApplyDesktopTheme(_theme);
-        BrandText.Text = AppInfo.Name;
         StatusText.Text =
-            $"Room: {_layout.RoomId} · Widgets: {_layout.Widgets.Count} · " +
-            $"App {args.Compatibility.AppVersion}";
+            $"{AppInfo.Name} · {_layout.Widgets.Count} widgets · v{args.Compatibility.AppVersion}";
 
         RenderWidgets();
-        _logger.Info("desktop", $"Desktop shown for room '{_layout.RoomId}' with {_layout.Widgets.Count} widget(s).");
-        _logger.Info("widget", "Clock widget host ready.");
+        _logger.Info("desktop", $"Overlay desktop shown for room '{_layout.RoomId}' with {_layout.Widgets.Count} widget(s).");
+        _logger.Info("widget", "Clock and Text widget hosts ready.");
+        _logger.Info("overlay", "Chromeless desktop overlay active (Explorer/Taskbar untouched).");
     }
 
     private void ApplyDesktopTheme(ThemeDefinition theme)
     {
-        RootGrid.Background = new LinearGradientBrush
-        {
-            StartPoint = new Windows.Foundation.Point(0, 0),
-            EndPoint = new Windows.Foundation.Point(1, 1),
-            GradientStops =
-            {
-                new GradientStop { Color = ThemePainter.ParseColor(theme.Background), Offset = 0 },
-                new GradientStop { Color = ThemePainter.ParseColor(theme.BackgroundSecondary), Offset = 1 }
-            }
-        };
-        BrandText.Foreground = ThemePainter.Brush(theme.Foreground);
+        // Overlay root stays transparent so the Windows wallpaper shows through empty space.
+        RootGrid.Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
+        WidgetCanvas.Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
+
         StatusText.Foreground = ThemePainter.Brush(theme.ForegroundMuted);
-        BrandText.FontFamily = new FontFamily(theme.FontFamily);
+        StatusText.FontFamily = new FontFamily(theme.FontFamily);
+
+        OverlayChrome.Background = ThemePainter.Brush(theme.WidgetBackground, ThemePainter.EffectiveWidgetOpacity(theme));
+        OverlayChrome.CornerRadius = new CornerRadius(Math.Max(8, theme.CornerRadius / 2));
     }
 
     private void RenderWidgets()
@@ -126,7 +124,47 @@ public sealed partial class DesktopPage : Page
             return view;
         }
 
+        if (instance.Type == WidgetTypes.Text)
+        {
+            var config = TextWidgetConfiguration.FromDictionary(instance.Configuration);
+            instance.Configuration = config.ToDictionary();
+
+            var view = new TextWidgetView();
+            view.Initialize(config, updated =>
+            {
+                instance.Configuration = updated.ToDictionary();
+                PersistLayoutNow();
+            });
+            if (_theme is not null)
+            {
+                view.ApplyTheme(_theme);
+            }
+
+            return view;
+        }
+
         return null;
+    }
+
+    private void EnsureSeedTextWidget(DesktopLayout layout)
+    {
+        // Temporary until Add Widget UI exists: make sure a Text widget is present
+        // without rewriting Clock-only layouts' existing geometry.
+        if (layout.Widgets.Any(w => string.Equals(w.Type, WidgetTypes.Text, StringComparison.Ordinal)))
+        {
+            return;
+        }
+
+        layout.Widgets.Add(DefaultWidgetFactory.CreateDefaultText(layout.RoomId));
+        try
+        {
+            _layoutStore?.Save(layout);
+            _logger?.Info("widget", "Seeded default Text widget (no Add Widget UI yet).");
+        }
+        catch (Exception ex)
+        {
+            _logger?.Error("persistence", "Failed to save layout after seeding Text widget.", ex);
+        }
     }
 
     private void PersistLayoutNow()

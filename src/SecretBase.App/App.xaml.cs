@@ -45,7 +45,8 @@ public partial class App : Application
             ThemeStore: new JsonThemeStore(),
             TimeProvider: new SystemTimeProvider());
 
-        _window = new MainWindow(pageArgs);
+        IDesktopOverlayService overlay = new AppWindowDesktopOverlayService();
+        _window = new MainWindow(pageArgs, overlay);
         _window.Closed += (_, _) =>
         {
             _logger?.Info("lifecycle", "Main window closed. Returning to normal Windows desktop.");

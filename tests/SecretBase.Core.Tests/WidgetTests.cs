@@ -2,6 +2,7 @@ using SecretBase.Core.Desktop;
 using SecretBase.Core.Time;
 using SecretBase.Core.Widgets;
 using SecretBase.Core.Widgets.Clock;
+using SecretBase.Core.Widgets.Text;
 
 namespace SecretBase.Core.Tests;
 
@@ -72,12 +73,54 @@ public class WidgetInstanceTests
     }
 
     [Fact]
-    public void DesktopLayout_CreateDefault_IncludesClock()
+    public void DefaultText_HasStableIdentityAndGeometry()
+    {
+        var text = DefaultWidgetFactory.CreateDefaultText();
+
+        Assert.Equal(WidgetTypes.Text, text.Type);
+        Assert.Equal(RoomId.DefaultRoomId, text.RoomId);
+        Assert.Equal(48, text.Position.X);
+        Assert.Equal(240, text.Position.Y);
+        Assert.Equal(320, text.Size.Width);
+        Assert.Equal(180, text.Size.Height);
+        Assert.Contains(nameof(TextWidgetConfiguration.Text), text.Configuration.Keys);
+        Assert.Contains(nameof(TextWidgetConfiguration.FontSize), text.Configuration.Keys);
+        Assert.Contains(nameof(TextWidgetConfiguration.TextAlignment), text.Configuration.Keys);
+    }
+
+    [Fact]
+    public void TextConfiguration_RoundTripsThroughDictionary()
+    {
+        var original = new TextWidgetConfiguration
+        {
+            Text = "Ship the Text Widget",
+            FontSize = 22,
+            TextAlignment = TextWidgetAlignment.Center
+        };
+
+        var restored = TextWidgetConfiguration.FromDictionary(original.ToDictionary());
+        Assert.Equal("Ship the Text Widget", restored.Text);
+        Assert.Equal(22, restored.FontSize);
+        Assert.Equal(TextWidgetAlignment.Center, restored.TextAlignment);
+    }
+
+    [Fact]
+    public void TextConfiguration_FromDictionary_UsesDefaultsForMissingKeys()
+    {
+        var restored = TextWidgetConfiguration.FromDictionary(new Dictionary<string, System.Text.Json.JsonElement>());
+        Assert.Equal(TextWidgetConfiguration.DefaultPlaceholderText, restored.Text);
+        Assert.Equal(18, restored.FontSize);
+        Assert.Equal(TextWidgetAlignment.Left, restored.TextAlignment);
+    }
+
+    [Fact]
+    public void DesktopLayout_CreateDefault_IncludesClockAndText()
     {
         var layout = DesktopLayout.CreateDefault();
         Assert.Equal(1, layout.SchemaVersion);
-        Assert.Single(layout.Widgets);
+        Assert.Equal(2, layout.Widgets.Count);
         Assert.Equal(WidgetTypes.Clock, layout.Widgets[0].Type);
+        Assert.Equal(WidgetTypes.Text, layout.Widgets[1].Type);
     }
 }
 

@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<UserControl
+    x:Class="SecretBase.Widgets.Text.TextWidgetView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d">
+
+    <Border
+        x:Name="RootBorder"
+        Padding="16,12"
+        Background="#CC243447"
+        CornerRadius="16">
+        <Grid>
+            <TextBlock
+                x:Name="DisplayText"
+                TextWrapping="WrapWholeWords"
+                TextTrimming="CharacterEllipsis"
+                IsTextSelectionEnabled="False"
+                DoubleTapped="DisplayText_DoubleTapped"
+                VerticalAlignment="Stretch"
+                FontSize="18"
+                Foreground="#FFF4F0E6" />
+
+            <TextBox
+                x:Name="EditBox"
+                Visibility="Collapsed"
+                AcceptsReturn="True"
+                TextWrapping="Wrap"
+                VerticalAlignment="Stretch"
+                VerticalContentAlignment="Top"
+                FontSize="18"
+                LostFocus="EditBox_LostFocus"
+                KeyDown="EditBox_KeyDown">
+                <TextBox.KeyboardAccelerators>
+                    <KeyboardAccelerator
+                        Key="Enter"
+                        Modifiers="Control"
+                        Invoked="EditBox_CommitAccelerator" />
+                </TextBox.KeyboardAccelerators>
+            </TextBox>
+        </Grid>
+    </Border>
+</UserControl>
