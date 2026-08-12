@@ -12,10 +12,10 @@ Highest principle:
 |---------|----------------|
 | `SecretBase.App` | WinUI shell, Desktop host UI, composition root |
 | `SecretBase.Core` | Domain models (Desktop/Room/Security). No Windows API calls |
-| `SecretBase.Infrastructure` | Logging, paths, future JSON persistence |
+| `SecretBase.Infrastructure` | Logging, AppData paths, JSON layout/theme persistence |
 | `SecretBase.Platform.Abstractions` | OS-facing contracts (`ICompatibilityService`, `ISafeExitService`) |
 | `SecretBase.Platform.Windows` | Windows adapter implementations only |
-| `SecretBase.Widgets` | Built-in widget assembly (empty in this milestone) |
+| `SecretBase.Widgets` | Built-in widget views (Clock reference implementation) + theme painting helpers |
 
 ## Why this split
 
