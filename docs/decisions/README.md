@@ -27,3 +27,9 @@ See [2026-08-11-rider-run-configuration.md](2026-08-11-rider-run-configuration.m
 **Decision:** Implement Clock first with Core models + Infrastructure JSON + Widgets WinUI view + App host chrome.
 
 **Why:** Establishes `WidgetInstance`, theme tokens, layout persistence, and drag/resize host patterns before adding more widget types.
+
+## 2026-08-12 — Text Widget reuses WidgetFrame (no registry yet)
+
+**Decision:** Add Text as a second built-in type (`WidgetTypes.Text`) with Core configuration + `TextWidgetView`, wired in `DesktopPage` beside Clock. No widget registry / plugin framework.
+
+**Why:** A second concrete widget clarifies shared vs type-specific boundaries; abstract only after more types prove the pattern. Until Add Widget UI exists, Desktop may seed a missing Text instance on load.
