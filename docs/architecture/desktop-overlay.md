@@ -32,6 +32,7 @@ Normal UX: **widgets only**. Transparent/empty areas pass input to Windows. No t
 | `DwmSetWindowAttribute(DWMWA_WINDOW_CORNER_PREFERENCE, DONOTROUND)` | Avoid corner AA halo |
 | `SetWindowSubclass` + `WM_ERASEBKGND` FillRect | Skip opaque client erase (black→glass) |
 | `SetWindowRgn` (union of widget client rects) | Cross-process click-through outside widgets |
+| `SetWindowRgn` on `DesktopChildSiteBridge` child | WinUI island hit-test surface (in addition to top-level HWND) |
 | `SetWindowPos(..., HWND_BOTTOM, ...)` | Keep overlay under other top-level apps |
 | Transparent page / canvas brushes | XAML layer stays clear |
 
@@ -43,6 +44,8 @@ Investigation notes: [overlay-input-and-edges.md](overlay-input-and-edges.md).
 
 - App computes widget (+ optional debug chrome) client rects in physical pixels.
 - Platform applies documented `SetWindowRgn` so the HWND shape is the union of those rects.
+- The same region is also applied to WinUI's `DesktopChildSiteBridge` child when present (island input surface).
+- Regions are cached and reapplied when the overlay is parked at `HWND_BOTTOM` after activation.
 - Outside the region, Explorer / other apps receive mouse input (cross-process).
 - `WM_NCHITTEST` / `HTTRANSPARENT` alone is **not** used for Desktop passthrough (same-thread limitation per Win32 docs).
 

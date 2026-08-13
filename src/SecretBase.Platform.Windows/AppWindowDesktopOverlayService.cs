@@ -20,6 +20,11 @@ public sealed class AppWindowDesktopOverlayService : IDesktopOverlayService
     private static readonly HashSet<nint> s_subclassedHwnds = [];
     private static nint s_blackBrush;
 
+    // Last interactive rects (client-relative physical px) — reapplied after Z-order / DWM churn.
+    private readonly object _regionGate = new();
+    private nint _regionHwnd;
+    private OverlayInputRect[] _lastRects = [];
+
     public void ApplyChromelessWorkAreaOverlay(DesktopOverlayTarget target)
     {
         var windowId = new WindowId(target.AppWindowId);
@@ -45,6 +50,16 @@ public sealed class AppWindowDesktopOverlayService : IDesktopOverlayService
         {
             TryEnableTransparentFrame(target.WindowHandle);
             TrySuppressSystemEdgeChrome(target.WindowHandle);
+            // FRAMECHANGED after DWM attrs so border/corner preference sticks.
+            _ = NativeMethods.SetWindowPos(
+                target.WindowHandle,
+                nint.Zero,
+                0,
+                0,
+                0,
+                0,
+                NativeMethods.SwpNomove | NativeMethods.SwpNosize | NativeMethods.SwpNozorder
+                | NativeMethods.SwpNoactivate | NativeMethods.SwpFramechanged);
             TrySubclassEraseBackground(target.WindowHandle);
             KeepBehindApplicationWindows(target);
         }
@@ -66,6 +81,10 @@ public sealed class AppWindowDesktopOverlayService : IDesktopOverlayService
             0,
             0,
             NativeMethods.SwpNomove | NativeMethods.SwpNosize | NativeMethods.SwpNoactivate);
+
+        // WinUI/DWM may reset window regions around activation — reapply cached shape.
+        TrySuppressSystemEdgeChrome(target.WindowHandle);
+        ReapplyCachedInteractiveRegions(target.WindowHandle);
     }
 
     public void UpdateInteractiveInputRegions(
@@ -77,8 +96,81 @@ public sealed class AppWindowDesktopOverlayService : IDesktopOverlayService
             return;
         }
 
+        var snapshot = rects.ToArray();
+        lock (_regionGate)
+        {
+            _regionHwnd = target.WindowHandle;
+            _lastRects = snapshot;
+        }
+
+        ApplyInteractiveRegions(target.WindowHandle, snapshot);
+    }
+
+    private void ReapplyCachedInteractiveRegions(nint hwnd)
+    {
+        OverlayInputRect[] snapshot;
+        lock (_regionGate)
+        {
+            if (_regionHwnd != hwnd || _lastRects.Length == 0)
+            {
+                return;
+            }
+
+            snapshot = _lastRects;
+        }
+
+        ApplyInteractiveRegions(hwnd, snapshot);
+    }
+
+    private void ApplyInteractiveRegions(nint topLevelHwnd, IReadOnlyList<OverlayInputRect> rects)
+    {
         // Documented user32 SetWindowRgn: window shape = interactive widgets only.
         // Outside the region, input goes to Desktop / other processes (cross-process).
+        //
+        // WinUI 3: hit-testing often lives on the DesktopChildSiteBridge child HWND.
+        // Apply the same client-relative region to the top-level window AND that bridge
+        // (castorix / microsoft-ui-xaml#10746). Coordinates: SetWindowRgn is relative to
+        // each HWND's upper-left; for a fill-client bridge that matches our client rects.
+        var targets = EnumerateRegionTargetHwnds(topLevelHwnd);
+        foreach (var hwnd in targets)
+        {
+            ApplyRegionToHwnd(hwnd, rects);
+        }
+    }
+
+    private static List<nint> EnumerateRegionTargetHwnds(nint topLevelHwnd)
+    {
+        var list = new List<nint> { topLevelHwnd };
+        var bridges = new List<nint>();
+        NativeMethods.EnumChildWindows(
+            topLevelHwnd,
+            (child, _) =>
+            {
+                var className = GetWindowClassName(child);
+                if (className.Contains("DesktopChildSiteBridge", StringComparison.OrdinalIgnoreCase)
+                    || className.Contains("DesktopWindowXamlSource", StringComparison.OrdinalIgnoreCase)
+                    || className.Contains("InputSiteWindow", StringComparison.OrdinalIgnoreCase))
+                {
+                    bridges.Add(child);
+                }
+
+                return true;
+            },
+            0);
+
+        list.AddRange(bridges);
+        return list;
+    }
+
+    private static string GetWindowClassName(nint hwnd)
+    {
+        var buffer = new System.Text.StringBuilder(256);
+        var length = NativeMethods.GetClassName(hwnd, buffer, buffer.Capacity);
+        return length > 0 ? buffer.ToString() : string.Empty;
+    }
+
+    private static void ApplyRegionToHwnd(nint hwnd, IReadOnlyList<OverlayInputRect> rects)
+    {
         // After a successful SetWindowRgn, the system owns the HRGN — do not DeleteObject it.
         nint combined = NativeMethods.CreateRectRgn(0, 0, 0, 0);
         if (combined == nint.Zero)
@@ -86,6 +178,7 @@ public sealed class AppWindowDesktopOverlayService : IDesktopOverlayService
             return;
         }
 
+        var transferred = false;
         try
         {
             foreach (var rect in rects)
@@ -95,10 +188,15 @@ public sealed class AppWindowDesktopOverlayService : IDesktopOverlayService
                     continue;
                 }
 
-                var left = rect.X;
-                var top = rect.Y;
-                var right = rect.X + rect.Width;
-                var bottom = rect.Y + rect.Height;
+                // Map App-supplied client px → this HWND's window-relative px.
+                if (!TryMapClientRectToWindowRgn(hwnd, rect, out var left, out var top, out var right, out var bottom))
+                {
+                    left = rect.X;
+                    top = rect.Y;
+                    right = rect.X + rect.Width;
+                    bottom = rect.Y + rect.Height;
+                }
+
                 var piece = NativeMethods.CreateRectRgn(left, top, right, bottom);
                 if (piece == nint.Zero)
                 {
@@ -109,21 +207,62 @@ public sealed class AppWindowDesktopOverlayService : IDesktopOverlayService
                 _ = NativeMethods.DeleteObject(piece);
             }
 
-            if (!NativeMethods.SetWindowRgn(target.WindowHandle, combined, redraw: true))
+            if (NativeMethods.SetWindowRgn(hwnd, combined, redraw: true))
             {
-                _ = NativeMethods.DeleteObject(combined);
+                transferred = true;
             }
-
-            // Ownership transferred to the system on success.
-            combined = nint.Zero;
         }
         finally
         {
-            if (combined != nint.Zero)
+            if (!transferred && combined != nint.Zero)
             {
                 _ = NativeMethods.DeleteObject(combined);
             }
         }
+    }
+
+    /// <summary>
+    /// Converts a top-level client rectangle into coordinates suitable for SetWindowRgn on
+    /// <paramref name="hwnd"/> (window-relative, including any non-client offset).
+    /// </summary>
+    private static bool TryMapClientRectToWindowRgn(
+        nint hwnd,
+        OverlayInputRect clientRect,
+        out int left,
+        out int top,
+        out int right,
+        out int bottom)
+    {
+        left = top = right = bottom = 0;
+
+        // Treat incoming rect as relative to the top-level client; map via screen space.
+        var topLevel = NativeMethods.GetAncestor(hwnd, NativeMethods.GaRoot) is var root and not 0
+            ? root
+            : hwnd;
+
+        var topLeft = new NativeMethods.Point { X = clientRect.X, Y = clientRect.Y };
+        var bottomRight = new NativeMethods.Point
+        {
+            X = clientRect.X + clientRect.Width,
+            Y = clientRect.Y + clientRect.Height
+        };
+
+        if (!NativeMethods.ClientToScreen(topLevel, ref topLeft)
+            || !NativeMethods.ClientToScreen(topLevel, ref bottomRight))
+        {
+            return false;
+        }
+
+        if (!NativeMethods.GetWindowRect(hwnd, out var windowRect))
+        {
+            return false;
+        }
+
+        left = topLeft.X - windowRect.Left;
+        top = topLeft.Y - windowRect.Top;
+        right = bottomRight.X - windowRect.Left;
+        bottom = bottomRight.Y - windowRect.Top;
+        return right > left && bottom > top;
     }
 
     private static void TryEnableTransparentFrame(nint hwnd)
@@ -172,12 +311,26 @@ public sealed class AppWindowDesktopOverlayService : IDesktopOverlayService
             ref colorNone,
             sizeof(uint));
 
+        _ = NativeMethods.DwmSetWindowAttribute(
+            hwnd,
+            NativeMethods.DwmwaCaptionColor,
+            ref colorNone,
+            sizeof(uint));
+
         // Avoid rounded-corner anti-alias halo on a work-area transparent host.
         var corner = NativeMethods.DwmwcpDoNotRound;
         _ = NativeMethods.DwmSetWindowAttribute(
             hwnd,
             NativeMethods.DwmwaWindowCornerPreference,
             ref corner,
+            sizeof(uint));
+
+        // Prefer no system backdrop material on the HWND chrome (Win11).
+        var backdropNone = NativeMethods.DwmsbtNone;
+        _ = NativeMethods.DwmSetWindowAttribute(
+            hwnd,
+            NativeMethods.DwmwaSystemBackdropType,
+            ref backdropNone,
             sizeof(uint));
     }
 
@@ -220,6 +373,17 @@ public sealed class AppWindowDesktopOverlayService : IDesktopOverlayService
         {
             TryEnableTransparentFrame(hWnd);
             TrySuppressSystemEdgeChrome(hWnd);
+            // Region cache is per-service instance; subclass is static — cannot reach instance.
+            // KeepBehind / next App Sync will reapply. FRAMECHANGED helps DWM attrs stick.
+            _ = NativeMethods.SetWindowPos(
+                hWnd,
+                nint.Zero,
+                0,
+                0,
+                0,
+                0,
+                NativeMethods.SwpNomove | NativeMethods.SwpNosize | NativeMethods.SwpNozorder
+                | NativeMethods.SwpNoactivate | NativeMethods.SwpFramechanged);
             return 0;
         }
 
@@ -246,7 +410,9 @@ public sealed class AppWindowDesktopOverlayService : IDesktopOverlayService
     {
         public const uint SwpNosize = 0x0001;
         public const uint SwpNomove = 0x0002;
+        public const uint SwpNozorder = 0x0004;
         public const uint SwpNoactivate = 0x0010;
+        public const uint SwpFramechanged = 0x0020;
 
         public const uint DwmBbEnable = 0x00000001;
         public const uint DwmBbBlurRegion = 0x00000002;
@@ -258,10 +424,14 @@ public sealed class AppWindowDesktopOverlayService : IDesktopOverlayService
         // DWMWINDOWATTRIBUTE (Win11 Build 22000+)
         public const uint DwmwaWindowCornerPreference = 33;
         public const uint DwmwaBorderColor = 34;
+        public const uint DwmwaCaptionColor = 35;
+        public const uint DwmwaSystemBackdropType = 38;
         public const uint DwmwaColorNone = 0xFFFFFFFE;
         public const uint DwmwcpDoNotRound = 1;
+        public const uint DwmsbtNone = 1;
 
         public const int RgnOr = 2;
+        public const uint GaRoot = 2;
 
         [StructLayout(LayoutKind.Sequential)]
         public struct MARGINS
@@ -286,10 +456,17 @@ public sealed class AppWindowDesktopOverlayService : IDesktopOverlayService
         [StructLayout(LayoutKind.Sequential)]
         public struct Rect
         {
-            public int left;
-            public int top;
-            public int right;
-            public int bottom;
+            public int Left;
+            public int Top;
+            public int Right;
+            public int Bottom;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        public struct Point
+        {
+            public int X;
+            public int Y;
         }
 
         public delegate nint SubclassProc(
@@ -299,6 +476,8 @@ public sealed class AppWindowDesktopOverlayService : IDesktopOverlayService
             nint lParam,
             nuint uIdSubclass,
             nuint dwRefData);
+
+        public delegate bool EnumChildProc(nint hWnd, nint lParam);
 
         [DllImport("dwmapi.dll")]
         public static extern int DwmExtendFrameIntoClientArea(nint hwnd, ref MARGINS pMarInset);
@@ -329,6 +508,15 @@ public sealed class AppWindowDesktopOverlayService : IDesktopOverlayService
         public static extern bool GetClientRect(nint hWnd, out Rect lpRect);
 
         [DllImport("user32.dll")]
+        public static extern bool GetWindowRect(nint hWnd, out Rect lpRect);
+
+        [DllImport("user32.dll")]
+        public static extern bool ClientToScreen(nint hWnd, ref Point lpPoint);
+
+        [DllImport("user32.dll")]
+        public static extern nint GetAncestor(nint hWnd, uint gaFlags);
+
+        [DllImport("user32.dll")]
         public static extern int FillRect(nint hDC, ref Rect lprc, nint hbr);
 
         [DllImport("user32.dll", SetLastError = true)]
@@ -343,6 +531,12 @@ public sealed class AppWindowDesktopOverlayService : IDesktopOverlayService
             int cx,
             int cy,
             uint uFlags);
+
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+        public static extern int GetClassName(nint hWnd, System.Text.StringBuilder lpClassName, int nMaxCount);
+
+        [DllImport("user32.dll")]
+        public static extern bool EnumChildWindows(nint hWndParent, EnumChildProc lpEnumFunc, nint lParam);
 
         // https://learn.microsoft.com/windows/win32/api/commctrl/nf-commctrl-setwindowsubclass
         [DllImport("comctl32.dll", SetLastError = true)]
