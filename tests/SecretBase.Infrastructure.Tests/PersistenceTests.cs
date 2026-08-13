@@ -5,6 +5,7 @@ using SecretBase.Core.Themes;
 using SecretBase.Core.Widgets;
 using SecretBase.Core.Widgets.Clock;
 using SecretBase.Core.Widgets.Text;
+using SecretBase.Core.Widgets.Web;
 using SecretBase.Infrastructure.Persistence;
 
 namespace SecretBase.Infrastructure.Tests;
@@ -292,6 +293,75 @@ public class LayoutPersistenceTests
             Assert.Equal(text.Id, restored.Widgets[1].Id);
             Assert.Empty(restored.Blocks);
             Assert.Equal(DesktopLayout.CurrentSchemaVersion, restored.SchemaVersion);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void SaveAndLoad_RestoresWebWidgetUrlAndGeometry()
+    {
+        var dir = CreateTempDir();
+        try
+        {
+            var store = new JsonLayoutStore(dir);
+            var layout = DesktopLayout.CreateDefault();
+            var web = DefaultWidgetFactory.CreateWeb(
+                "https://www.youtube.com/",
+                layout.RoomId,
+                x: 140,
+                y: 90,
+                width: 640,
+                height: 400);
+            layout.Widgets.Add(web);
+            store.Save(layout);
+
+            var restored = store.LoadOrCreateDefault(RoomId.DefaultRoomId);
+            Assert.Equal(3, restored.Widgets.Count);
+            Assert.Contains(restored.Widgets, w => w.Type == WidgetTypes.Clock);
+            Assert.Contains(restored.Widgets, w => w.Type == WidgetTypes.Text);
+
+            var widget = restored.Widgets.Single(w => w.Type == WidgetTypes.Web);
+            Assert.Equal(web.Id, widget.Id);
+            Assert.Equal(140, widget.Position.X);
+            Assert.Equal(90, widget.Position.Y);
+            Assert.Equal(640, widget.Size.Width);
+            Assert.Equal(400, widget.Size.Height);
+            Assert.Equal(RoomId.DefaultRoomId, widget.RoomId);
+
+            var config = WebWidgetConfiguration.FromDictionary(widget.Configuration);
+            Assert.Equal("https://www.youtube.com/", config.Url);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void SaveAndLoad_MixedClockTextWeb_PreservesAllTypes()
+    {
+        var dir = CreateTempDir();
+        try
+        {
+            var store = new JsonLayoutStore(dir);
+            var layout = DesktopLayout.CreateDefault();
+            layout.Widgets.Add(DefaultWidgetFactory.CreateWeb("https://github.com/"));
+            layout.Widgets.Add(DefaultWidgetFactory.CreateWeb("https://www.notion.so/"));
+            store.Save(layout);
+
+            var restored = store.LoadOrCreateDefault(RoomId.DefaultRoomId);
+            Assert.Equal(4, restored.Widgets.Count);
+            Assert.Equal(2, restored.Widgets.Count(w => w.Type == WidgetTypes.Web));
+
+            var urls = restored.Widgets
+                .Where(w => w.Type == WidgetTypes.Web)
+                .Select(w => WebWidgetConfiguration.FromDictionary(w.Configuration).Url)
+                .OrderBy(u => u, StringComparer.Ordinal)
+                .ToList();
+            Assert.Equal(["https://github.com/", "https://www.notion.so/"], urls);
         }
         finally
         {

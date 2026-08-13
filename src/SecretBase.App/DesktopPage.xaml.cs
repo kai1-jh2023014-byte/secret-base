@@ -18,6 +18,8 @@ using SecretBase.Platform.Abstractions;
 using SecretBase.Widgets.Clock;
 using SecretBase.Widgets.Text;
 using SecretBase.Widgets.Theming;
+using SecretBase.Widgets.Web;
+using SecretBase.Core.Widgets.Web;
 using Windows.Foundation;
 
 namespace SecretBase.App;
@@ -85,6 +87,7 @@ public sealed partial class DesktopPage : Page
         _logger.Info("block", "Block host ready (use + button to add; drop + drag icons inside a Block).");
         _logger.Info("theme", "Theme editor ready (Aa button) — colors apply to Clock, Text, and Blocks.");
         _logger.Info("layout", "Arrange ready (Grid button) — even placement for widgets and blocks.");
+        _logger.Info("widget", "Web Widget ready (Web button) — Untrusted WebView2, no host bridge.");
     }
 
     private void StyleFabButtons(ThemeDefinition theme)
@@ -93,6 +96,12 @@ public sealed partial class DesktopPage : Page
         AddBlockFab.Foreground = ThemePainter.Brush(theme.Foreground);
         AddBlockFab.BorderBrush = ThemePainter.Brush(theme.WidgetForeground, 0.35);
         AddBlockFab.BorderThickness = new Thickness(1);
+
+        AddWebFab.Background = ThemePainter.Brush(theme.WidgetBackground, ThemePainter.EffectiveWidgetOpacity(theme));
+        AddWebFab.Foreground = ThemePainter.Brush(theme.WidgetForeground);
+        AddWebFab.BorderBrush = ThemePainter.Brush(theme.Accent, 0.7);
+        AddWebFab.BorderThickness = new Thickness(1);
+        AddWebFab.FontFamily = new FontFamily(theme.FontFamily);
 
         ThemeFab.Background = ThemePainter.Brush(theme.WidgetBackground, ThemePainter.EffectiveWidgetOpacity(theme));
         ThemeFab.Foreground = ThemePainter.Brush(theme.WidgetForeground);
@@ -258,6 +267,11 @@ public sealed partial class DesktopPage : Page
             rects.Add(fabRect);
         }
 
+        if (TryCreateClientRect(AddWebFab, scale, out var webFabRect))
+        {
+            rects.Add(webFabRect);
+        }
+
         if (TryCreateClientRect(ThemeFab, scale, out var themeFabRect))
         {
             rects.Add(themeFabRect);
@@ -325,6 +339,25 @@ public sealed partial class DesktopPage : Page
             instance.Configuration = config.ToDictionary();
 
             var view = new TextWidgetView();
+            view.Initialize(config, updated =>
+            {
+                instance.Configuration = updated.ToDictionary();
+                PersistLayoutNow();
+            });
+            if (_theme is not null)
+            {
+                view.ApplyTheme(_theme);
+            }
+
+            return view;
+        }
+
+        if (instance.Type == WidgetTypes.Web)
+        {
+            var config = WebWidgetConfiguration.FromDictionary(instance.Configuration);
+            instance.Configuration = config.ToDictionary();
+
+            var view = new WebWidgetView();
             view.Initialize(config, updated =>
             {
                 instance.Configuration = updated.ToDictionary();
@@ -414,6 +447,127 @@ public sealed partial class DesktopPage : Page
     {
         args.Handled = true;
         await ShowAddBlockDialogAsync();
+    }
+
+    private async void AddWebButton_Click(object sender, RoutedEventArgs e) =>
+        await ShowAddWebDialogAsync();
+
+    private async void AddWebAccelerator_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        args.Handled = true;
+        await ShowAddWebDialogAsync();
+    }
+
+    private async Task ShowAddWebDialogAsync()
+    {
+        if (_layout is null || _theme is null)
+        {
+            return;
+        }
+
+        AllowFullWindowInput();
+
+        var urlBox = new TextBox
+        {
+            Header = "URL (https)",
+            Text = WebWidgetConfiguration.DefaultUrl,
+            PlaceholderText = "https://www.youtube.com/"
+        };
+        var xBox = new NumberBox
+        {
+            Header = "X",
+            Value = 96,
+            Minimum = 0,
+            SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline
+        };
+        var yBox = new NumberBox
+        {
+            Header = "Y",
+            Value = 96,
+            Minimum = 0,
+            SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline
+        };
+        var wBox = new NumberBox
+        {
+            Header = "Width",
+            Value = 560,
+            Minimum = Math.Max(_theme.WidgetMinWidth, 320),
+            SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline
+        };
+        var hBox = new NumberBox
+        {
+            Header = "Height",
+            Value = 360,
+            Minimum = Math.Max(_theme.WidgetMinHeight, 220),
+            SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline
+        };
+
+        var hint = new TextBlock
+        {
+            Text = "Web pages are Untrusted. No host bridge to Secret Base.",
+            FontSize = 12,
+            Opacity = 0.75,
+            TextWrapping = TextWrapping.WrapWholeWords
+        };
+
+        var panel = new StackPanel { Spacing = 8 };
+        panel.Children.Add(urlBox);
+        panel.Children.Add(hint);
+        panel.Children.Add(xBox);
+        panel.Children.Add(yBox);
+        panel.Children.Add(wBox);
+        panel.Children.Add(hBox);
+
+        var dialog = new ContentDialog
+        {
+            Title = "Add Web Widget",
+            PrimaryButtonText = "Create",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Primary,
+            Content = panel,
+            XamlRoot = XamlRoot
+        };
+
+        ContentDialogResult result;
+        try
+        {
+            result = await dialog.ShowAsync();
+        }
+        finally
+        {
+            SyncInteractiveInputRegions();
+        }
+
+        if (result != ContentDialogResult.Primary)
+        {
+            return;
+        }
+
+        if (!WebUrlValidator.TryNormalize(urlBox.Text, out var normalized, out var error))
+        {
+            _logger?.Warn("widget", error ?? WebUrlValidator.BlockedMessage);
+            if (_debugChromeVisible)
+            {
+                StatusText.Text = error ?? WebUrlValidator.BlockedMessage;
+            }
+
+            return;
+        }
+
+        var cascade = _layout.Widgets.Count(w => w.Type == WidgetTypes.Web) * 24;
+        var widget = DefaultWidgetFactory.CreateWeb(
+            normalized,
+            _layout.RoomId,
+            xBox.Value + cascade,
+            yBox.Value + cascade,
+            wBox.Value,
+            hBox.Value);
+
+        _layout.Widgets.Add(widget);
+        PersistLayoutNow();
+        RenderDesktopObjects();
+        RefreshDebugStatus();
+        _logger?.Info("widget", $"Added Web Widget → {normalized}");
     }
 
     private async Task ShowAddBlockDialogAsync()

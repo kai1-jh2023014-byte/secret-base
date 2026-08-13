@@ -2,7 +2,7 @@
 
 > Make your PC feel like *your* secret base — a Personal Desktop Environment for Windows.
 
-**v0.1 milestone status:** foundation + Clock + Text + Desktop Overlay (**widgets-only UX**).  
+**v0.1 milestone status:** foundation + Clock + Text + Blocks + Theme + Arrange + Desktop Overlay (**widgets-only UX**) + **Web Widget**.  
 Wallpaper shows through the host; widgets float on the desktop; Exit via **Ctrl+Shift+Q** (debug chrome: **Ctrl+Shift+D**).
 
 ## Principles
@@ -21,9 +21,9 @@ Wallpaper shows through the host; widgets float on the desktop; Exit via **Ctrl+
 | Runtime | **.NET 10 LTS** |
 | UI | **WinUI 3** |
 | Platform | **Windows App SDK 2.3.1** |
-| Web (later) | WebView2 |
+| Web | **WebView2** (via WASDK; Untrusted; no Electron) |
 | IDE | Rider 2026.1 / `dotnet` CLI |
-| Persistence (later) | Split JSON under `%LocalAppData%\SecretBase` |
+| Persistence | Split JSON under `%LocalAppData%\SecretBase` |
 
 Details: [docs/architecture/tech-stack.md](docs/architecture/tech-stack.md)
 
@@ -97,19 +97,18 @@ Use **Ctrl+Shift+Q** to leave Secret Base (Safe Exit). **Ctrl+Shift+D** toggles 
   settings\   # reserved
 ```
 
-## Roadmap after Text
+## Roadmap after Web Widget
 
-1. App Launcher Widget  
+1. App Launcher polish  
 2. Drag & Drop polish  
-3. Theme editor UX  
-4. Web Content Widget  
-5. Room switching  
+3. Room switching  
 
 ## Architecture docs
 
 - [Overview](docs/architecture/overview.md)
 - [Tech stack](docs/architecture/tech-stack.md)
 - [Widget architecture](docs/architecture/widget-architecture.md)
+- [Web Widget](docs/architecture/web-widget.md)
 - [Desktop overlay](docs/architecture/desktop-overlay.md)
 - [Security boundaries](docs/architecture/security-boundaries.md)
 - [Windows Update resilience](docs/architecture/windows-update-resilience.md)

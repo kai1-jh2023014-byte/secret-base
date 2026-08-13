@@ -10,7 +10,7 @@
 
     <!--
       Widgets + Blocks desktop layer.
-      + Add Block · Aa Theme · Grid Arrange (always visible).
+      + Add Block · Web · Aa Theme · Grid Arrange (always visible).
       Debug chrome: Ctrl+Shift+D. Safe Exit: Ctrl+Shift+Q.
     -->
     <Grid x:Name="RootGrid" Background="Transparent">
@@ -31,6 +31,10 @@
                 Key="T"
                 Modifiers="Control,Shift"
                 Invoked="ThemeAccelerator_Invoked" />
+            <KeyboardAccelerator
+                Key="W"
+                Modifiers="Control,Shift"
+                Invoked="AddWebAccelerator_Invoked" />
         </Grid.KeyboardAccelerators>
 
         <Canvas
@@ -54,6 +58,17 @@
                 CornerRadius="14"
                 Click="AddBlockButton_Click"
                 ToolTipService.ToolTip="Add Block" />
+            <Button
+                x:Name="AddWebFab"
+                Width="48"
+                Height="48"
+                Content="Web"
+                FontSize="12"
+                FontWeight="SemiBold"
+                Padding="0"
+                CornerRadius="14"
+                Click="AddWebButton_Click"
+                ToolTipService.ToolTip="Add Web Widget" />
             <Button
                 x:Name="ThemeFab"
                 Width="48"
@@ -113,6 +128,12 @@
                     Click="AddBlockButton_Click"
                     Padding="12,4"
                     ToolTipService.ToolTip="Create a Block" />
+                <Button
+                    x:Name="AddWebButton"
+                    Content="Add Web"
+                    Click="AddWebButton_Click"
+                    Padding="12,4"
+                    ToolTipService.ToolTip="Create a Web Widget" />
                 <Button
                     x:Name="ExitButton"
                     Content="Exit"
