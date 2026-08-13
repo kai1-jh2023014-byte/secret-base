@@ -58,6 +58,12 @@ See [2026-08-11-rider-run-configuration.md](2026-08-11-rider-run-configuration.m
 
 **Why:** Users need wallpaper/Desktop/other apps clickable outside widgets; WinUI transparency alone still hit-tests the full work-area HWND. `SetWindowRgn` is public and cross-process. Thin white edges after chromeless presenter are DWM border/corner artifacts, not XAML margins.
 
+## 2026-08-13 — Overlay hit-test hardening (DesktopChildSiteBridge)
+
+**Decision:** Keep Option A (`SetWindowRgn`), but apply the region to the top-level HWND **and** WinUI `DesktopChildSiteBridge` (and related) child HWNDs; map client rects to window-relative coordinates; cache/reapply on activation/`HWND_BOTTOM`; strengthen DWM edge suppress (`CAPTION_COLOR`, `SYSTEMBACKDROP_TYPE`, `SWP_FRAMECHANGED`). Still no WorkerW / Taskbar COM / undocumented APIs.
+
+**Why:** Windows reports showed full-window input steal + edge chrome despite the first SetWindowRgn pass — consistent with shaping only the outer HWND while WinUI’s island child continued to hit-test the full client (see microsoft-ui-xaml#10746 / castorix notes).
+
 See [overlay-input-and-edges.md](../architecture/overlay-input-and-edges.md).
 
 ## 2026-08-12 — Block as first-class Desktop room (schema v2)

@@ -285,6 +285,15 @@ public sealed partial class DesktopPage : Page
         _overlay.UpdateInteractiveInputRegions(_overlayTarget, rects);
     }
 
+    /// <summary>
+    /// Called from <see cref="MainWindow"/> after XAML island creation to re-apply SetWindowRgn.
+    /// </summary>
+    public void RequestInteractiveRegionSync()
+    {
+        SyncInteractiveInputRegions();
+        _logger?.Info("overlay", "Interactive SetWindowRgn sync requested (post-island).");
+    }
+
     private bool TryCreateClientRect(FrameworkElement element, double scale, out OverlayInputRect rect)
     {
         rect = default;

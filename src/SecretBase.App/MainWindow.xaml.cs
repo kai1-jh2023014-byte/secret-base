@@ -35,6 +35,7 @@ public sealed partial class MainWindow : Window
 
         // When Windows activates us (e.g. click a widget), immediately return to HWND_BOTTOM
         // so normal applications stay above the desktop overlay layer.
+        // KeepBehind also reapplies the cached SetWindowRgn shape.
         Activated += OnActivated;
 
         // Page needs overlay target to push widget hit regions (SetWindowRgn) after layout.
@@ -44,6 +45,18 @@ public sealed partial class MainWindow : Window
             OverlayTarget = _overlayTarget
         };
         RootFrame.Navigate(typeof(DesktopPage), pageArgs);
+
+        // WinUI may finish creating DesktopChildSiteBridge after first navigate — re-sync soon.
+        if (DispatcherQueue is not null)
+        {
+            _ = DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () =>
+            {
+                if (RootFrame.Content is DesktopPage page)
+                {
+                    page.RequestInteractiveRegionSync();
+                }
+            });
+        }
     }
 
     private void OnActivated(object sender, WindowActivatedEventArgs args)
