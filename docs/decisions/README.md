@@ -66,3 +66,11 @@ See [overlay-input-and-edges.md](../architecture/overlay-input-and-edges.md).
 
 **Why:** “Small rooms on the Desktop” needs nested items and safe launch, which is a different shape from Clock/Text configuration bags. Persistence compatibility for existing Clock/Text layouts is mandatory.
 
+## 2026-08-13 — Theme editor for Clock / Text / Blocks
+
+**Decision:** Ship a small Theme dialog (presets + hex colors + font/radius/opacity) that mutates the room `ThemeDefinition` and persists via existing `JsonThemeStore`. Re-render Desktop after Apply. No per-widget theme system yet.
+
+**Why:** Users need to restyle Clock (time/date), Text boxes, and Blocks without a settings framework. One shared theme matches the current paint path (`ApplyTheme` / `BlockFrame.ApplyTheme`).
+
+See [theme-editor.md](../architecture/theme-editor.md).
+

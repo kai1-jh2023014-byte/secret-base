@@ -36,5 +36,6 @@ Highest principle:
 - ✅ Desktop Overlay (chromeless work-area host; widgets-only UX)
 - ✅ Widget-shaped input (`SetWindowRgn`) + DWM edge suppress (see overlay-input-and-edges.md)
 - ✅ Block rooms (layout schema v2; launch via Platform `ITargetLaunchService`)
-- App Launcher polish → Theme editor → WebContent → Room switching
+- ✅ Theme editor (presets + colors for Clock / Text / Blocks)
+- App Launcher polish → WebContent → Room switching
 

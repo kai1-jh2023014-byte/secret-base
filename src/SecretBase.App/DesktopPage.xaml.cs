@@ -75,7 +75,7 @@ public sealed partial class DesktopPage : Page
         EnsureSeedTextWidget(_layout);
 
         ApplyDesktopTheme(_theme);
-        StyleAddBlockFab(_theme);
+        StyleFabButtons(_theme);
         RefreshDebugStatus();
         ShowDebugChrome(forceVisible: false);
 
@@ -83,14 +83,21 @@ public sealed partial class DesktopPage : Page
         _logger.Info("desktop", $"Overlay desktop shown for room '{_layout.RoomId}' with {_layout.Widgets.Count} widget(s), {_layout.Blocks.Count} block(s).");
         _logger.Info("widget", "Clock and Text widget hosts ready.");
         _logger.Info("block", "Block host ready (use + button to add; drop + drag icons inside a Block).");
+        _logger.Info("theme", "Theme editor ready (Aa button) — colors apply to Clock, Text, and Blocks.");
     }
 
-    private void StyleAddBlockFab(ThemeDefinition theme)
+    private void StyleFabButtons(ThemeDefinition theme)
     {
         AddBlockFab.Background = ThemePainter.Brush(theme.Accent, 0.92);
         AddBlockFab.Foreground = ThemePainter.Brush(theme.Foreground);
         AddBlockFab.BorderBrush = ThemePainter.Brush(theme.WidgetForeground, 0.35);
         AddBlockFab.BorderThickness = new Thickness(1);
+
+        ThemeFab.Background = ThemePainter.Brush(theme.WidgetBackground, ThemePainter.EffectiveWidgetOpacity(theme));
+        ThemeFab.Foreground = ThemePainter.Brush(theme.WidgetForeground);
+        ThemeFab.BorderBrush = ThemePainter.Brush(theme.Accent, 0.7);
+        ThemeFab.BorderThickness = new Thickness(1);
+        ThemeFab.FontFamily = new FontFamily(theme.FontFamily);
     }
 
     private void ApplyDesktopTheme(ThemeDefinition theme)
@@ -244,6 +251,11 @@ public sealed partial class DesktopPage : Page
             rects.Add(fabRect);
         }
 
+        if (TryCreateClientRect(ThemeFab, scale, out var themeFabRect))
+        {
+            rects.Add(themeFabRect);
+        }
+
         _overlay.UpdateInteractiveInputRegions(_overlayTarget, rects);
     }
 
@@ -334,6 +346,15 @@ public sealed partial class DesktopPage : Page
         {
             _logger?.Error("persistence", "Failed to save layout after seeding Text widget.", ex);
         }
+    }
+
+    private async void ThemeButton_Click(object sender, RoutedEventArgs e) =>
+        await ShowThemeEditorDialogAsync();
+
+    private async void ThemeAccelerator_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        args.Handled = true;
+        await ShowThemeEditorDialogAsync();
     }
 
     private async void AddBlockButton_Click(object sender, RoutedEventArgs e) =>
@@ -440,6 +461,270 @@ public sealed partial class DesktopPage : Page
         RenderDesktopObjects();
         RefreshDebugStatus();
         _logger?.Info("block", $"Created Block '{block.Name}' ({block.Id}).");
+    }
+
+    private async Task ShowThemeEditorDialogAsync()
+    {
+        if (_theme is null || _themeStore is null)
+        {
+            return;
+        }
+
+        AllowFullWindowInput();
+
+        var draft = ThemeDefinition.CreateDefault();
+        ThemePresets.CopyVisualsTo(_theme, draft);
+        draft.Id = _theme.Id;
+        draft.WidgetMinWidth = _theme.WidgetMinWidth;
+        draft.WidgetMinHeight = _theme.WidgetMinHeight;
+
+        var presetBox = new ComboBox
+        {
+            Header = "Preset",
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            SelectedItem = ThemePresets.Names.Contains(draft.DisplayName) ? draft.DisplayName : "Default"
+        };
+        foreach (var name in ThemePresets.Names)
+        {
+            presetBox.Items.Add(name);
+        }
+
+        var widgetBg = CreateColorBox("Widget / Block background (#AARRGGBB)", draft.WidgetBackground);
+        var widgetFg = CreateColorBox("Clock / Text / title color", draft.WidgetForeground);
+        var mutedFg = CreateColorBox("Date / muted text", draft.ForegroundMuted);
+        var accent = CreateColorBox("Accent (buttons)", draft.Accent);
+        var fontBox = new ComboBox
+        {
+            Header = "Font",
+            HorizontalAlignment = HorizontalAlignment.Stretch
+        };
+        foreach (var font in new[]
+                 {
+                     "Segoe UI Variable Display",
+                     "Segoe UI",
+                     "Georgia",
+                     "Cascadia Mono",
+                     "Consolas",
+                     "Yu Gothic UI"
+                 })
+        {
+            fontBox.Items.Add(font);
+        }
+
+        fontBox.SelectedItem = fontBox.Items.Contains(draft.FontFamily) ? draft.FontFamily : fontBox.Items[0];
+
+        var radiusBox = new NumberBox
+        {
+            Header = "Corner radius",
+            Value = draft.CornerRadius,
+            Minimum = 0,
+            Maximum = 40,
+            SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline
+        };
+        var opacityBox = new NumberBox
+        {
+            Header = "Surface opacity (0.35–1.0)",
+            Value = draft.Transparency,
+            Minimum = 0.35,
+            Maximum = 1.0,
+            SmallChange = 0.05,
+            LargeChange = 0.1,
+            SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline
+        };
+
+        var preview = new Border
+        {
+            Height = 72,
+            CornerRadius = new CornerRadius(draft.CornerRadius),
+            Padding = new Thickness(12, 8, 12, 8),
+            Margin = new Thickness(0, 4, 0, 0)
+        };
+        var previewTime = new TextBlock
+        {
+            Text = "14:35:08",
+            FontSize = 22,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
+        };
+        var previewDate = new TextBlock { Text = "2026 / 08 / 13", FontSize = 12, Opacity = 0.9 };
+        var previewStack = new StackPanel { Spacing = 2 };
+        previewStack.Children.Add(previewTime);
+        previewStack.Children.Add(previewDate);
+        preview.Child = previewStack;
+
+        void RefreshPreview()
+        {
+            preview.Background = ThemePainter.Brush(widgetBg.Text, Math.Clamp(opacityBox.Value, 0.35, 1.0));
+            preview.CornerRadius = new CornerRadius(Math.Clamp(radiusBox.Value, 0, 40));
+            previewTime.Foreground = ThemePainter.Brush(widgetFg.Text);
+            previewDate.Foreground = ThemePainter.Brush(mutedFg.Text);
+            var font = fontBox.SelectedItem as string ?? draft.FontFamily;
+            previewTime.FontFamily = new FontFamily(font);
+            previewDate.FontFamily = new FontFamily(font);
+        }
+
+        presetBox.SelectionChanged += (_, _) =>
+        {
+            if (presetBox.SelectedItem is not string preset)
+            {
+                return;
+            }
+
+            ThemePresets.ApplyPreset(draft, preset);
+            widgetBg.Text = draft.WidgetBackground;
+            widgetFg.Text = draft.WidgetForeground;
+            mutedFg.Text = draft.ForegroundMuted;
+            accent.Text = draft.Accent;
+            radiusBox.Value = draft.CornerRadius;
+            opacityBox.Value = draft.Transparency;
+            if (fontBox.Items.Contains(draft.FontFamily))
+            {
+                fontBox.SelectedItem = draft.FontFamily;
+            }
+
+            RefreshPreview();
+        };
+
+        widgetBg.TextChanged += (_, _) => RefreshPreview();
+        widgetFg.TextChanged += (_, _) => RefreshPreview();
+        mutedFg.TextChanged += (_, _) => RefreshPreview();
+        radiusBox.ValueChanged += (_, _) => RefreshPreview();
+        opacityBox.ValueChanged += (_, _) => RefreshPreview();
+        fontBox.SelectionChanged += (_, _) => RefreshPreview();
+        RefreshPreview();
+
+        var panel = new StackPanel { Spacing = 8, Width = 360 };
+        panel.Children.Add(new TextBlock
+        {
+            Text = "Applies to Clock, date, Text boxes, and Blocks.",
+            TextWrapping = TextWrapping.Wrap,
+            Opacity = 0.8,
+            FontSize = 12
+        });
+        panel.Children.Add(presetBox);
+        panel.Children.Add(preview);
+        panel.Children.Add(widgetBg);
+        panel.Children.Add(widgetFg);
+        panel.Children.Add(mutedFg);
+        panel.Children.Add(accent);
+        panel.Children.Add(fontBox);
+        panel.Children.Add(radiusBox);
+        panel.Children.Add(opacityBox);
+
+        var dialog = new ContentDialog
+        {
+            Title = "Theme",
+            PrimaryButtonText = "Apply",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Primary,
+            Content = new ScrollViewer
+            {
+                Content = panel,
+                MaxHeight = 520,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto
+            },
+            XamlRoot = XamlRoot
+        };
+
+        ContentDialogResult result;
+        try
+        {
+            result = await dialog.ShowAsync();
+        }
+        finally
+        {
+            SyncInteractiveInputRegions();
+        }
+
+        if (result != ContentDialogResult.Primary)
+        {
+            return;
+        }
+
+        if (!TryNormalizeHex(widgetBg.Text, out var bg) ||
+            !TryNormalizeHex(widgetFg.Text, out var fg) ||
+            !TryNormalizeHex(mutedFg.Text, out var muted) ||
+            !TryNormalizeHex(accent.Text, out var ac))
+        {
+            _logger?.Warn("theme", "Theme apply cancelled — invalid color hex.");
+            if (_debugChromeVisible)
+            {
+                StatusText.Text = "Invalid color. Use #RRGGBB or #AARRGGBB.";
+            }
+
+            return;
+        }
+
+        draft.WidgetBackground = bg;
+        draft.WidgetForeground = fg;
+        draft.ForegroundMuted = muted;
+        draft.Accent = ac;
+        draft.CornerRadius = Math.Clamp(radiusBox.Value, 0, 40);
+        draft.Transparency = Math.Clamp(opacityBox.Value, 0.35, 1.0);
+        draft.FontFamily = fontBox.SelectedItem as string ?? draft.FontFamily;
+        if (presetBox.SelectedItem is string selectedPreset)
+        {
+            draft.DisplayName = selectedPreset;
+        }
+
+        ThemePresets.CopyVisualsTo(draft, _theme);
+        _theme.Id = draft.Id;
+        _theme.WidgetMinWidth = draft.WidgetMinWidth;
+        _theme.WidgetMinHeight = draft.WidgetMinHeight;
+
+        try
+        {
+            _themeStore.Save(_theme);
+            ApplyDesktopTheme(_theme);
+            StyleFabButtons(_theme);
+            RenderDesktopObjects();
+            RefreshDebugStatus();
+            _logger?.Info("theme", $"Theme applied ({_theme.DisplayName}).");
+        }
+        catch (Exception ex)
+        {
+            _logger?.Error("theme", "Failed to save theme.", ex);
+        }
+    }
+
+    private static TextBox CreateColorBox(string header, string value) =>
+        new()
+        {
+            Header = header,
+            Text = value,
+            PlaceholderText = "#AARRGGBB"
+        };
+
+    private static bool TryNormalizeHex(string? input, out string normalized)
+    {
+        normalized = string.Empty;
+        if (string.IsNullOrWhiteSpace(input))
+        {
+            return false;
+        }
+
+        var value = input.Trim();
+        if (!value.StartsWith('#'))
+        {
+            value = "#" + value;
+        }
+
+        var hex = value[1..];
+        if (hex.Length is not (6 or 8))
+        {
+            return false;
+        }
+
+        foreach (var c in hex)
+        {
+            var ok = c is (>= '0' and <= '9') or (>= 'a' and <= 'f') or (>= 'A' and <= 'F');
+            if (!ok)
+            {
+                return false;
+            }
+        }
+
+        normalized = "#" + hex.ToUpperInvariant();
+        return true;
     }
 
     private void AllowFullWindowInput()

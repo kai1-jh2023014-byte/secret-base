@@ -10,7 +10,7 @@
 
     <!--
       Widgets + Blocks desktop layer.
-      Add Block: always-visible icon button (+).
+      + Add Block · Aa Theme editor (always visible).
       Debug chrome: Ctrl+Shift+D. Safe Exit: Ctrl+Shift+Q.
     -->
     <Grid x:Name="RootGrid" Background="Transparent">
@@ -27,27 +27,45 @@
                 Key="B"
                 Modifiers="Control,Shift"
                 Invoked="AddBlockAccelerator_Invoked" />
+            <KeyboardAccelerator
+                Key="T"
+                Modifiers="Control,Shift"
+                Invoked="ThemeAccelerator_Invoked" />
         </Grid.KeyboardAccelerators>
 
         <Canvas
             x:Name="WidgetCanvas"
             Background="Transparent" />
 
-        <!-- Always-visible Add Block affordance (not keyboard-only). -->
-        <Button
-            x:Name="AddBlockFab"
-            Width="48"
-            Height="48"
-            Margin="16,16"
+        <StackPanel
+            Orientation="Horizontal"
             HorizontalAlignment="Left"
             VerticalAlignment="Bottom"
-            Content="+"
-            FontSize="28"
-            FontWeight="SemiBold"
-            Padding="0"
-            CornerRadius="14"
-            Click="AddBlockButton_Click"
-            ToolTipService.ToolTip="Add Block" />
+            Margin="16,16"
+            Spacing="10">
+            <Button
+                x:Name="AddBlockFab"
+                Width="48"
+                Height="48"
+                Content="+"
+                FontSize="28"
+                FontWeight="SemiBold"
+                Padding="0"
+                CornerRadius="14"
+                Click="AddBlockButton_Click"
+                ToolTipService.ToolTip="Add Block" />
+            <Button
+                x:Name="ThemeFab"
+                Width="48"
+                Height="48"
+                Content="Aa"
+                FontSize="18"
+                FontWeight="SemiBold"
+                Padding="0"
+                CornerRadius="14"
+                Click="ThemeButton_Click"
+                ToolTipService.ToolTip="Theme — colors &amp; design" />
+        </StackPanel>
 
         <!-- Developer / recovery chrome — hidden in normal overlay UX. -->
         <Border
@@ -66,6 +84,12 @@
                     FontSize="11"
                     Foreground="#FF9AA7B2"
                     TextWrapping="NoWrap" />
+                <Button
+                    x:Name="ThemeButton"
+                    Content="Theme"
+                    Click="ThemeButton_Click"
+                    Padding="12,4"
+                    ToolTipService.ToolTip="Edit colors &amp; design" />
                 <Button
                     x:Name="AddBlockButton"
                     Content="Add Block"
