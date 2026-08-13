@@ -59,9 +59,14 @@ Investigation notes: [overlay-input-and-edges.md](overlay-input-and-edges.md).
 |---------|-----------|--------------------|
 | Page / canvas background | Transparent | — |
 | Title / brand text | Hidden | — |
+| **+** Add Block | Always visible (bottom-left FAB) | Debug chrome **Add Block** |
+| **Aa** Theme | Always visible | Debug chrome **Theme**, **Ctrl+Shift+T** |
+| **Grid** Arrange | Always visible — even layout for widgets & blocks | Debug chrome **Arrange** |
 | Status / widget count | Hidden | **Ctrl+Shift+D** shows debug chrome |
 | Exit button | Hidden | Debug chrome **Exit**, or **Ctrl+Shift+Q** |
 | `WidgetFrame` | Subtle grip + resize (stronger on hover) | Same |
+
+Arrange uses Core `DesktopWidgetLayout` / `DesktopBlockLayout` (compact equal-gap grid from top-left; Blocks sit below the widget band) and persists via the layout store.
 
 ## Explicitly out of scope / forbidden
 
