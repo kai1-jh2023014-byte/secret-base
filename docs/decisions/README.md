@@ -80,3 +80,11 @@ See [theme-editor.md](../architecture/theme-editor.md).
 
 **Why:** Users asked to tidy floating widgets/blocks without manual drag for every item; Core-only math keeps it testable and UI-agnostic.
 
+## 2026-08-13 — Web Widget (WebView2, Untrusted)
+
+**Decision:** Add `WidgetTypes.Web` with Core `WebWidgetConfiguration` + `WebUrlValidator` (http/https only). Host UI in `WebWidgetView` (WebView2 via WASDK). No schema bump. Not seeded into default layout — **Web** FAB / Ctrl+Shift+W. Harden WebView2 (`AreHostObjectsAllowed = false`, `IsWebMessageEnabled = false`, no host objects). Move/resize remain on `WidgetFrame`.
+
+**Why:** Desktop-native web surfaces (YouTube first) without Electron, without Core→Windows coupling, and without a JS bridge into Secret Base.
+
+See [web-widget.md](../architecture/web-widget.md) and [security-boundaries.md](../architecture/security-boundaries.md).
+

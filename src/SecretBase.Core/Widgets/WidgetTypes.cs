@@ -7,4 +7,7 @@ public static class WidgetTypes
 {
     public const string Clock = "clock";
     public const string Text = "text";
+
+    /// <summary>WebView2-hosted page. Untrusted content — no host bridge.</summary>
+    public const string Web = "web";
 }
