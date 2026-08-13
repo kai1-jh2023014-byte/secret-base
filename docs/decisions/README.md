@@ -74,3 +74,9 @@ See [overlay-input-and-edges.md](../architecture/overlay-input-and-edges.md).
 
 See [theme-editor.md](../architecture/theme-editor.md).
 
+## 2026-08-13 — Desktop widget & block arrange
+
+**Decision:** Add always-visible **Grid** FAB (+ debug **Arrange**) that runs `DesktopWidgetLayout.ArrangeEvenly` then `DesktopBlockLayout.ArrangeEvenlyBelow` (blocks under the widget band), persists layout JSON, and re-renders. Compact equal-gap grid from top-left — not full-bleed stretch.
+
+**Why:** Users asked to tidy floating widgets/blocks without manual drag for every item; Core-only math keeps it testable and UI-agnostic.
+

@@ -37,5 +37,6 @@ Highest principle:
 - ✅ Widget-shaped input (`SetWindowRgn`) + DWM edge suppress (see overlay-input-and-edges.md)
 - ✅ Block rooms (layout schema v2; launch via Platform `ITargetLaunchService`)
 - ✅ Theme editor (presets + colors for Clock / Text / Blocks)
+- ✅ Desktop arrange (**Grid** FAB — even widget/block placement)
 - App Launcher polish → WebContent → Room switching
 

@@ -84,6 +84,7 @@ public sealed partial class DesktopPage : Page
         _logger.Info("widget", "Clock and Text widget hosts ready.");
         _logger.Info("block", "Block host ready (use + button to add; drop + drag icons inside a Block).");
         _logger.Info("theme", "Theme editor ready (Aa button) — colors apply to Clock, Text, and Blocks.");
+        _logger.Info("layout", "Arrange ready (Grid button) — even placement for widgets and blocks.");
     }
 
     private void StyleFabButtons(ThemeDefinition theme)
@@ -98,6 +99,12 @@ public sealed partial class DesktopPage : Page
         ThemeFab.BorderBrush = ThemePainter.Brush(theme.Accent, 0.7);
         ThemeFab.BorderThickness = new Thickness(1);
         ThemeFab.FontFamily = new FontFamily(theme.FontFamily);
+
+        ArrangeFab.Background = ThemePainter.Brush(theme.WidgetBackground, ThemePainter.EffectiveWidgetOpacity(theme));
+        ArrangeFab.Foreground = ThemePainter.Brush(theme.WidgetForeground);
+        ArrangeFab.BorderBrush = ThemePainter.Brush(theme.Accent, 0.7);
+        ArrangeFab.BorderThickness = new Thickness(1);
+        ArrangeFab.FontFamily = new FontFamily(theme.FontFamily);
     }
 
     private void ApplyDesktopTheme(ThemeDefinition theme)
@@ -256,6 +263,11 @@ public sealed partial class DesktopPage : Page
             rects.Add(themeFabRect);
         }
 
+        if (TryCreateClientRect(ArrangeFab, scale, out var arrangeFabRect))
+        {
+            rects.Add(arrangeFabRect);
+        }
+
         _overlay.UpdateInteractiveInputRegions(_overlayTarget, rects);
     }
 
@@ -350,6 +362,44 @@ public sealed partial class DesktopPage : Page
 
     private async void ThemeButton_Click(object sender, RoutedEventArgs e) =>
         await ShowThemeEditorDialogAsync();
+
+    private void ArrangeButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_layout is null)
+        {
+            return;
+        }
+
+        var areaWidth = Math.Max(WidgetCanvas.ActualWidth, ActualWidth);
+        var areaHeight = Math.Max(WidgetCanvas.ActualHeight, ActualHeight);
+        areaWidth = Math.Max(320, areaWidth);
+        areaHeight = Math.Max(240, areaHeight);
+        const double margin = 24;
+        const double gap = 24;
+
+        DesktopWidgetLayout.ArrangeEvenly(_layout.Widgets, areaWidth, areaHeight, margin, gap);
+
+        var widgetBottom = _layout.Widgets.Count == 0
+            ? margin
+            : _layout.Widgets.Max(w => w.Position.Y + w.Size.Height) + gap;
+
+        DesktopBlockLayout.ArrangeEvenlyBelow(
+            _layout.Blocks,
+            areaWidth,
+            areaHeight,
+            topOffset: widgetBottom,
+            margin: margin,
+            gap: gap);
+
+        PersistLayoutNow();
+        RenderDesktopObjects();
+        RefreshDebugStatus();
+        _logger?.Info("layout", "Arranged widgets and blocks evenly.");
+        if (_debugChromeVisible)
+        {
+            StatusText.Text = "Arranged widgets & blocks evenly.";
+        }
+    }
 
     private async void ThemeAccelerator_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
     {

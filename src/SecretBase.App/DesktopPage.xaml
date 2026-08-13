@@ -10,7 +10,7 @@
 
     <!--
       Widgets + Blocks desktop layer.
-      + Add Block · Aa Theme editor (always visible).
+      + Add Block · Aa Theme · Grid Arrange (always visible).
       Debug chrome: Ctrl+Shift+D. Safe Exit: Ctrl+Shift+Q.
     -->
     <Grid x:Name="RootGrid" Background="Transparent">
@@ -65,6 +65,17 @@
                 CornerRadius="14"
                 Click="ThemeButton_Click"
                 ToolTipService.ToolTip="Theme — colors &amp; design" />
+            <Button
+                x:Name="ArrangeFab"
+                Width="48"
+                Height="48"
+                Content="Grid"
+                FontSize="12"
+                FontWeight="SemiBold"
+                Padding="0"
+                CornerRadius="14"
+                Click="ArrangeButton_Click"
+                ToolTipService.ToolTip="Arrange widgets &amp; blocks evenly" />
         </StackPanel>
 
         <!-- Developer / recovery chrome — hidden in normal overlay UX. -->
@@ -90,6 +101,12 @@
                     Click="ThemeButton_Click"
                     Padding="12,4"
                     ToolTipService.ToolTip="Edit colors &amp; design" />
+                <Button
+                    x:Name="ArrangeButton"
+                    Content="Arrange"
+                    Click="ArrangeButton_Click"
+                    Padding="12,4"
+                    ToolTipService.ToolTip="Arrange widgets &amp; blocks evenly" />
                 <Button
                     x:Name="AddBlockButton"
                     Content="Add Block"
