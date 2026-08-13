@@ -10,7 +10,7 @@
 
     <!--
       Widgets + Blocks desktop layer.
-      + Add Block · Web · Aa Theme · Grid Arrange (always visible).
+      + Add Block · Web · Cal · Aa Theme · Grid Arrange (always visible).
       Debug chrome: Ctrl+Shift+D. Safe Exit: Ctrl+Shift+Q.
     -->
     <Grid x:Name="RootGrid" Background="Transparent">
@@ -35,6 +35,10 @@
                 Key="W"
                 Modifiers="Control,Shift"
                 Invoked="AddWebAccelerator_Invoked" />
+            <KeyboardAccelerator
+                Key="C"
+                Modifiers="Control,Shift"
+                Invoked="AddCalendarAccelerator_Invoked" />
         </Grid.KeyboardAccelerators>
 
         <Canvas
@@ -69,6 +73,17 @@
                 CornerRadius="14"
                 Click="AddWebButton_Click"
                 ToolTipService.ToolTip="Add Web Widget" />
+            <Button
+                x:Name="AddCalendarFab"
+                Width="48"
+                Height="48"
+                Content="Cal"
+                FontSize="12"
+                FontWeight="SemiBold"
+                Padding="0"
+                CornerRadius="14"
+                Click="AddCalendarButton_Click"
+                ToolTipService.ToolTip="Add Calendar Widget" />
             <Button
                 x:Name="ThemeFab"
                 Width="48"
@@ -134,6 +149,12 @@
                     Click="AddWebButton_Click"
                     Padding="12,4"
                     ToolTipService.ToolTip="Create a Web Widget" />
+                <Button
+                    x:Name="AddCalendarButton"
+                    Content="Add Cal"
+                    Click="AddCalendarButton_Click"
+                    Padding="12,4"
+                    ToolTipService.ToolTip="Create a Calendar Widget" />
                 <Button
                     x:Name="ExitButton"
                     Content="Exit"

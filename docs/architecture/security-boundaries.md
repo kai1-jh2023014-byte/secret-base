@@ -5,7 +5,7 @@
 | Zone | Code | Trust | May access |
 |------|------|-------|------------|
 | Trusted Host | App, Core, Infrastructure, Platform | Trusted | Internal services only; Platform still avoids destructive OS APIs |
-| Built-in Widget | `SecretBase.Widgets` (Clock, Text, Web chrome) | Semi-trusted | Own settings/UI; Platform APIs only through approved host services |
+| Built-in Widget | `SecretBase.Widgets` (Clock, Text, Web chrome, Calendar) | Semi-trusted | Own settings/UI; Platform APIs only through approved host services |
 | Web Content | Documents inside WebView2 (`WidgetTypes.Web`) | **Untrusted** | Network rendering only; **no** host object injection to Secret Base APIs |
 | Plugin (future) | Marketplace packages | Untrusted | Sandboxed Plugin API only — never Core internals |
 | AI (future) | LLM providers / tools | Restricted | Observation → Safe → Confirm → Restricted ladder |
@@ -40,6 +40,19 @@ Forbidden (v0.1 and forward until redesign):
 - Injecting secrets into the page
 
 Future “Web → Secret Base API” bridges, if ever added, require an explicit security design and must not ship by accident.
+
+## Calendar Integration Layer (v0.1)
+
+```
+CalendarWidgetView
+        ↓
+ICalendarEventSource   (Core contract)
+   ├─ Empty / LocalConfiguration   ← shipped
+   └─ Outlook / Google (future)    ← Platform/Infrastructure only + user consent
+```
+
+v0.1 Calendar is **local-only** (events in layout JSON). Do not embed cloud OAuth tokens in Core
+or call calendar REST APIs from Widgets without a dedicated Platform provider and confirmation UX.
 
 ## v0.1 hard rules
 

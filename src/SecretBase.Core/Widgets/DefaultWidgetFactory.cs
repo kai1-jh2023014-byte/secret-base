@@ -1,4 +1,5 @@
 using SecretBase.Core.Desktop;
+using SecretBase.Core.Widgets.Calendar;
 using SecretBase.Core.Widgets.Clock;
 using SecretBase.Core.Widgets.Text;
 using SecretBase.Core.Widgets.Web;
@@ -64,6 +65,30 @@ public static class DefaultWidgetFactory
             Type = WidgetTypes.Web,
             Position = new WidgetPosition(x ?? 96, y ?? 96),
             Size = new WidgetSize(width ?? 560, height ?? 360),
+            RoomId = room,
+            Configuration = config.ToDictionary()
+        };
+    }
+
+    /// <summary>
+    /// Creates a Calendar Widget. Not seeded into default layout — add explicitly.
+    /// </summary>
+    public static WidgetInstance CreateCalendar(
+        RoomId? roomId = null,
+        double? x = null,
+        double? y = null,
+        double? width = null,
+        double? height = null,
+        CalendarWidgetConfiguration? configuration = null)
+    {
+        var room = roomId ?? RoomId.DefaultRoomId;
+        var config = configuration ?? CalendarWidgetConfiguration.CreateDefault();
+        return new WidgetInstance
+        {
+            Id = Guid.NewGuid(),
+            Type = WidgetTypes.Calendar,
+            Position = new WidgetPosition(x ?? 360, y ?? 48),
+            Size = new WidgetSize(width ?? 320, height ?? 340),
             RoomId = room,
             Configuration = config.ToDictionary()
         };

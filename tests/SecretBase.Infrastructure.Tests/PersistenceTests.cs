@@ -1,8 +1,10 @@
 using System.Text.Json;
 using SecretBase.Core.Blocks;
+using SecretBase.Core.Calendar;
 using SecretBase.Core.Desktop;
 using SecretBase.Core.Themes;
 using SecretBase.Core.Widgets;
+using SecretBase.Core.Widgets.Calendar;
 using SecretBase.Core.Widgets.Clock;
 using SecretBase.Core.Widgets.Text;
 using SecretBase.Core.Widgets.Web;
@@ -362,6 +364,62 @@ public class LayoutPersistenceTests
                 .OrderBy(u => u, StringComparer.Ordinal)
                 .ToList();
             Assert.Equal(["https://github.com/", "https://www.notion.so/"], urls);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void SaveAndLoad_RestoresCalendarEventsAndGeometry()
+    {
+        var dir = CreateTempDir();
+        try
+        {
+            var store = new JsonLayoutStore(dir);
+            var layout = DesktopLayout.CreateDefault();
+            var config = new CalendarWidgetConfiguration
+            {
+                FirstDayOfWeek = DayOfWeek.Sunday,
+                FollowToday = false,
+                PinnedYear = 2026,
+                PinnedMonth = 8,
+                Events =
+                [
+                    new CalendarEvent
+                    {
+                        Date = new DateOnly(2026, 8, 13),
+                        Title = "Calendar ship"
+                    }
+                ]
+            };
+            var calendar = DefaultWidgetFactory.CreateCalendar(
+                layout.RoomId,
+                x: 400,
+                y: 60,
+                width: 330,
+                height: 350,
+                configuration: config);
+            layout.Widgets.Add(calendar);
+            store.Save(layout);
+
+            var restored = store.LoadOrCreateDefault(RoomId.DefaultRoomId);
+            Assert.Contains(restored.Widgets, w => w.Type == WidgetTypes.Clock);
+            Assert.Contains(restored.Widgets, w => w.Type == WidgetTypes.Text);
+            var widget = restored.Widgets.Single(w => w.Type == WidgetTypes.Calendar);
+            Assert.Equal(calendar.Id, widget.Id);
+            Assert.Equal(400, widget.Position.X);
+            Assert.Equal(60, widget.Position.Y);
+
+            var loaded = CalendarWidgetConfiguration.FromDictionary(widget.Configuration);
+            Assert.Equal(DayOfWeek.Sunday, loaded.FirstDayOfWeek);
+            Assert.False(loaded.FollowToday);
+            Assert.Equal(2026, loaded.PinnedYear);
+            Assert.Equal(8, loaded.PinnedMonth);
+            Assert.Single(loaded.Events);
+            Assert.Equal("Calendar ship", loaded.Events[0].Title);
+            Assert.Equal(new DateOnly(2026, 8, 13), loaded.Events[0].Date);
         }
         finally
         {

@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
@@ -6,20 +7,23 @@ using Microsoft.UI.Xaml.Navigation;
 using SecretBase.App.Desktop;
 using SecretBase.Core;
 using SecretBase.Core.Blocks;
+using SecretBase.Core.Calendar;
 using SecretBase.Core.Desktop;
 using SecretBase.Core.Themes;
 using SecretBase.Core.Time;
 using SecretBase.Core.Widgets;
+using SecretBase.Core.Widgets.Calendar;
 using SecretBase.Core.Widgets.Clock;
 using SecretBase.Core.Widgets.Text;
+using SecretBase.Core.Widgets.Web;
 using SecretBase.Infrastructure.Logging;
 using SecretBase.Infrastructure.Persistence;
 using SecretBase.Platform.Abstractions;
+using SecretBase.Widgets.Calendar;
 using SecretBase.Widgets.Clock;
 using SecretBase.Widgets.Text;
 using SecretBase.Widgets.Theming;
 using SecretBase.Widgets.Web;
-using SecretBase.Core.Widgets.Web;
 using Windows.Foundation;
 
 namespace SecretBase.App;
@@ -88,6 +92,7 @@ public sealed partial class DesktopPage : Page
         _logger.Info("theme", "Theme editor ready (Aa button) — colors apply to Clock, Text, and Blocks.");
         _logger.Info("layout", "Arrange ready (Grid button) — even placement for widgets and blocks.");
         _logger.Info("widget", "Web Widget ready (Web button) — Untrusted WebView2, no host bridge.");
+        _logger.Info("widget", "Calendar Widget ready (Cal button) — local month grid + event source layer.");
     }
 
     private void StyleFabButtons(ThemeDefinition theme)
@@ -102,6 +107,12 @@ public sealed partial class DesktopPage : Page
         AddWebFab.BorderBrush = ThemePainter.Brush(theme.Accent, 0.7);
         AddWebFab.BorderThickness = new Thickness(1);
         AddWebFab.FontFamily = new FontFamily(theme.FontFamily);
+
+        AddCalendarFab.Background = ThemePainter.Brush(theme.WidgetBackground, ThemePainter.EffectiveWidgetOpacity(theme));
+        AddCalendarFab.Foreground = ThemePainter.Brush(theme.WidgetForeground);
+        AddCalendarFab.BorderBrush = ThemePainter.Brush(theme.Accent, 0.7);
+        AddCalendarFab.BorderThickness = new Thickness(1);
+        AddCalendarFab.FontFamily = new FontFamily(theme.FontFamily);
 
         ThemeFab.Background = ThemePainter.Brush(theme.WidgetBackground, ThemePainter.EffectiveWidgetOpacity(theme));
         ThemeFab.Foreground = ThemePainter.Brush(theme.WidgetForeground);
@@ -272,6 +283,11 @@ public sealed partial class DesktopPage : Page
             rects.Add(webFabRect);
         }
 
+        if (TryCreateClientRect(AddCalendarFab, scale, out var calendarFabRect))
+        {
+            rects.Add(calendarFabRect);
+        }
+
         if (TryCreateClientRect(ThemeFab, scale, out var themeFabRect))
         {
             rects.Add(themeFabRect);
@@ -380,6 +396,25 @@ public sealed partial class DesktopPage : Page
             return view;
         }
 
+        if (instance.Type == WidgetTypes.Calendar)
+        {
+            var config = CalendarWidgetConfiguration.FromDictionary(instance.Configuration);
+            instance.Configuration = config.ToDictionary();
+
+            var view = new CalendarWidgetView();
+            view.Initialize(config, _timeProvider, updated =>
+            {
+                instance.Configuration = updated.ToDictionary();
+                PersistLayoutNow();
+            });
+            if (_theme is not null)
+            {
+                view.ApplyTheme(_theme);
+            }
+
+            return view;
+        }
+
         return null;
     }
 
@@ -465,6 +500,137 @@ public sealed partial class DesktopPage : Page
     {
         args.Handled = true;
         await ShowAddWebDialogAsync();
+    }
+
+    private async void AddCalendarButton_Click(object sender, RoutedEventArgs e) =>
+        await ShowAddCalendarDialogAsync();
+
+    private async void AddCalendarAccelerator_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        args.Handled = true;
+        await ShowAddCalendarDialogAsync();
+    }
+
+    private async Task ShowAddCalendarDialogAsync()
+    {
+        if (_layout is null || _theme is null)
+        {
+            return;
+        }
+
+        AllowFullWindowInput();
+
+        var titleBox = new TextBox
+        {
+            Header = "Optional first event title",
+            PlaceholderText = "Leave blank for an empty calendar"
+        };
+        var dateBox = new TextBox
+        {
+            Header = "Optional first event date (yyyy-MM-dd)",
+            Text = DateTime.Now.ToString("yyyy-MM-dd")
+        };
+        var xBox = new NumberBox
+        {
+            Header = "X",
+            Value = 360,
+            Minimum = 0,
+            SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline
+        };
+        var yBox = new NumberBox
+        {
+            Header = "Y",
+            Value = 48,
+            Minimum = 0,
+            SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline
+        };
+        var wBox = new NumberBox
+        {
+            Header = "Width",
+            Value = 320,
+            Minimum = Math.Max(_theme.WidgetMinWidth, 280),
+            SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline
+        };
+        var hBox = new NumberBox
+        {
+            Header = "Height",
+            Value = 340,
+            Minimum = Math.Max(_theme.WidgetMinHeight, 280),
+            SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline
+        };
+
+        var hint = new TextBlock
+        {
+            Text = "Local calendar only. No Outlook/Google cloud sync in v0.1.",
+            FontSize = 12,
+            Opacity = 0.75,
+            TextWrapping = TextWrapping.WrapWholeWords
+        };
+
+        var panel = new StackPanel { Spacing = 8 };
+        panel.Children.Add(hint);
+        panel.Children.Add(titleBox);
+        panel.Children.Add(dateBox);
+        panel.Children.Add(xBox);
+        panel.Children.Add(yBox);
+        panel.Children.Add(wBox);
+        panel.Children.Add(hBox);
+
+        var dialog = new ContentDialog
+        {
+            Title = "Add Calendar Widget",
+            PrimaryButtonText = "Create",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Primary,
+            Content = panel,
+            XamlRoot = XamlRoot
+        };
+
+        ContentDialogResult result;
+        try
+        {
+            result = await dialog.ShowAsync();
+        }
+        finally
+        {
+            SyncInteractiveInputRegions();
+        }
+
+        if (result != ContentDialogResult.Primary)
+        {
+            return;
+        }
+
+        var config = CalendarWidgetConfiguration.CreateDefault();
+        var title = titleBox.Text?.Trim() ?? string.Empty;
+        if (!string.IsNullOrWhiteSpace(title)
+            && DateOnly.TryParse(
+                dateBox.Text?.Trim(),
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.None,
+                out var eventDate))
+        {
+            config.Events.Add(new CalendarEvent
+            {
+                Date = eventDate,
+                Title = title
+            });
+        }
+
+        var cascade = _layout.Widgets.Count(w => w.Type == WidgetTypes.Calendar) * 24;
+        var widget = DefaultWidgetFactory.CreateCalendar(
+            _layout.RoomId,
+            xBox.Value + cascade,
+            yBox.Value + cascade,
+            wBox.Value,
+            hBox.Value,
+            config);
+
+        _layout.Widgets.Add(widget);
+        PersistLayoutNow();
+        RenderDesktopObjects();
+        RefreshDebugStatus();
+        _logger?.Info("widget", "Added Calendar Widget (local event source).");
     }
 
     private async Task ShowAddWebDialogAsync()

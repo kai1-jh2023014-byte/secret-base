@@ -3,23 +3,23 @@
 ## Goals
 
 Widgets are the building blocks of the Secret Base Desktop. Clock was the first
-**reference implementation**; Text and Web reuse the same host patterns.
+**reference implementation**; Text, Web, and Calendar reuse the same host patterns.
 
 ## Responsibilities
 
 | Layer | Owns | Must not own |
 |-------|------|--------------|
-| **Core** | `WidgetInstance`, `WidgetTypes`, position/size, per-type configuration (`ClockWidgetConfiguration`, `TextWidgetConfiguration`, `WebWidgetConfiguration` + `WebUrlValidator`), `ClockDisplayFormatter`, `ThemeDefinition`, `ITimeProvider` | XAML, timers, Win2D/WinUI/WebView2 types |
+| **Core** | `WidgetInstance`, `WidgetTypes`, position/size, per-type configuration (`Clock` / `Text` / `Web` / `Calendar`), `CalendarMonthBuilder` + `ICalendarEventSource`, `ThemeDefinition`, `ITimeProvider` | XAML, timers, Win2D/WinUI/WebView2 types |
 | **Infrastructure** | JSON layout/theme persistence (`JsonLayoutStore`, `JsonThemeStore`) | Widget visuals |
-| **Widgets** | Widget views (`ClockWidgetView`, `TextWidgetView`, `WebWidgetView`), theme brush mapping helpers | OS APIs (beyond WebView2), persistence paths, Desktop chrome |
-| **App** | Desktop canvas host, drag/resize chrome (`WidgetFrame`), composition root, type→view wiring | Clock formatting / Text edit / URL validation rules beyond hosting |
+| **Widgets** | Widget views (`ClockWidgetView`, `TextWidgetView`, `WebWidgetView`, `CalendarWidgetView`), theme helpers | OS APIs (beyond WebView2), persistence paths, Desktop chrome |
+| **App** | Desktop canvas host, drag/resize chrome (`WidgetFrame`), composition root, type→view wiring | Domain formatting / URL / calendar math beyond hosting |
 
 ## WidgetInstance
 
 ```
 WidgetInstance
 ├── Id (Guid)
-├── Type (e.g. "clock", "text", "web")
+├── Type (e.g. "clock", "text", "web", "calendar")
 ├── Position (X/Y)
 ├── Size (Width/Height)
 ├── RoomId (future multi-room)
@@ -31,7 +31,7 @@ WidgetInstance
 
 ## Shared vs type-specific
 
-### Shared (Clock + Text + Web)
+### Shared (Clock + Text + Web + Calendar)
 
 - Same `WidgetInstance` + JSON layout persistence
 - Same `WidgetFrame` for move / resize / min size (drag handle + corner grip only)
@@ -46,37 +46,38 @@ WidgetInstance
 ### Text-specific
 
 - Core: `TextWidgetConfiguration` (`Text`, `FontSize`, `TextAlignment`)
-- View: `TextWidgetView` — display mode → double-click → edit (`TextBox`) → commit/cancel
-  - Commit: focus loss or **Ctrl+Enter** (Enter alone inserts a newline for notes)
-  - Cancel: **Escape**
-- Editing lives in the content area; drag stays on `WidgetFrame`'s drag bar so edit gestures do not move the widget
+- View: `TextWidgetView` — display ↔ edit; drag stays on `WidgetFrame` DragBar
 
 ### Web-specific
 
 - Core: `WebWidgetConfiguration` (`Url`), `WebUrlValidator` (http/https only)
-- View: `WebWidgetView` — WebView2 + minimal URL/Go/Reload toolbar
-- Content is **Untrusted**; no host bridge (see [web-widget.md](web-widget.md), [security-boundaries.md](security-boundaries.md))
-- Drag stays on `WidgetFrame` DragBar so WebView pointer capture does not move the widget
+- View: `WebWidgetView` — WebView2 + minimal toolbar; Untrusted document (no host bridge)
+
+### Calendar-specific
+
+- Core: `CalendarWidgetConfiguration`, `CalendarMonthBuilder`, `ICalendarEventSource` (+ local/empty sources)
+- View: `CalendarWidgetView` — month grid, prev/next/today
+- v0.1 events are local configuration only (see [calendar-widget.md](calendar-widget.md))
 
 ## Core ↔ UI boundary
 
-- Core owns configuration + pure formatting (Clock) + URL validation (Web). Text/Web content strings are plain data in Core.
-- Views only render and handle local interaction (WebView2 stays in Widgets).
-- Host chrome (move/resize) lives in App (`WidgetFrame`) so every widget reuses the same placement behavior.
+- Core owns configuration + pure formatting (Clock) + URL validation (Web) + month/event math (Calendar).
+- Views only render and handle local interaction.
+- Host chrome (move/resize) lives in App (`WidgetFrame`).
 
 ## Persistence
 
 - Layout: `%LocalAppData%\SecretBase\layouts\{roomId}.layout.json`
 - Theme: `%LocalAppData%\SecretBase\themes\{themeId}.theme.json`
-- Move/resize, Text edits, Web URL commits, and Exit all save layout. Atomic write via `.tmp` then replace.
-- `schemaVersion` is **2** (Blocks). Existing Clock/Text layouts still load; Web instances are additive.
-- First-run `DesktopLayout.CreateDefault()` seeds Clock + Text only (Web is added via **Web** FAB).
+- Move/resize, Text edits, Web URL commits, Calendar month/events, and Exit all save layout.
+- `schemaVersion` is **2** (Blocks). Web/Calendar instances are additive — no default-layout replacement.
+- First-run seeds Clock + Text only (Web/Calendar via FABs).
 
 ## Security (built-in widgets)
 
 | Widget | Network | Notes |
 |--------|---------|-------|
-| Clock / Text | None | Local-only; no file/process access from the widget itself |
+| Clock / Text / Calendar | None (v0.1) | Local-only |
 | Web | Yes (WebView2) | Untrusted document; scheme gate + no host bridge |
 
 File IO is confined to Infrastructure persistence of layout/theme JSON.

@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="utf-8"?>
+<UserControl
+    x:Class="SecretBase.Widgets.Calendar.CalendarWidgetView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d">
+
+    <!--
+      Local month calendar. Move/resize stay on WidgetFrame DragBar —
+      navigation buttons live in the content area only.
+    -->
+    <Border
+        x:Name="RootBorder"
+        Padding="12,10"
+        Background="#CC243447"
+        CornerRadius="16"
+        BorderThickness="1"
+        BorderBrush="#44FFFFFF">
+        <Grid RowSpacing="8">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <Grid Grid.Row="0" ColumnSpacing="6">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <Button
+                    x:Name="PrevButton"
+                    Grid.Column="0"
+                    Content="‹"
+                    MinWidth="32"
+                    Padding="8,2"
+                    Click="PrevButton_Click"
+                    ToolTipService.ToolTip="Previous month" />
+
+                <TextBlock
+                    x:Name="MonthTitle"
+                    Grid.Column="1"
+                    VerticalAlignment="Center"
+                    HorizontalAlignment="Center"
+                    FontSize="16"
+                    FontWeight="SemiBold"
+                    Text="2026 / 08" />
+
+                <Button
+                    x:Name="TodayButton"
+                    Grid.Column="2"
+                    Content="Today"
+                    Padding="8,2"
+                    Click="TodayButton_Click"
+                    ToolTipService.ToolTip="Jump to today" />
+
+                <Button
+                    x:Name="NextButton"
+                    Grid.Column="3"
+                    Content="›"
+                    MinWidth="32"
+                    Padding="8,2"
+                    Click="NextButton_Click"
+                    ToolTipService.ToolTip="Next month" />
+            </Grid>
+
+            <Grid
+                x:Name="WeekdayHeader"
+                Grid.Row="1"
+                ColumnSpacing="2" />
+
+            <Grid
+                x:Name="DayGrid"
+                Grid.Row="2"
+                RowSpacing="2"
+                ColumnSpacing="2" />
+
+            <TextBlock
+                x:Name="EventSummary"
+                Grid.Row="3"
+                FontSize="11"
+                TextWrapping="WrapWholeWords"
+                TextTrimming="CharacterEllipsis"
+                MaxLines="2"
+                Opacity="0.85" />
+        </Grid>
+    </Border>
+</UserControl>

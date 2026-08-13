@@ -15,7 +15,7 @@ Highest principle:
 | `SecretBase.Infrastructure` | Logging, AppData paths, JSON layout/theme persistence |
 | `SecretBase.Platform.Abstractions` | OS-facing contracts (`ICompatibilityService`, `ISafeExitService`, `IDesktopOverlayService`) |
 | `SecretBase.Platform.Windows` | Windows adapter implementations only (AppWindow overlay, Safe Exit, compatibility) |
-| `SecretBase.Widgets` | Built-in widget views (Clock, Text, Web) + theme painting helpers |
+| `SecretBase.Widgets` | Built-in widget views (Clock, Text, Web, Calendar) + theme painting helpers |
 
 ## Why this split
 
@@ -39,5 +39,6 @@ Highest principle:
 - ✅ Theme editor (presets + colors for Clock / Text / Blocks)
 - ✅ Desktop arrange (**Grid** FAB — even widget/block placement)
 - ✅ Web Widget (WebView2; Untrusted; no host bridge)
+- ✅ Calendar Widget (local month grid + `ICalendarEventSource` layer)
 - App Launcher polish → Room switching
 
