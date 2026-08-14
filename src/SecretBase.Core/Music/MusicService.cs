@@ -1,6 +1,6 @@
 namespace SecretBase.Core.Music;
 
-/// <summary>Resolves which <see cref="IMusicProvider"/> opens a <see cref="MusicSource"/>.</summary>
+/// <summary>Composes music providers for the Music Widget / Command service.</summary>
 public sealed class MusicService
 {
     private readonly IReadOnlyList<IMusicProvider> _providers;
@@ -10,6 +10,7 @@ public sealed class MusicService
         _providers = providers?.ToList()
             ??
             [
+                new DemoCatalogMusicProvider(),
                 OpenWebMusicProvider.Instance,
                 LocalMusicProvider.Instance
             ];
@@ -20,7 +21,8 @@ public sealed class MusicService
     public IMusicProvider? FindProvider(MusicSource source)
     {
         ArgumentNullException.ThrowIfNull(source);
-        return _providers.FirstOrDefault(p => p.CanHandle(source.Type));
+        return _providers.FirstOrDefault(p => p.CanHandle(source.Type) && p is not DemoCatalogMusicProvider)
+               ?? _providers.FirstOrDefault(p => p.CanHandle(source.Type));
     }
 
     public bool TryResolveOpenUrl(MusicSource source, out string? url, out string? error)
@@ -35,4 +37,21 @@ public sealed class MusicService
 
         return provider.TryResolveOpenUrl(source, out url, out error);
     }
+
+    public MusicProviderCapabilities AggregateCapabilities()
+    {
+        MusicProviderCapabilities caps = MusicProviderCapabilities.None;
+        foreach (var p in _providers)
+        {
+            caps |= p.Capabilities;
+        }
+
+        return caps;
+    }
+
+    public IMusicProvider? GetPlaybackProvider() =>
+        _providers.FirstOrDefault(p =>
+            p.Capabilities.HasFlag(MusicProviderCapabilities.Playback)
+            && p.CurrentTrack is not null)
+        ?? _providers.FirstOrDefault(p => p.Capabilities.HasFlag(MusicProviderCapabilities.Playback));
 }

@@ -1,23 +1,31 @@
 namespace SecretBase.Core.Music;
 
-/// <summary>What a music provider can do. Not every provider supports APIs.</summary>
+/// <summary>What a music provider can do. UI disables unsupported ops; never fake APIs.</summary>
 [Flags]
 public enum MusicProviderCapabilities
 {
     None = 0,
 
-    /// <summary>Can resolve an http(s) URL to open inside the Music Widget WebView.</summary>
+    /// <summary>Can resolve an http(s) URL (optional auxiliary open — not the primary Music UI).</summary>
     OpenInWidget = 1 << 0,
 
-    /// <summary>Reserved — OAuth / API auth (not implemented this phase).</summary>
+    /// <summary>Reserved — OAuth / API auth.</summary>
     Authentication = 1 << 1,
 
-    /// <summary>Reserved — catalog search.</summary>
+    /// <summary>Catalog / track search.</summary>
     Search = 1 << 2,
 
-    /// <summary>Reserved — now-playing / transport.</summary>
+    /// <summary>Expose current track metadata.</summary>
     NowPlaying = 1 << 3,
 
     /// <summary>Reserved — user-selected local library (never unrestricted FS scan).</summary>
-    LocalLibrary = 1 << 4
+    LocalLibrary = 1 << 4,
+
+    /// <summary>Start playback of a resolved track.</summary>
+    Playback = 1 << 5,
+
+    Pause = 1 << 6,
+    Resume = 1 << 7,
+    Next = 1 << 8,
+    Previous = 1 << 9
 }

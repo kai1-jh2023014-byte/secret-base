@@ -125,3 +125,11 @@ See [calendar-integration.md](../architecture/calendar-integration.md).
 **Why:** Introduce Music as a Creative OS domain (not a generic Web Widget) while keeping security boundaries and deferring heavy API work.
 
 See [music-widget.md](../architecture/music-widget.md).
+
+## 2026-08-14 — Music native UX + MusicCommand boundary
+
+**Decision:** Evolve Music Widget from WebView-primary hub to native search / current-track / transport UI. Expand `IMusicProvider` with capability-gated Search/Playback ops. Introduce `MusicCommand` + `MusicCommandService` so future AI must go Command → Service → Provider. Ship `DemoCatalogMusicProvider` (honest demo catalog) because Spotify/YouTube APIs are not connected. Optional web source open uses system browser only. **Do not** add Host Bridge, AI, or OAuth.
+
+**Why:** Secret Base needs its own Music UX and a safe automation boundary before connecting AI or official music APIs.
+
+See [music-widget.md](../architecture/music-widget.md) and [music-commands.md](../architecture/music-commands.md).

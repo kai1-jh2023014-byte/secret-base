@@ -101,7 +101,7 @@ public sealed partial class DesktopPage : Page
         _logger.Info("layout", "Arrange ready (Grid button) — even placement for widgets and blocks.");
         _logger.Info("widget", "Web Widget ready (Web button) — Untrusted WebView2, no host bridge.");
         _logger.Info("widget", "Calendar Hub ready (Cal button) — Local / Mock / Google ICS / Google API read.");
-        _logger.Info("widget", "Music Widget ready (♪ button) — Sources hub; Untrusted WebView; no Host Bridge.");
+        _logger.Info("widget", "Music Widget ready (♪ button) — native search/playback UI via MusicCommand; Demo catalog; no Host Bridge.");
     }
 
     private void StyleFabButtons(ThemeDefinition theme)
@@ -458,7 +458,8 @@ public sealed partial class DesktopPage : Page
                 {
                     instance.Configuration = updated.ToDictionary();
                     PersistLayoutNow();
-                });
+                },
+                openUrl: url => TryOpenHttpsUrl(url));
             if (_theme is not null)
             {
                 view.ApplyTheme(_theme);
@@ -655,9 +656,9 @@ public sealed partial class DesktopPage : Page
         var hint = new TextBlock
         {
             Text =
-                "Music Hub with Spotify / YouTube Music / Local sources. "
-                + "Opens pages in an Untrusted WebView (same rules as Web Widget — no Host Bridge). "
-                + "No OAuth or API keys. Not a generic Web Widget.",
+                "Native Music UI: search Demo catalog, select a track, play/pause/next. "
+                + "Spotify/YouTube APIs are not connected — optional browser open for registered web sources. "
+                + "Commands go MusicCommand → Provider (future AI-ready). No Host Bridge.",
             FontSize = 12,
             Opacity = 0.75,
             TextWrapping = TextWrapping.WrapWholeWords

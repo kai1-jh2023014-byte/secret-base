@@ -30,9 +30,9 @@ Widgets are the building blocks of the Secret Base Desktop. Clock was the first
 
 ## Music-specific
 
-- Sources hub UI (`MusicWidgetView`) — open Spotify/YouTube/Web in Untrusted WebView2
-- Minimal `IMusicProvider` (`OpenInWidget` now; API providers later)
-- Distinct from Web Widget — see [music-widget.md](music-widget.md)
+- Native Music UI (`MusicWidgetView`) — search / current track / transport
+- `MusicCommand` → `MusicCommandService` → `IMusicProvider` (Demo catalog today)
+- Optional browser open for registered web sources — see [music-widget.md](music-widget.md) / [music-commands.md](music-commands.md)
 
 ## Persistence
 
@@ -46,6 +46,6 @@ Widgets are the building blocks of the Secret Base Desktop. Clock was the first
 | Clock / Text | None | Local-only |
 | Calendar | Optional HTTPS ICS + OAuth read | User ICS URL and/or AppData OAuth client; tokens in Credential Manager |
 | Web | WebView2 | Untrusted; no host bridge |
-| Music | WebView2 when browsing | Untrusted; same harden as Web; sources metadata only |
+| Music | Commands + optional browser | Native UI; Demo catalog; no Host Bridge; APIs deferred |
 
 Overlay hit-test / DWM are independent of widget types (PR #8).

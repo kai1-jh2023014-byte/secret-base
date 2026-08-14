@@ -1,46 +1,64 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
-using Microsoft.Web.WebView2.Core;
 using SecretBase.Core.Music;
 using SecretBase.Core.Themes;
 using SecretBase.Core.Widgets.Music;
-using SecretBase.Core.Widgets.Web;
 using SecretBase.Widgets.Theming;
-using Windows.UI;
+using Windows.System;
 
 namespace SecretBase.Widgets.Music;
 
 /// <summary>
-/// Music Hub widget. Sources are first-class; browsing uses Untrusted WebView2
-/// with the same harden rules as Web Widget (no host bridge).
+/// Native Music UI. Search / current track / transport go through
+/// <see cref="MusicCommandService"/> → <see cref="IMusicProvider"/>.
+/// No Host Bridge. WebView is not the primary surface.
 /// </summary>
 public sealed partial class MusicWidgetView : UserControl
 {
     private MusicWidgetConfiguration _configuration = MusicWidgetConfiguration.CreateDefault();
-    private readonly MusicService _musicService = new();
+    private MusicService _musicService = new();
+    private MusicCommandService _commands = null!;
     private Action<MusicWidgetConfiguration>? _onConfigurationChanged;
+    private Func<string, bool>? _openUrl;
     private ThemeDefinition? _theme;
-    private bool _coreReady;
-    private string? _pendingNavigateUrl;
-    private string? _blockedMessage;
-    private bool _browseMode;
+    private readonly List<MusicTrack> _lastResults = [];
+    private int _searchGate;
+    private int _commandGate;
 
     public MusicWidgetView()
     {
         InitializeComponent();
-        Loaded += OnLoaded;
-        Unloaded += OnUnloaded;
+        _commands = new MusicCommandService(_musicService);
     }
 
     public void Initialize(
         MusicWidgetConfiguration configuration,
-        Action<MusicWidgetConfiguration>? onConfigurationChanged = null)
+        Action<MusicWidgetConfiguration>? onConfigurationChanged = null,
+        Func<string, bool>? openUrl = null,
+        MusicService? musicService = null)
     {
         _configuration = configuration;
         _onConfigurationChanged = onConfigurationChanged;
-        ShowHub();
-        RebuildSourceList();
+        _openUrl = openUrl;
+        if (musicService is not null)
+        {
+            _musicService = musicService;
+            _commands = new MusicCommandService(_musicService);
+        }
+
+        if (_configuration.CurrentTrack is not null)
+        {
+            _commands.RememberTracks([_configuration.CurrentTrack]);
+        }
+
+        UpdateCurrentTrackUi(_configuration.CurrentTrack, isPlaying: false);
+        UpdateTransportEnabled();
+        ResultsList.Children.Clear();
+        ResultsList.Children.Add(CreateMuted("Search the Demo catalog (Spotify/YouTube API not connected)."));
+        StatusLabel.Text = string.Empty;
+        SourceLabel.Text = "Source: Demo catalog";
     }
 
     public void ApplyTheme(ThemeDefinition theme)
@@ -53,217 +71,317 @@ public sealed partial class MusicWidgetView : UserControl
         var font = new FontFamily(theme.FontFamily);
         HeaderText.FontFamily = font;
         HeaderText.Foreground = ThemePainter.Brush(theme.WidgetForeground);
-        HeaderSubText.FontFamily = font;
-        HeaderSubText.Foreground = ThemePainter.Brush(theme.ForegroundMuted);
-        HubHint.FontFamily = font;
-        HubHint.Foreground = ThemePainter.Brush(theme.ForegroundMuted);
-        StatusText.FontFamily = font;
-        StatusText.Foreground = ThemePainter.Brush(theme.WidgetForeground);
+        SearchBox.FontFamily = font;
+        TrackTitleText.FontFamily = font;
+        TrackTitleText.Foreground = ThemePainter.Brush(theme.WidgetForeground);
+        TrackArtistText.FontFamily = font;
+        TrackArtistText.Foreground = ThemePainter.Brush(theme.ForegroundMuted);
+        SourceLabel.FontFamily = font;
+        SourceLabel.Foreground = ThemePainter.Brush(theme.ForegroundMuted);
+        StatusLabel.FontFamily = font;
+        StatusLabel.Foreground = ThemePainter.Brush(theme.ForegroundMuted);
+        ArtGlyph.Foreground = ThemePainter.Brush(theme.Accent);
+        ArtPlaceholder.Background = ThemePainter.Brush(theme.Accent, 0.2);
 
-        HeaderBar.Background = ThemePainter.Brush(theme.WidgetBackground, Math.Min(1.0, ThemePainter.EffectiveWidgetOpacity(theme) + 0.06));
-        StyleActionButton(BackButton, theme);
-        StyleActionButton(AddSourceButton, theme);
-        RebuildSourceList();
+        StyleActionButton(SearchButton, theme, accent: true);
+        StyleActionButton(PreviousButton, theme);
+        StyleActionButton(PlayPauseButton, theme, accent: true);
+        StyleActionButton(NextButton, theme);
+        StyleActionButton(OpenWebSourceButton, theme);
     }
 
-    private static void StyleActionButton(Button button, ThemeDefinition theme)
+    private static void StyleActionButton(Button button, ThemeDefinition theme, bool accent = false)
     {
         button.FontFamily = new FontFamily(theme.FontFamily);
-        button.Background = ThemePainter.Brush(theme.WidgetBackground, ThemePainter.EffectiveWidgetOpacity(theme));
+        button.Background = accent
+            ? ThemePainter.Brush(theme.Accent, 0.85)
+            : ThemePainter.Brush(theme.WidgetBackground, ThemePainter.EffectiveWidgetOpacity(theme));
         button.Foreground = ThemePainter.Brush(theme.WidgetForeground);
         button.BorderBrush = ThemePainter.Brush(theme.Accent, 0.55);
         button.BorderThickness = new Thickness(1);
     }
 
-    private async void OnLoaded(object sender, RoutedEventArgs e)
+    private void SearchBox_KeyDown(object sender, KeyRoutedEventArgs e)
     {
+        if (e.Key == VirtualKey.Enter)
+        {
+            e.Handled = true;
+            _ = RunSearchAsync();
+        }
+    }
+
+    private void SearchButton_Click(object sender, RoutedEventArgs e) => _ = RunSearchAsync();
+
+    private async Task RunSearchAsync()
+    {
+        if (Interlocked.Exchange(ref _searchGate, 1) == 1)
+        {
+            return;
+        }
+
         try
         {
-            await EnsureBrowserAsync();
-            if (!string.IsNullOrEmpty(_pendingNavigateUrl))
+            StatusLabel.Text = "Searching…";
+            ResultsList.Children.Clear();
+            ResultsList.Children.Add(CreateMuted("Searching…"));
+
+            var result = await _commands.ExecuteAsync(MusicCommand.SearchTrack(SearchBox.Text ?? string.Empty));
+            ResultsList.Children.Clear();
+            _lastResults.Clear();
+
+            if (!result.Succeeded)
             {
-                NavigateTo(_pendingNavigateUrl!);
+                ResultsList.Children.Add(CreateMuted(result.ErrorMessage ?? "Search failed."));
+                StatusLabel.Text = result.ErrorMessage ?? "Search failed.";
+                return;
             }
+
+            if (result.Tracks.Count == 0)
+            {
+                ResultsList.Children.Add(CreateMuted("No tracks found."));
+                StatusLabel.Text = "No tracks found.";
+                return;
+            }
+
+            _lastResults.AddRange(result.Tracks);
+            foreach (var track in result.Tracks)
+            {
+                ResultsList.Children.Add(CreateResultRow(track));
+            }
+
+            StatusLabel.Text = $"{result.Tracks.Count} result(s) · Demo catalog";
+            UpdateTransportEnabled();
         }
-        catch (Exception ex)
+        finally
         {
-            ShowStatus($"WebView2 failed to start: {ex.Message}", loading: false);
-        }
-    }
-
-    private void OnUnloaded(object sender, RoutedEventArgs e) => DetachBrowserHandlers();
-
-    private async Task EnsureBrowserAsync()
-    {
-        if (_coreReady)
-        {
-            return;
-        }
-
-        await Browser.EnsureCoreWebView2Async();
-        HardenWebView();
-        AttachBrowserHandlers();
-        _coreReady = true;
-    }
-
-    private void HardenWebView()
-    {
-        var core = Browser.CoreWebView2;
-        if (core is null)
-        {
-            return;
-        }
-
-        var settings = core.Settings;
-        settings.AreHostObjectsAllowed = false;
-        settings.IsWebMessageEnabled = false;
-        settings.IsStatusBarEnabled = false;
-        settings.AreDefaultContextMenusEnabled = true;
-        settings.AreDevToolsEnabled = false;
-        Browser.DefaultBackgroundColor = Color.FromArgb(0, 0, 0, 0);
-    }
-
-    private void AttachBrowserHandlers()
-    {
-        var core = Browser.CoreWebView2;
-        if (core is null)
-        {
-            return;
-        }
-
-        core.NavigationStarting += Core_NavigationStarting;
-        core.NavigationCompleted += Core_NavigationCompleted;
-        core.NewWindowRequested += Core_NewWindowRequested;
-    }
-
-    private void DetachBrowserHandlers()
-    {
-        var core = Browser.CoreWebView2;
-        if (core is null)
-        {
-            return;
-        }
-
-        core.NavigationStarting -= Core_NavigationStarting;
-        core.NavigationCompleted -= Core_NavigationCompleted;
-        core.NewWindowRequested -= Core_NewWindowRequested;
-    }
-
-    private void Core_NavigationStarting(CoreWebView2 sender, CoreWebView2NavigationStartingEventArgs args)
-    {
-        if (!WebUrlValidator.TryNormalize(args.Uri, out _, out var error))
-        {
-            args.Cancel = true;
-            _blockedMessage = error ?? WebUrlValidator.BlockedMessage;
-            ShowStatus(_blockedMessage, loading: false);
-            return;
-        }
-
-        _blockedMessage = null;
-        ShowStatus("Loading…", loading: true);
-    }
-
-    private void Core_NavigationCompleted(CoreWebView2 sender, CoreWebView2NavigationCompletedEventArgs args)
-    {
-        if (!string.IsNullOrEmpty(_blockedMessage))
-        {
-            ShowStatus(_blockedMessage, loading: false);
-            return;
-        }
-
-        if (!args.IsSuccess)
-        {
-            ShowStatus($"Failed to load ({args.WebErrorStatus}).", loading: false);
-            return;
-        }
-
-        HideStatus();
-    }
-
-    private void Core_NewWindowRequested(CoreWebView2 sender, CoreWebView2NewWindowRequestedEventArgs args)
-    {
-        args.Handled = true;
-        if (WebUrlValidator.TryNormalize(args.Uri, out var normalized, out var error))
-        {
-            NavigateTo(normalized!);
-        }
-        else
-        {
-            ShowStatus(error ?? WebUrlValidator.BlockedMessage, loading: false);
+            Interlocked.Exchange(ref _searchGate, 0);
         }
     }
 
-    private void ShowHub()
+    private UIElement CreateResultRow(MusicTrack track)
     {
-        _browseMode = false;
-        HubPanel.Visibility = Visibility.Visible;
-        BrowsePanel.Visibility = Visibility.Collapsed;
-        BackButton.Visibility = Visibility.Collapsed;
-        HeaderText.Text = "Music";
-        HeaderSubText.Text = "Sources";
-        HideStatus();
-    }
-
-    private void ShowBrowse(string title)
-    {
-        _browseMode = true;
-        HubPanel.Visibility = Visibility.Collapsed;
-        BrowsePanel.Visibility = Visibility.Visible;
-        BackButton.Visibility = Visibility.Visible;
-        HeaderText.Text = title;
-        HeaderSubText.Text = "Untrusted";
-    }
-
-    private void BackButton_Click(object sender, RoutedEventArgs e) => ShowHub();
-
-    private void RebuildSourceList()
-    {
-        SourceList.Children.Clear();
-        var enabled = _configuration.Sources.Where(s => s.IsEnabled).ToList();
-        if (enabled.Count == 0)
+        var button = new Button
         {
-            SourceList.Children.Add(CreateMuted("No music selected"));
-            return;
-        }
-
-        foreach (var source in enabled)
-        {
-            SourceList.Children.Add(CreateSourceRow(source));
-        }
-    }
-
-    private UIElement CreateSourceRow(MusicSource source)
-    {
-        var open = new Button
-        {
-            Content = source.Name,
             HorizontalAlignment = HorizontalAlignment.Stretch,
             HorizontalContentAlignment = HorizontalAlignment.Left,
-            Padding = new Thickness(12, 10, 12, 10),
-            Tag = source.Id
+            Padding = new Thickness(10, 8, 10, 8),
+            Tag = track.Id
         };
-        open.Click += SourceOpen_Click;
 
-        var typeLabel = new TextBlock
+        var panel = new StackPanel { Spacing = 2 };
+        panel.Children.Add(new TextBlock
         {
-            Text = source.Type.ToString(),
+            Text = track.Title,
+            FontSize = 13,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            TextWrapping = TextWrapping.WrapWholeWords
+        });
+        panel.Children.Add(new TextBlock
+        {
+            Text = $"{track.Artist} · {track.Source}",
             FontSize = 11,
-            Opacity = 0.7,
-            Margin = new Thickness(0, 2, 0, 0)
-        };
+            Opacity = 0.8,
+            TextWrapping = TextWrapping.WrapWholeWords
+        });
+        button.Content = panel;
+        button.Click += ResultRow_Click;
 
         if (_theme is not null)
         {
-            StyleActionButton(open, _theme);
-            open.BorderBrush = ThemePainter.Brush(_theme.Accent, 0.45);
-            typeLabel.Foreground = ThemePainter.Brush(_theme.ForegroundMuted);
-            typeLabel.FontFamily = new FontFamily(_theme.FontFamily);
+            StyleActionButton(button, _theme);
+            if (button.Content is StackPanel sp)
+            {
+                foreach (var child in sp.Children.OfType<TextBlock>())
+                {
+                    child.FontFamily = new FontFamily(_theme.FontFamily);
+                    child.Foreground = ThemePainter.Brush(_theme.WidgetForeground);
+                }
+            }
         }
 
-        var panel = new StackPanel { Spacing = 2 };
-        panel.Children.Add(open);
-        panel.Children.Add(typeLabel);
-        return panel;
+        return button;
+    }
+
+    private async void ResultRow_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: string id })
+        {
+            return;
+        }
+
+        var track = _lastResults.FirstOrDefault(t => string.Equals(t.Id, id, StringComparison.Ordinal));
+        if (track is null)
+        {
+            return;
+        }
+
+        await RunCommandAsync(MusicCommand.PlayTrack(track));
+    }
+
+    private async void PlayPauseButton_Click(object sender, RoutedEventArgs e)
+    {
+        var playback = _musicService.GetPlaybackProvider();
+        if (playback?.CurrentTrack is null && _configuration.CurrentTrack is not null)
+        {
+            await RunCommandAsync(MusicCommand.PlayTrack(_configuration.CurrentTrack));
+            return;
+        }
+
+        if (playback is { IsPlaying: true })
+        {
+            await RunCommandAsync(MusicCommand.Pause());
+        }
+        else
+        {
+            await RunCommandAsync(MusicCommand.Resume());
+        }
+    }
+
+    private async void PreviousButton_Click(object sender, RoutedEventArgs e) =>
+        await RunCommandAsync(MusicCommand.Previous());
+
+    private async void NextButton_Click(object sender, RoutedEventArgs e) =>
+        await RunCommandAsync(MusicCommand.Next());
+
+    private async Task RunCommandAsync(MusicCommand command)
+    {
+        if (Interlocked.Exchange(ref _commandGate, 1) == 1)
+        {
+            return;
+        }
+
+        try
+        {
+            var result = await _commands.ExecuteAsync(command);
+            if (!result.Succeeded)
+            {
+                StatusLabel.Text = result.ErrorMessage ?? "Command failed.";
+                UpdateTransportEnabled();
+                return;
+            }
+
+            if (result.CurrentTrack is not null)
+            {
+                _configuration.CurrentTrack = result.CurrentTrack;
+                Persist();
+            }
+
+            UpdateCurrentTrackUi(result.CurrentTrack ?? _configuration.CurrentTrack, result.IsPlaying);
+            StatusLabel.Text = result.Kind switch
+            {
+                MusicCommandKind.PlayTrack => "Playing",
+                MusicCommandKind.Pause => "Paused",
+                MusicCommandKind.Resume => "Playing",
+                MusicCommandKind.Next => "Next",
+                MusicCommandKind.Previous => "Previous",
+                _ => StatusLabel.Text
+            };
+            UpdateTransportEnabled();
+        }
+        finally
+        {
+            Interlocked.Exchange(ref _commandGate, 0);
+        }
+    }
+
+    private void UpdateCurrentTrackUi(MusicTrack? track, bool isPlaying)
+    {
+        if (track is null || string.IsNullOrWhiteSpace(track.Title))
+        {
+            TrackTitleText.Text = "No track selected";
+            TrackArtistText.Text = "Search and pick a track";
+            SourceLabel.Text = "Source: Demo catalog";
+            PlayPauseButton.Content = "▶";
+            return;
+        }
+
+        TrackTitleText.Text = track.Title;
+        TrackArtistText.Text = string.IsNullOrWhiteSpace(track.Artist) ? track.Source : track.Artist;
+        SourceLabel.Text = string.IsNullOrWhiteSpace(track.Source)
+            ? $"Source: {track.ProviderId}"
+            : $"Source: {track.Source}";
+        PlayPauseButton.Content = isPlaying ? "⏸" : "▶";
+    }
+
+    private void UpdateTransportEnabled()
+    {
+        var caps = _musicService.AggregateCapabilities();
+        var hasTrack = _configuration.CurrentTrack is not null
+                       || _musicService.GetPlaybackProvider()?.CurrentTrack is not null;
+
+        SearchButton.IsEnabled = caps.HasFlag(MusicProviderCapabilities.Search);
+        PreviousButton.IsEnabled = caps.HasFlag(MusicProviderCapabilities.Previous) && hasTrack;
+        NextButton.IsEnabled = caps.HasFlag(MusicProviderCapabilities.Next) && hasTrack;
+        PlayPauseButton.IsEnabled = hasTrack && (
+            caps.HasFlag(MusicProviderCapabilities.Playback)
+            || caps.HasFlag(MusicProviderCapabilities.Pause)
+            || caps.HasFlag(MusicProviderCapabilities.Resume));
+    }
+
+    private async void OpenWebSourceButton_Click(object sender, RoutedEventArgs e)
+    {
+        var sources = _configuration.Sources.Where(s => s.IsEnabled && s.Type != MusicSourceType.Local).ToList();
+        if (sources.Count == 0)
+        {
+            StatusLabel.Text = "No web music sources configured.";
+            return;
+        }
+
+        var list = new ListView
+        {
+            SelectionMode = ListViewSelectionMode.Single,
+            MaxHeight = 220
+        };
+        foreach (var s in sources)
+        {
+            list.Items.Add($"{s.Name} ({s.Type})");
+        }
+
+        list.SelectedIndex = 0;
+        var dialog = new ContentDialog
+        {
+            Title = "Open web source",
+            Content = new StackPanel
+            {
+                Spacing = 8,
+                Children =
+                {
+                    new TextBlock
+                    {
+                        Text = "Opens in the system browser (https only). This is optional — Music UI stays native.",
+                        FontSize = 12,
+                        Opacity = 0.75,
+                        TextWrapping = TextWrapping.WrapWholeWords
+                    },
+                    list
+                }
+            },
+            PrimaryButtonText = "Open",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = XamlRoot
+        };
+
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary || list.SelectedIndex < 0)
+        {
+            return;
+        }
+
+        var source = sources[list.SelectedIndex];
+        if (!_musicService.TryResolveOpenUrl(source, out var url, out var error) || url is null)
+        {
+            StatusLabel.Text = error ?? "Cannot open source.";
+            return;
+        }
+
+        if (_openUrl?.Invoke(url) == true)
+        {
+            StatusLabel.Text = $"Opened {source.Name} in browser.";
+        }
+        else
+        {
+            StatusLabel.Text = "Could not open browser.";
+        }
     }
 
     private TextBlock CreateMuted(string text)
@@ -271,11 +389,10 @@ public sealed partial class MusicWidgetView : UserControl
         var block = new TextBlock
         {
             Text = text,
-            FontSize = 14,
-            Opacity = 0.8,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            Margin = new Thickness(0, 24, 0, 24),
-            TextWrapping = TextWrapping.WrapWholeWords
+            FontSize = 12,
+            Opacity = 0.75,
+            TextWrapping = TextWrapping.WrapWholeWords,
+            Margin = new Thickness(0, 8, 0, 8)
         };
         if (_theme is not null)
         {
@@ -286,200 +403,5 @@ public sealed partial class MusicWidgetView : UserControl
         return block;
     }
 
-    private void SourceOpen_Click(object sender, RoutedEventArgs e)
-    {
-        if (sender is not Button { Tag: string id })
-        {
-            return;
-        }
-
-        var source = _configuration.FindSource(id);
-        if (source is null)
-        {
-            return;
-        }
-
-        OpenSource(source);
-    }
-
-    private async void OpenSource(MusicSource source)
-    {
-        _configuration.ActiveSourceId = source.Id;
-        Persist();
-
-        if (!_musicService.TryResolveOpenUrl(source, out var url, out var error))
-        {
-            ShowBrowse(source.Name);
-            ShowStatus(error ?? "Cannot open this source.", loading: false);
-            return;
-        }
-
-        ShowBrowse(source.Name);
-        try
-        {
-            await EnsureBrowserAsync();
-            NavigateTo(url!);
-        }
-        catch (Exception ex)
-        {
-            ShowStatus($"WebView2 failed: {ex.Message}", loading: false);
-        }
-    }
-
-    private void NavigateTo(string url)
-    {
-        if (!_coreReady || Browser.CoreWebView2 is null)
-        {
-            _pendingNavigateUrl = url;
-            ShowStatus("Loading…", loading: true);
-            return;
-        }
-
-        _pendingNavigateUrl = null;
-        if (!WebUrlValidator.TryNormalize(url, out var normalized, out var error))
-        {
-            ShowStatus(error ?? WebUrlValidator.BlockedMessage, loading: false);
-            return;
-        }
-
-        ShowStatus("Loading…", loading: true);
-        Browser.CoreWebView2.Navigate(normalized);
-    }
-
-    private async void AddSourceButton_Click(object sender, RoutedEventArgs e)
-    {
-        var typeBox = new ComboBox
-        {
-            Header = "Type",
-            HorizontalAlignment = HorizontalAlignment.Stretch
-        };
-        typeBox.Items.Add(MusicSourceType.Spotify.ToString());
-        typeBox.Items.Add(MusicSourceType.YouTube.ToString());
-        typeBox.Items.Add(MusicSourceType.Web.ToString());
-        typeBox.Items.Add(MusicSourceType.Local.ToString());
-        typeBox.SelectedIndex = 0;
-
-        var nameBox = new TextBox { Header = "Name", Text = "Spotify" };
-        var urlBox = new TextBox
-        {
-            Header = "URL (https)",
-            Text = MusicWidgetConfiguration.DefaultSpotifyUrl,
-            PlaceholderText = "https://"
-        };
-
-        typeBox.SelectionChanged += (_, _) =>
-        {
-            var selected = typeBox.SelectedItem?.ToString();
-            if (string.Equals(selected, nameof(MusicSourceType.Spotify), StringComparison.Ordinal))
-            {
-                nameBox.Text = "Spotify";
-                urlBox.Text = MusicWidgetConfiguration.DefaultSpotifyUrl;
-                urlBox.IsEnabled = true;
-            }
-            else if (string.Equals(selected, nameof(MusicSourceType.YouTube), StringComparison.Ordinal))
-            {
-                nameBox.Text = "YouTube Music";
-                urlBox.Text = MusicWidgetConfiguration.DefaultYouTubeUrl;
-                urlBox.IsEnabled = true;
-            }
-            else if (string.Equals(selected, nameof(MusicSourceType.Local), StringComparison.Ordinal))
-            {
-                nameBox.Text = "Local";
-                urlBox.Text = string.Empty;
-                urlBox.IsEnabled = false;
-            }
-            else
-            {
-                nameBox.Text = "Web";
-                urlBox.Text = "https://";
-                urlBox.IsEnabled = true;
-            }
-        };
-
-        var panel = new StackPanel { Spacing = 8 };
-        panel.Children.Add(new TextBlock
-        {
-            Text = "Registers a music source (metadata only). No OAuth tokens or cookies are stored.",
-            FontSize = 12,
-            Opacity = 0.75,
-            TextWrapping = TextWrapping.WrapWholeWords
-        });
-        panel.Children.Add(typeBox);
-        panel.Children.Add(nameBox);
-        panel.Children.Add(urlBox);
-
-        var dialog = new ContentDialog
-        {
-            Title = "Add music source",
-            PrimaryButtonText = "Add",
-            CloseButtonText = "Cancel",
-            DefaultButton = ContentDialogButton.Primary,
-            Content = panel,
-            XamlRoot = XamlRoot
-        };
-
-        var result = await dialog.ShowAsync();
-        if (result != ContentDialogResult.Primary)
-        {
-            return;
-        }
-
-        if (!Enum.TryParse<MusicSourceType>(typeBox.SelectedItem?.ToString(), out var type))
-        {
-            return;
-        }
-
-        var name = nameBox.Text?.Trim();
-        if (string.IsNullOrWhiteSpace(name))
-        {
-            return;
-        }
-
-        string? url = null;
-        if (type != MusicSourceType.Local)
-        {
-            if (!WebUrlValidator.TryNormalize(urlBox.Text, out var normalized, out _))
-            {
-                ShowHub();
-                HubHint.Text = WebUrlValidator.BlockedMessage;
-                return;
-            }
-
-            url = normalized;
-        }
-
-        _configuration.Sources.Add(new MusicSource
-        {
-            Id = Guid.NewGuid().ToString("N"),
-            Type = type,
-            Name = name,
-            Url = url,
-            IsEnabled = true
-        });
-        Persist();
-        RebuildSourceList();
-        HubHint.Text = "Pick a source to open it here. Web content stays Untrusted — no Host Bridge.";
-    }
-
     private void Persist() => _onConfigurationChanged?.Invoke(_configuration);
-
-    private void ShowStatus(string message, bool loading)
-    {
-        if (!_browseMode)
-        {
-            HubHint.Text = message;
-            return;
-        }
-
-        StatusOverlay.Visibility = Visibility.Visible;
-        StatusText.Text = message;
-        LoadingRing.IsActive = loading;
-        LoadingRing.Visibility = loading ? Visibility.Visible : Visibility.Collapsed;
-    }
-
-    private void HideStatus()
-    {
-        StatusOverlay.Visibility = Visibility.Collapsed;
-        LoadingRing.IsActive = false;
-    }
 }

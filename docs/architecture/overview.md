@@ -41,6 +41,6 @@ Highest principle:
 - ✅ Web Widget (WebView2; Untrusted; no host bridge)
 - ✅ Calendar Widget (Today agenda + `ICalendarProvider` / Google ICS)
 - ✅ Calendar Hub (capabilities, Mock, Google API OAuth read design, agenda cache)
-- ✅ Music Widget (Sources hub + Untrusted WebView; no Spotify/YouTube API yet)
+- ✅ Music Widget (native search/playback UI + MusicCommand boundary; Demo catalog)
 - App Launcher polish → Room switching
 

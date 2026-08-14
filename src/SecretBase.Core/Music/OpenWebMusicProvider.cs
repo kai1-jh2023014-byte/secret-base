@@ -4,7 +4,7 @@ namespace SecretBase.Core.Music;
 
 /// <summary>
 /// Opens Spotify / YouTube / Web sources via validated http(s) URLs.
-/// No Spotify/YouTube API, no OAuth, no credential handling.
+/// No Spotify/YouTube API — Search/Playback unsupported.
 /// </summary>
 public sealed class OpenWebMusicProvider : IMusicProvider
 {
@@ -17,6 +17,10 @@ public sealed class OpenWebMusicProvider : IMusicProvider
     public MusicProviderCapabilities Capabilities => MusicProviderCapabilities.OpenInWidget;
 
     public MusicAuthStatus AuthStatus => MusicAuthStatus.NotApplicable;
+
+    public MusicTrack? CurrentTrack => null;
+
+    public bool IsPlaying => false;
 
     public bool CanHandle(MusicSourceType type) =>
         type is MusicSourceType.Spotify or MusicSourceType.YouTube or MusicSourceType.Web;
@@ -48,4 +52,23 @@ public sealed class OpenWebMusicProvider : IMusicProvider
         url = normalized;
         return true;
     }
+
+    public Task<IReadOnlyList<MusicTrack>> SearchAsync(string query, CancellationToken cancellationToken = default) =>
+        Task.FromException<IReadOnlyList<MusicTrack>>(
+            new NotSupportedException("Web Music provider does not support search. Spotify/YouTube API is not connected."));
+
+    public Task PlayAsync(MusicTrack track, CancellationToken cancellationToken = default) =>
+        Task.FromException(new NotSupportedException("Web Music provider does not support playback."));
+
+    public Task PauseAsync(CancellationToken cancellationToken = default) =>
+        Task.FromException(new NotSupportedException("Web Music provider does not support pause."));
+
+    public Task ResumeAsync(CancellationToken cancellationToken = default) =>
+        Task.FromException(new NotSupportedException("Web Music provider does not support resume."));
+
+    public Task NextAsync(CancellationToken cancellationToken = default) =>
+        Task.FromException(new NotSupportedException("Web Music provider does not support next."));
+
+    public Task PreviousAsync(CancellationToken cancellationToken = default) =>
+        Task.FromException(new NotSupportedException("Web Music provider does not support previous."));
 }
