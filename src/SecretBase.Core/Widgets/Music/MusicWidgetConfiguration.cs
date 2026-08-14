@@ -18,6 +18,9 @@ public sealed class MusicWidgetConfiguration
     /// <summary>Last opened / selected source id (optional).</summary>
     public string? ActiveSourceId { get; set; }
 
+    /// <summary>Last selected track metadata (never tokens). Used to restore UI.</summary>
+    public MusicTrack? CurrentTrack { get; set; }
+
     public static MusicWidgetConfiguration CreateDefault()
     {
         var config = new MusicWidgetConfiguration
@@ -64,6 +67,13 @@ public sealed class MusicWidgetConfiguration
             result.ActiveSourceId = string.IsNullOrWhiteSpace(id) ? null : id.Trim();
         }
 
+        if (configuration.TryGetValue(nameof(CurrentTrack), out var trackEl)
+            && trackEl.ValueKind == JsonValueKind.Object
+            && TryReadTrack(trackEl, out var track))
+        {
+            result.CurrentTrack = track;
+        }
+
         if (configuration.TryGetValue(nameof(Sources), out var sources)
             && sources.ValueKind == JsonValueKind.Array)
         {
@@ -93,12 +103,19 @@ public sealed class MusicWidgetConfiguration
             .Cast<MusicSource>()
             .ToList();
 
-        return new Dictionary<string, JsonElement>(StringComparer.Ordinal)
+        var bag = new Dictionary<string, JsonElement>(StringComparer.Ordinal)
         {
             [nameof(ActiveSourceId)] = JsonSerializer.SerializeToElement(ActiveSourceId),
             [nameof(Sources)] = JsonSerializer.SerializeToElement(
                 cleaned.Select(SerializeSource).ToList())
         };
+
+        if (CurrentTrack is not null && !string.IsNullOrWhiteSpace(CurrentTrack.Title))
+        {
+            bag[nameof(CurrentTrack)] = JsonSerializer.SerializeToElement(SerializeTrack(CurrentTrack));
+        }
+
+        return bag;
     }
 
     public MusicSource? FindSource(string? id) =>
@@ -149,6 +166,40 @@ public sealed class MusicWidgetConfiguration
             ["Url"] = JsonSerializer.SerializeToElement(s.Url),
             ["IsEnabled"] = JsonSerializer.SerializeToElement(s.IsEnabled)
         };
+
+    private static Dictionary<string, JsonElement> SerializeTrack(MusicTrack t) =>
+        new(StringComparer.Ordinal)
+        {
+            ["Id"] = JsonSerializer.SerializeToElement(t.Id),
+            ["Title"] = JsonSerializer.SerializeToElement(t.Title),
+            ["Artist"] = JsonSerializer.SerializeToElement(t.Artist),
+            ["Album"] = JsonSerializer.SerializeToElement(t.Album),
+            ["ProviderId"] = JsonSerializer.SerializeToElement(t.ProviderId),
+            ["Source"] = JsonSerializer.SerializeToElement(t.Source)
+            // ArtworkUrl intentionally omitted from persistence — avoid storing remote image fetches.
+        };
+
+    private static bool TryReadTrack(JsonElement item, out MusicTrack track)
+    {
+        track = new MusicTrack();
+        var title = ReadString(item, "Title");
+        if (string.IsNullOrWhiteSpace(title))
+        {
+            return false;
+        }
+
+        track = new MusicTrack
+        {
+            Id = ReadString(item, "Id") ?? Guid.NewGuid().ToString("N"),
+            Title = title.Trim(),
+            Artist = ReadString(item, "Artist") ?? string.Empty,
+            Album = ReadString(item, "Album"),
+            ProviderId = ReadString(item, "ProviderId") ?? string.Empty,
+            Source = ReadString(item, "Source") ?? string.Empty,
+            ArtworkUrl = null
+        };
+        return true;
+    }
 
     private static bool TryReadSource(JsonElement item, out MusicSource source)
     {

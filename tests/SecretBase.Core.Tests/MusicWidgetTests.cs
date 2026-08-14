@@ -21,7 +21,7 @@ public class MusicSourceTests
 public class MusicProviderTests
 {
     [Fact]
-    public void OpenWebProvider_ResolvesSpotifyUrl()
+    public void OpenWebProvider_ResolvesSpotifyUrl_ButNoSearch()
     {
         var source = new MusicSource
         {
@@ -33,6 +33,8 @@ public class MusicProviderTests
         Assert.True(OpenWebMusicProvider.Instance.TryResolveOpenUrl(source, out var url, out var error));
         Assert.Null(error);
         Assert.StartsWith("https://open.spotify.com/", url, StringComparison.OrdinalIgnoreCase);
+        Assert.False(OpenWebMusicProvider.Instance.Capabilities.HasFlag(MusicProviderCapabilities.Search));
+        Assert.False(OpenWebMusicProvider.Instance.Capabilities.HasFlag(MusicProviderCapabilities.Playback));
     }
 
     [Fact]
@@ -60,19 +62,23 @@ public class MusicProviderTests
     }
 
     [Fact]
-    public void MusicService_RoutesByType()
+    public async Task DemoCatalog_SearchAndPlay()
     {
-        var service = new MusicService();
-        Assert.True(service.TryResolveOpenUrl(
-            new MusicSource { Type = MusicSourceType.YouTube, Name = "YT", Url = "https://music.youtube.com/" },
-            out var url,
-            out _));
-        Assert.Equal("https://music.youtube.com/", url);
+        var demo = new DemoCatalogMusicProvider();
+        Assert.True(demo.Capabilities.HasFlag(MusicProviderCapabilities.Search));
+        Assert.True(demo.Capabilities.HasFlag(MusicProviderCapabilities.Playback));
 
-        Assert.False(service.TryResolveOpenUrl(
-            new MusicSource { Type = MusicSourceType.Local, Name = "Local" },
-            out _,
-            out _));
+        var found = await demo.SearchAsync("Lilac");
+        Assert.Contains(found, t => t.Title.Contains("Lilac", StringComparison.OrdinalIgnoreCase));
+
+        await demo.PlayAsync(found[0]);
+        Assert.True(demo.IsPlaying);
+        Assert.Equal(found[0].Id, demo.CurrentTrack!.Id);
+
+        await demo.PauseAsync();
+        Assert.False(demo.IsPlaying);
+        await demo.ResumeAsync();
+        Assert.True(demo.IsPlaying);
     }
 
     [Fact]
@@ -82,7 +88,118 @@ public class MusicProviderTests
         Assert.True(caps.HasFlag(MusicProviderCapabilities.OpenInWidget));
         Assert.False(caps.HasFlag(MusicProviderCapabilities.Authentication));
         Assert.False(caps.HasFlag(MusicProviderCapabilities.Search));
-        Assert.False(caps.HasFlag(MusicProviderCapabilities.NowPlaying));
+        Assert.False(caps.HasFlag(MusicProviderCapabilities.Playback));
+    }
+}
+
+public class MusicCommandServiceTests
+{
+    [Fact]
+    public async Task SearchTrack_ReturnsDemoHits()
+    {
+        var service = new MusicCommandService(new MusicService());
+        var result = await service.ExecuteAsync(MusicCommand.SearchTrack("Mrs. GREEN"));
+        Assert.True(result.Succeeded);
+        Assert.NotEmpty(result.Tracks);
+        Assert.All(result.Tracks, t => Assert.Equal(DemoCatalogMusicProvider.Id, t.ProviderId));
+    }
+
+    [Fact]
+    public async Task SearchTrack_RejectsEmptyAndDangerousQuery()
+    {
+        var service = new MusicCommandService(new MusicService());
+        Assert.False((await service.ExecuteAsync(MusicCommand.SearchTrack("  "))).Succeeded);
+        Assert.False((await service.ExecuteAsync(MusicCommand.SearchTrack("https://evil.example"))).Succeeded);
+        Assert.False((await service.ExecuteAsync(MusicCommand.SearchTrack("../etc/passwd"))).Succeeded);
+    }
+
+    [Fact]
+    public async Task PlayTrack_ThenPauseResumeNext()
+    {
+        var music = new MusicService([new DemoCatalogMusicProvider()]);
+        var service = new MusicCommandService(music);
+        var search = await service.ExecuteAsync(MusicCommand.SearchTrack("Pretender"));
+        Assert.True(search.Succeeded);
+        var track = search.Tracks[0];
+
+        var play = await service.ExecuteAsync(MusicCommand.PlayTrack(track));
+        Assert.True(play.Succeeded);
+        Assert.True(play.IsPlaying);
+        Assert.Equal("Pretender", play.CurrentTrack!.Title);
+
+        var pause = await service.ExecuteAsync(MusicCommand.Pause());
+        Assert.True(pause.Succeeded);
+        Assert.False(pause.IsPlaying);
+
+        var resume = await service.ExecuteAsync(MusicCommand.Resume());
+        Assert.True(resume.Succeeded);
+        Assert.True(resume.IsPlaying);
+
+        var next = await service.ExecuteAsync(MusicCommand.Next());
+        Assert.True(next.Succeeded);
+        Assert.NotNull(next.CurrentTrack);
+    }
+
+    [Fact]
+    public async Task PlayTrack_UnsupportedProvider_Fails()
+    {
+        var music = new MusicService([OpenWebMusicProvider.Instance]);
+        var service = new MusicCommandService(music);
+        var result = await service.ExecuteAsync(MusicCommand.PlayTrack(new MusicTrack
+        {
+            Id = "x",
+            Title = "Nope",
+            ProviderId = "web-open"
+        }));
+        Assert.False(result.Succeeded);
+        Assert.Contains("supports playback", result.ErrorMessage, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Pause_WithoutTrack_Fails()
+    {
+        var service = new MusicCommandService(new MusicService([new DemoCatalogMusicProvider()]));
+        var result = await service.ExecuteAsync(MusicCommand.Pause());
+        Assert.False(result.Succeeded);
+    }
+}
+
+public class MusicTrackSerializationTests
+{
+    [Fact]
+    public void Configuration_RoundTripsCurrentTrackWithoutArtwork()
+    {
+        var original = new MusicWidgetConfiguration
+        {
+            ActiveSourceId = "spotify-default",
+            CurrentTrack = new MusicTrack
+            {
+                Id = "demo-lilac",
+                Title = "Lilac",
+                Artist = "Mrs. GREEN APPLE",
+                Album = "Antenna",
+                ProviderId = DemoCatalogMusicProvider.Id,
+                Source = "Demo catalog",
+                ArtworkUrl = "https://example.com/art.jpg"
+            },
+            Sources =
+            [
+                new MusicSource
+                {
+                    Id = "spotify-default",
+                    Type = MusicSourceType.Spotify,
+                    Name = "Spotify",
+                    Url = "https://open.spotify.com/",
+                    IsEnabled = true
+                }
+            ]
+        };
+
+        var restored = MusicWidgetConfiguration.FromDictionary(original.ToDictionary());
+        Assert.Equal("Lilac", restored.CurrentTrack!.Title);
+        Assert.Equal("Mrs. GREEN APPLE", restored.CurrentTrack.Artist);
+        Assert.Equal(DemoCatalogMusicProvider.Id, restored.CurrentTrack.ProviderId);
+        Assert.Null(restored.CurrentTrack.ArtworkUrl);
     }
 }
 
