@@ -7,7 +7,7 @@
 | .NET | **10.0 (LTS)** SDK 10.0.302 | Active LTS until 2028-11-14. .NET 9 STS ends 2026-11; .NET 8 LTS also ends 2026-11. |
 | Windows App SDK | **2.3.1** (stable) | Latest stable WASDK/WinUI 3 line as of 2026-07-16. Highest priority for UI/platform compatibility. |
 | WinUI | 3 (via WASDK 2.3) | Official modern Windows UI framework |
-| WebView2 | via WASDK dependency | Web Widget host (`WidgetTypes.Web`); no Electron |
+| WebView2 | via WASDK dependency | Web Widget + Music browse host; no Electron |
 | TFM (App) | `net10.0-windows10.0.26100.0` | Matches current Windows SDK projections used by WASDK tooling |
 | Min OS | `10.0.17763.0` (declared) | WASDK support floor; development target is Windows 11 |
 | IDE | Rider 2026.1 + `dotnet` CLI | Visual Studio not required; WinUI `dotnet new` templates used |

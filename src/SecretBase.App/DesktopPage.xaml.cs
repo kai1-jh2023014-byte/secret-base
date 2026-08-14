@@ -14,6 +14,7 @@ using SecretBase.Core.Time;
 using SecretBase.Core.Widgets;
 using SecretBase.Core.Widgets.Calendar;
 using SecretBase.Core.Widgets.Clock;
+using SecretBase.Core.Widgets.Music;
 using SecretBase.Core.Widgets.Text;
 using SecretBase.Core.Widgets.Web;
 using SecretBase.Infrastructure.Calendar;
@@ -23,6 +24,7 @@ using SecretBase.Platform.Abstractions;
 using SecretBase.Platform.Windows;
 using SecretBase.Widgets.Calendar;
 using SecretBase.Widgets.Clock;
+using SecretBase.Widgets.Music;
 using SecretBase.Widgets.Text;
 using SecretBase.Widgets.Theming;
 using SecretBase.Widgets.Web;
@@ -99,6 +101,7 @@ public sealed partial class DesktopPage : Page
         _logger.Info("layout", "Arrange ready (Grid button) — even placement for widgets and blocks.");
         _logger.Info("widget", "Web Widget ready (Web button) — Untrusted WebView2, no host bridge.");
         _logger.Info("widget", "Calendar Hub ready (Cal button) — Local / Mock / Google ICS / Google API read.");
+        _logger.Info("widget", "Music Widget ready (♪ button) — Sources hub; Untrusted WebView; no Host Bridge.");
     }
 
     private void StyleFabButtons(ThemeDefinition theme)
@@ -119,6 +122,12 @@ public sealed partial class DesktopPage : Page
         AddCalendarFab.BorderBrush = ThemePainter.Brush(theme.Accent, 0.7);
         AddCalendarFab.BorderThickness = new Thickness(1);
         AddCalendarFab.FontFamily = new FontFamily(theme.FontFamily);
+
+        AddMusicFab.Background = ThemePainter.Brush(theme.WidgetBackground, ThemePainter.EffectiveWidgetOpacity(theme));
+        AddMusicFab.Foreground = ThemePainter.Brush(theme.WidgetForeground);
+        AddMusicFab.BorderBrush = ThemePainter.Brush(theme.Accent, 0.7);
+        AddMusicFab.BorderThickness = new Thickness(1);
+        AddMusicFab.FontFamily = new FontFamily(theme.FontFamily);
 
         ThemeFab.Background = ThemePainter.Brush(theme.WidgetBackground, ThemePainter.EffectiveWidgetOpacity(theme));
         ThemeFab.Foreground = ThemePainter.Brush(theme.WidgetForeground);
@@ -294,6 +303,11 @@ public sealed partial class DesktopPage : Page
             rects.Add(calendarFabRect);
         }
 
+        if (TryCreateClientRect(AddMusicFab, scale, out var musicFabRect))
+        {
+            rects.Add(musicFabRect);
+        }
+
         if (TryCreateClientRect(ThemeFab, scale, out var themeFabRect))
         {
             rects.Add(themeFabRect);
@@ -424,6 +438,27 @@ public sealed partial class DesktopPage : Page
                     PersistLayoutNow();
                 },
                 cache: _calendarCache);
+            if (_theme is not null)
+            {
+                view.ApplyTheme(_theme);
+            }
+
+            return view;
+        }
+
+        if (instance.Type == WidgetTypes.Music)
+        {
+            var config = MusicWidgetConfiguration.FromDictionary(instance.Configuration);
+            instance.Configuration = config.ToDictionary();
+
+            var view = new MusicWidgetView();
+            view.Initialize(
+                config,
+                onConfigurationChanged: updated =>
+                {
+                    instance.Configuration = updated.ToDictionary();
+                    PersistLayoutNow();
+                });
             if (_theme is not null)
             {
                 view.ApplyTheme(_theme);
@@ -568,6 +603,111 @@ public sealed partial class DesktopPage : Page
     {
         args.Handled = true;
         await ShowAddCalendarDialogAsync();
+    }
+
+    private async void AddMusicButton_Click(object sender, RoutedEventArgs e) =>
+        await ShowAddMusicDialogAsync();
+
+    private async void AddMusicAccelerator_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        args.Handled = true;
+        await ShowAddMusicDialogAsync();
+    }
+
+    private async Task ShowAddMusicDialogAsync()
+    {
+        if (_layout is null || _theme is null)
+        {
+            return;
+        }
+
+        AllowFullWindowInput();
+
+        var xBox = new NumberBox
+        {
+            Header = "X",
+            Value = 120,
+            Minimum = 0,
+            SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline
+        };
+        var yBox = new NumberBox
+        {
+            Header = "Y",
+            Value = 120,
+            Minimum = 0,
+            SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline
+        };
+        var wBox = new NumberBox
+        {
+            Header = "Width",
+            Value = 360,
+            Minimum = Math.Max(_theme.WidgetMinWidth, 280),
+            SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline
+        };
+        var hBox = new NumberBox
+        {
+            Header = "Height",
+            Value = 420,
+            Minimum = Math.Max(_theme.WidgetMinHeight, 280),
+            SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline
+        };
+
+        var hint = new TextBlock
+        {
+            Text =
+                "Music Hub with Spotify / YouTube Music / Local sources. "
+                + "Opens pages in an Untrusted WebView (same rules as Web Widget — no Host Bridge). "
+                + "No OAuth or API keys. Not a generic Web Widget.",
+            FontSize = 12,
+            Opacity = 0.75,
+            TextWrapping = TextWrapping.WrapWholeWords
+        };
+
+        var panel = new StackPanel { Spacing = 8 };
+        panel.Children.Add(hint);
+        panel.Children.Add(xBox);
+        panel.Children.Add(yBox);
+        panel.Children.Add(wBox);
+        panel.Children.Add(hBox);
+
+        var dialog = new ContentDialog
+        {
+            Title = "Add Music Widget",
+            PrimaryButtonText = "Create",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Primary,
+            Content = panel,
+            XamlRoot = XamlRoot
+        };
+
+        ContentDialogResult result;
+        try
+        {
+            result = await dialog.ShowAsync();
+        }
+        finally
+        {
+            SyncInteractiveInputRegions();
+        }
+
+        if (result != ContentDialogResult.Primary)
+        {
+            return;
+        }
+
+        var cascade = _layout.Widgets.Count(w => w.Type == WidgetTypes.Music) * 24;
+        var widget = DefaultWidgetFactory.CreateMusic(
+            _layout.RoomId,
+            xBox.Value + cascade,
+            yBox.Value + cascade,
+            wBox.Value,
+            hBox.Value);
+
+        _layout.Widgets.Add(widget);
+        PersistLayoutNow();
+        RenderDesktopObjects();
+        RefreshDebugStatus();
+        _logger?.Info("music", "Added Music Widget (Spotify / YouTube / Local sources).");
     }
 
     private async Task ShowAddCalendarDialogAsync()

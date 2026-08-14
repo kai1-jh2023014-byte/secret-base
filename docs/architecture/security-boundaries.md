@@ -5,8 +5,8 @@
 | Zone | Code | Trust | May access |
 |------|------|-------|------------|
 | Trusted Host | App, Core, Infrastructure, Platform | Trusted | Internal services only; Platform still avoids destructive OS APIs |
-| Built-in Widget | `SecretBase.Widgets` (Clock, Text, Web chrome, Calendar) | Semi-trusted | Own settings/UI; Platform APIs only through approved host services |
-| Web Content | Documents inside WebView2 (`WidgetTypes.Web`) | **Untrusted** | Network rendering only; **no** host object injection to Secret Base APIs |
+| Built-in Widget | `SecretBase.Widgets` (Clock, Text, Web chrome, Calendar, Music chrome) | Semi-trusted | Own settings/UI; Platform APIs only through approved host services |
+| Web Content | Documents inside WebView2 (`WidgetTypes.Web`, Music browse mode) | **Untrusted** | Network rendering only; **no** host object injection to Secret Base APIs |
 | Plugin (future) | Marketplace packages | Untrusted | Sandboxed Plugin API only — never Core internals |
 | AI (future) | LLM providers / tools | Restricted | Observation → Safe → Confirm → Restricted ladder |
 

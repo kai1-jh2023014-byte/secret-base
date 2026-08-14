@@ -2,10 +2,12 @@ using System.Text.Json;
 using SecretBase.Core.Blocks;
 using SecretBase.Core.Calendar;
 using SecretBase.Core.Desktop;
+using SecretBase.Core.Music;
 using SecretBase.Core.Themes;
 using SecretBase.Core.Widgets;
 using SecretBase.Core.Widgets.Calendar;
 using SecretBase.Core.Widgets.Clock;
+using SecretBase.Core.Widgets.Music;
 using SecretBase.Core.Widgets.Text;
 using SecretBase.Core.Widgets.Web;
 using SecretBase.Infrastructure.Persistence;
@@ -419,6 +421,98 @@ public class LayoutPersistenceTests
             Assert.Single(loaded.Events);
             Assert.Equal("Calendar ship", loaded.Events[0].Title);
             Assert.Equal(9, loaded.Events[0].Start.Hour);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void SaveAndLoad_RestoresMusicSourcesAndGeometry()
+    {
+        var dir = CreateTempDir();
+        try
+        {
+            var store = new JsonLayoutStore(dir);
+            var layout = DesktopLayout.CreateDefault();
+            var config = new MusicWidgetConfiguration
+            {
+                ActiveSourceId = "spotify-default",
+                Sources =
+                [
+                    new MusicSource
+                    {
+                        Id = "spotify-default",
+                        Type = MusicSourceType.Spotify,
+                        Name = "Spotify",
+                        Url = "https://open.spotify.com/",
+                        IsEnabled = true
+                    },
+                    new MusicSource
+                    {
+                        Id = "yt-1",
+                        Type = MusicSourceType.YouTube,
+                        Name = "YouTube Music",
+                        Url = "https://music.youtube.com/",
+                        IsEnabled = true
+                    }
+                ]
+            };
+            var music = DefaultWidgetFactory.CreateMusic(
+                layout.RoomId,
+                x: 160,
+                y: 100,
+                width: 380,
+                height: 440,
+                configuration: config);
+            layout.Widgets.Add(music);
+            store.Save(layout);
+
+            var restored = store.LoadOrCreateDefault(RoomId.DefaultRoomId);
+            Assert.Contains(restored.Widgets, w => w.Type == WidgetTypes.Clock);
+            Assert.Contains(restored.Widgets, w => w.Type == WidgetTypes.Text);
+            var widget = restored.Widgets.Single(w => w.Type == WidgetTypes.Music);
+            Assert.Equal(music.Id, widget.Id);
+            Assert.Equal(160, widget.Position.X);
+            Assert.Equal(100, widget.Position.Y);
+            Assert.Equal(380, widget.Size.Width);
+            Assert.Equal(440, widget.Size.Height);
+            Assert.Equal(DesktopLayout.CurrentSchemaVersion, restored.SchemaVersion);
+
+            var loaded = MusicWidgetConfiguration.FromDictionary(widget.Configuration);
+            Assert.Equal("spotify-default", loaded.ActiveSourceId);
+            Assert.Equal(2, loaded.Sources.Count);
+            Assert.Equal(MusicSourceType.Spotify, loaded.Sources[0].Type);
+            Assert.Equal("https://open.spotify.com/", loaded.Sources[0].Url);
+            Assert.DoesNotContain("token", System.Text.Json.JsonSerializer.Serialize(widget.Configuration), StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void SaveAndLoad_MixedClockTextWebCalendarMusic_PreservesAllTypes()
+    {
+        var dir = CreateTempDir();
+        try
+        {
+            var store = new JsonLayoutStore(dir);
+            var layout = DesktopLayout.CreateDefault();
+            layout.Widgets.Add(DefaultWidgetFactory.CreateWeb("https://github.com/"));
+            layout.Widgets.Add(DefaultWidgetFactory.CreateCalendar());
+            layout.Widgets.Add(DefaultWidgetFactory.CreateMusic());
+            store.Save(layout);
+
+            var restored = store.LoadOrCreateDefault(RoomId.DefaultRoomId);
+            Assert.Contains(restored.Widgets, w => w.Type == WidgetTypes.Clock);
+            Assert.Contains(restored.Widgets, w => w.Type == WidgetTypes.Text);
+            Assert.Contains(restored.Widgets, w => w.Type == WidgetTypes.Web);
+            Assert.Contains(restored.Widgets, w => w.Type == WidgetTypes.Calendar);
+            Assert.Contains(restored.Widgets, w => w.Type == WidgetTypes.Music);
+            Assert.Equal(DesktopLayout.CurrentSchemaVersion, restored.SchemaVersion);
         }
         finally
         {

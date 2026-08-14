@@ -65,6 +65,7 @@ Investigation notes: [overlay-input-and-edges.md](overlay-input-and-edges.md).
 | **+** Add Block | Always visible (bottom-left FAB) | Debug chrome **Add Block** |
 | **Web** Add Web Widget | Always visible | Debug chrome **Add Web**, **Ctrl+Shift+W** |
 | **Cal** Add Calendar | Always visible | Debug chrome **Add Cal**, **Ctrl+Shift+C** |
+| **♪** Add Music | Always visible | Debug chrome **Add Music**, **Ctrl+Shift+M** |
 | **Aa** Theme | Always visible | Debug chrome **Theme**, **Ctrl+Shift+T** |
 | **Grid** Arrange | Always visible — even layout for widgets & blocks | Debug chrome **Arrange** |
 | Status / widget count | Hidden | **Ctrl+Shift+D** shows debug chrome |
