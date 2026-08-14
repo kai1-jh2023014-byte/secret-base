@@ -14,6 +14,7 @@ using SecretBase.Core.Time;
 using SecretBase.Core.Widgets;
 using SecretBase.Core.Widgets.Calendar;
 using SecretBase.Core.Widgets.Clock;
+using SecretBase.Core.Widgets.Creative;
 using SecretBase.Core.Widgets.Music;
 using SecretBase.Core.Widgets.Text;
 using SecretBase.Core.Widgets.Web;
@@ -24,10 +25,13 @@ using SecretBase.Platform.Abstractions;
 using SecretBase.Platform.Windows;
 using SecretBase.Widgets.Calendar;
 using SecretBase.Widgets.Clock;
+using SecretBase.Widgets.Creative;
 using SecretBase.Widgets.Music;
 using SecretBase.Widgets.Text;
 using SecretBase.Widgets.Theming;
 using SecretBase.Widgets.Web;
+using SecretBase.Core.Blocks;
+using SecretBase.Core.Creative;
 using Windows.Foundation;
 
 namespace SecretBase.App;
@@ -46,6 +50,8 @@ public sealed partial class DesktopPage : Page
     private IBlockItemIntakeService? _intake;
     private ISecureSecretStore? _secretStore;
     private ICalendarAgendaCache? _calendarCache;
+    private IPathPickService? _pathPicker;
+    private CreativeCommandService? _creativeCommands;
     private DesktopLayout? _layout;
     private ThemeDefinition? _theme;
     private CompatibilityInfo? _compatibility;
@@ -83,6 +89,10 @@ public sealed partial class DesktopPage : Page
         _intake = args.Intake;
         _secretStore = args.SecretStore ?? new WindowsCredentialSecretStore();
         _calendarCache = args.CalendarCache ?? new JsonCalendarAgendaCache();
+        _pathPicker = args.PathPicker;
+        _creativeCommands = args.CreativeCommands
+            ?? new CreativeCommandService(
+                new CreativeWorkspaceService(new JsonCreativeWorkspaceStore()));
 
         _theme = _themeStore.LoadOrCreateDefault();
         _layout = _layoutStore.LoadOrCreateDefault(RoomId.DefaultRoomId);
@@ -102,6 +112,7 @@ public sealed partial class DesktopPage : Page
         _logger.Info("widget", "Web Widget ready (Web button) — Untrusted WebView2, no host bridge.");
         _logger.Info("widget", "Calendar Hub ready (Cal button) — Local / Mock / Google ICS / Google API read.");
         _logger.Info("widget", "Music Widget ready (♪ button) — native search/playback UI via MusicCommand; Demo catalog; no Host Bridge.");
+        _logger.Info("widget", "Creative Workspace ready (CW button) — favorites/recent/open registered paths only.");
     }
 
     private void StyleFabButtons(ThemeDefinition theme)
@@ -128,6 +139,12 @@ public sealed partial class DesktopPage : Page
         AddMusicFab.BorderBrush = ThemePainter.Brush(theme.Accent, 0.7);
         AddMusicFab.BorderThickness = new Thickness(1);
         AddMusicFab.FontFamily = new FontFamily(theme.FontFamily);
+
+        AddCreativeFab.Background = ThemePainter.Brush(theme.WidgetBackground, ThemePainter.EffectiveWidgetOpacity(theme));
+        AddCreativeFab.Foreground = ThemePainter.Brush(theme.WidgetForeground);
+        AddCreativeFab.BorderBrush = ThemePainter.Brush(theme.Accent, 0.7);
+        AddCreativeFab.BorderThickness = new Thickness(1);
+        AddCreativeFab.FontFamily = new FontFamily(theme.FontFamily);
 
         ThemeFab.Background = ThemePainter.Brush(theme.WidgetBackground, ThemePainter.EffectiveWidgetOpacity(theme));
         ThemeFab.Foreground = ThemePainter.Brush(theme.WidgetForeground);
@@ -308,6 +325,11 @@ public sealed partial class DesktopPage : Page
             rects.Add(musicFabRect);
         }
 
+        if (TryCreateClientRect(AddCreativeFab, scale, out var creativeFabRect))
+        {
+            rects.Add(creativeFabRect);
+        }
+
         if (TryCreateClientRect(ThemeFab, scale, out var themeFabRect))
         {
             rects.Add(themeFabRect);
@@ -468,7 +490,78 @@ public sealed partial class DesktopPage : Page
             return view;
         }
 
+        if (instance.Type == WidgetTypes.Creative)
+        {
+            var config = CreativeWorkspaceWidgetConfiguration.FromDictionary(instance.Configuration);
+            instance.Configuration = config.ToDictionary();
+
+            var commands = _creativeCommands
+                ?? new CreativeCommandService(
+                    new CreativeWorkspaceService(new JsonCreativeWorkspaceStore()));
+            var view = new CreativeWorkspaceView();
+            view.Initialize(
+                commands,
+                config,
+                tryLaunch: TryLaunchCreativeItem,
+                pickFile: PickCreativeFileAsync,
+                pickFolder: PickCreativeFolderAsync,
+                onConfigurationChanged: updated =>
+                {
+                    instance.Configuration = updated.ToDictionary();
+                    PersistLayoutNow();
+                });
+            if (_theme is not null)
+            {
+                view.ApplyTheme(_theme);
+            }
+
+            return view;
+        }
+
         return null;
+    }
+
+    private string? TryLaunchCreativeItem(CreativeItem item)
+    {
+        if (_launcher is null)
+        {
+            return "Launch service unavailable.";
+        }
+
+        var exists = File.Exists(item.Path) || Directory.Exists(item.Path);
+        if (!exists)
+        {
+            return "見つかりません — path was not found.";
+        }
+
+        var inferred = BlockTargetValidator.InferType(item.Path, Directory.Exists(item.Path));
+        var result = _launcher.TryLaunch(new TargetLaunchRequest(
+            Target: item.Path,
+            ItemType: inferred.ToString(),
+            DisplayName: item.Name));
+        return result.Succeeded ? null : (result.ErrorMessage ?? "Launch failed.");
+    }
+
+    private async Task<(bool ok, bool cancelled, string? path, string? error)> PickCreativeFileAsync()
+    {
+        if (_pathPicker is null)
+        {
+            return (false, false, null, "Path picker unavailable.");
+        }
+
+        var result = await _pathPicker.PickFileAsync();
+        return (result.Succeeded, result.Cancelled, result.Path, result.ErrorMessage);
+    }
+
+    private async Task<(bool ok, bool cancelled, string? path, string? error)> PickCreativeFolderAsync()
+    {
+        if (_pathPicker is null)
+        {
+            return (false, false, null, "Path picker unavailable.");
+        }
+
+        var result = await _pathPicker.PickFolderAsync();
+        return (result.Succeeded, result.Cancelled, result.Path, result.ErrorMessage);
     }
 
     private bool TryOpenHttpsUrl(string url)
@@ -613,6 +706,110 @@ public sealed partial class DesktopPage : Page
     {
         args.Handled = true;
         await ShowAddMusicDialogAsync();
+    }
+
+    private async void AddCreativeButton_Click(object sender, RoutedEventArgs e) =>
+        await ShowAddCreativeDialogAsync();
+
+    private async void AddCreativeAccelerator_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        args.Handled = true;
+        await ShowAddCreativeDialogAsync();
+    }
+
+    private async Task ShowAddCreativeDialogAsync()
+    {
+        if (_layout is null || _theme is null)
+        {
+            return;
+        }
+
+        AllowFullWindowInput();
+
+        var xBox = new NumberBox
+        {
+            Header = "X",
+            Value = 200,
+            Minimum = 0,
+            SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline
+        };
+        var yBox = new NumberBox
+        {
+            Header = "Y",
+            Value = 80,
+            Minimum = 0,
+            SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline
+        };
+        var wBox = new NumberBox
+        {
+            Header = "Width",
+            Value = 340,
+            Minimum = Math.Max(_theme.WidgetMinWidth, 280),
+            SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline
+        };
+        var hBox = new NumberBox
+        {
+            Header = "Height",
+            Value = 440,
+            Minimum = Math.Max(_theme.WidgetMinHeight, 320),
+            SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline
+        };
+
+        var hint = new TextBlock
+        {
+            Text =
+                "Desk for favorite projects and files. Register paths explicitly, then open with Windows defaults. "
+                + "Not an Explorer. No delete/move. Commands: CreativeCommand → Service → safe open.",
+            FontSize = 12,
+            Opacity = 0.75,
+            TextWrapping = TextWrapping.WrapWholeWords
+        };
+
+        var panel = new StackPanel { Spacing = 8 };
+        panel.Children.Add(hint);
+        panel.Children.Add(xBox);
+        panel.Children.Add(yBox);
+        panel.Children.Add(wBox);
+        panel.Children.Add(hBox);
+
+        var dialog = new ContentDialog
+        {
+            Title = "Add Creative Workspace",
+            PrimaryButtonText = "Create",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Primary,
+            Content = panel,
+            XamlRoot = XamlRoot
+        };
+
+        ContentDialogResult result;
+        try
+        {
+            result = await dialog.ShowAsync();
+        }
+        finally
+        {
+            SyncInteractiveInputRegions();
+        }
+
+        if (result != ContentDialogResult.Primary)
+        {
+            return;
+        }
+
+        var cascade = _layout.Widgets.Count(w => w.Type == WidgetTypes.Creative) * 24;
+        var widget = DefaultWidgetFactory.CreateCreative(
+            _layout.RoomId,
+            xBox.Value + cascade,
+            yBox.Value + cascade,
+            wBox.Value,
+            hBox.Value);
+
+        _layout.Widgets.Add(widget);
+        PersistLayoutNow();
+        RenderDesktopObjects();
+        RefreshDebugStatus();
+        _logger?.Info("creative", "Added Creative Workspace Widget.");
     }
 
     private async Task ShowAddMusicDialogAsync()

@@ -2,7 +2,7 @@
 
 > Make your PC feel like *your* secret base — a Personal Desktop Environment for Windows.
 
-**v0.1 milestone status:** foundation + Clock + Text + Blocks + Theme + Arrange + Desktop Overlay + Web + Calendar + **Music** (**widgets-only UX**; overlay click-through verified).  
+**v0.1 milestone status:** foundation + Clock + Text + Blocks + Theme + Arrange + Desktop Overlay + Web + Calendar + Music + **Creative Workspace** (**widgets-only UX**; overlay click-through verified).  
 Wallpaper shows through the host; widgets float on the desktop; Exit via **Ctrl+Shift+Q** (debug chrome: **Ctrl+Shift+D**).
 
 ## Principles
@@ -114,6 +114,8 @@ Use **Ctrl+Shift+Q** to leave Secret Base (Safe Exit). **Ctrl+Shift+D** toggles 
 - [Calendar Integration Layer](docs/architecture/calendar-integration.md)
 - [Music Widget](docs/architecture/music-widget.md)
 - [Music Commands](docs/architecture/music-commands.md)
+- [Creative Workspace](docs/architecture/creative-workspace.md)
+- [Creative Commands](docs/architecture/creative-commands.md)
 - [Desktop overlay](docs/architecture/desktop-overlay.md)
 - [Security boundaries](docs/architecture/security-boundaries.md)
 - [Windows Update resilience](docs/architecture/windows-update-resilience.md)

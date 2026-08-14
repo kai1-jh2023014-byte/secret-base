@@ -43,6 +43,10 @@
                 Key="M"
                 Modifiers="Control,Shift"
                 Invoked="AddMusicAccelerator_Invoked" />
+            <KeyboardAccelerator
+                Key="E"
+                Modifiers="Control,Shift"
+                Invoked="AddCreativeAccelerator_Invoked" />
         </Grid.KeyboardAccelerators>
 
         <Canvas
@@ -99,6 +103,17 @@
                 CornerRadius="14"
                 Click="AddMusicButton_Click"
                 ToolTipService.ToolTip="Add Music Widget (Ctrl+Shift+M)" />
+            <Button
+                x:Name="AddCreativeFab"
+                Width="48"
+                Height="48"
+                Content="CW"
+                FontSize="11"
+                FontWeight="SemiBold"
+                Padding="0"
+                CornerRadius="14"
+                Click="AddCreativeButton_Click"
+                ToolTipService.ToolTip="Add Creative Workspace (Ctrl+Shift+E)" />
             <Button
                 x:Name="ThemeFab"
                 Width="48"
@@ -176,6 +191,12 @@
                     Click="AddMusicButton_Click"
                     Padding="12,4"
                     ToolTipService.ToolTip="Create a Music Widget" />
+                <Button
+                    x:Name="AddCreativeButton"
+                    Content="Add Creative"
+                    Click="AddCreativeButton_Click"
+                    Padding="12,4"
+                    ToolTipService.ToolTip="Create a Creative Workspace" />
                 <Button
                     x:Name="ExitButton"
                     Content="Exit"

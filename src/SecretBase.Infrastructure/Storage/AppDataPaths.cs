@@ -32,6 +32,7 @@ public static class AppDataPaths
     public static string SettingsDirectory => Ensure("settings");
     public static string IconsDirectory => Ensure("icons");
     public static string BlockItemsDirectory => Ensure("block-items");
+    public static string CreativeDirectory => Ensure("creative");
 
     private static string Ensure(string relative)
     {

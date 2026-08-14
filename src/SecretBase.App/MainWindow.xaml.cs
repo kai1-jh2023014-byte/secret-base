@@ -2,6 +2,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using SecretBase.App.Desktop;
 using SecretBase.Core.Calendar;
+using SecretBase.Core.Creative;
 using SecretBase.Core.Time;
 using SecretBase.Infrastructure.Logging;
 using SecretBase.Infrastructure.Persistence;
@@ -28,6 +29,7 @@ public sealed partial class MainWindow : Window
         AppWindow.SetIcon("Assets/AppIcon.ico");
 
         var hwnd = WindowNative.GetWindowHandle(this);
+        args.PathPicker?.SetOwnerWindow(hwnd);
         _overlayTarget = new DesktopOverlayTarget(
             AppWindowId: AppWindow.Id.Value,
             WindowHandle: hwnd);
@@ -84,4 +86,6 @@ public sealed record DesktopPageArgs(
     IFileIconService? Icons = null,
     IBlockItemIntakeService? Intake = null,
     ISecureSecretStore? SecretStore = null,
-    ICalendarAgendaCache? CalendarCache = null);
+    ICalendarAgendaCache? CalendarCache = null,
+    IPathPickService? PathPicker = null,
+    CreativeCommandService? CreativeCommands = null);

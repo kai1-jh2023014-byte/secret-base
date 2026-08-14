@@ -12,7 +12,8 @@ Widgets are the building blocks of the Secret Base Desktop. Clock was the first
 | **Core** | `WidgetInstance`, `WidgetTypes`, configs, Calendar + Music models/providers (pure), `ThemeDefinition`, `ITimeProvider` | XAML, WinUI/WebView2, network I/O |
 | **Infrastructure** | JSON persistence, Google ICS + Google API OAuth read providers, agenda cache | Widget visuals, Overlay HWND |
 | **Platform.Abstractions** | `ISecureSecretStore`, overlay/launch contracts | Implementations |
-| **Widgets** | Views (`Clock`, `Text`, `Web`, `Calendar`, `Music`), theme helpers | Persistence paths, Desktop chrome, Overlay |
+| **Widgets** | Views (`Clock`, `Text`, `Web`, `Calendar`, `Music`, `Creative`), theme helpers | Persistence paths, Desktop chrome, Overlay |
+
 | **App** | Host, `WidgetFrame`, type→view wiring, FABs | Domain math beyond hosting |
 
 ## Shared
@@ -34,10 +35,16 @@ Widgets are the building blocks of the Secret Base Desktop. Clock was the first
 - `MusicCommand` → `MusicCommandService` → `IMusicProvider` (Demo catalog today)
 - Optional browser open for registered web sources — see [music-widget.md](music-widget.md) / [music-commands.md](music-commands.md)
 
+## Creative-specific
+
+- Desk UI (`CreativeWorkspaceView`) — favorites / recent / search registered items
+- `CreativeCommand` → `CreativeCommandService` → workspace store → `ITargetLaunchService`
+- See [creative-workspace.md](creative-workspace.md)
+
 ## Persistence
 
-- First-run seeds Clock + Text only (Web/Calendar/Music via FABs)
-- `schemaVersion` **2** (Blocks); widget types additive
+- First-run seeds Clock + Text only (Web/Calendar/Music/Creative via FABs)
+- `schemaVersion` **2** (Blocks); widget types additive; Creative items in separate `creative/workspace.json`
 
 ## Security
 
@@ -47,5 +54,6 @@ Widgets are the building blocks of the Secret Base Desktop. Clock was the first
 | Calendar | Optional HTTPS ICS + OAuth read | User ICS URL and/or AppData OAuth client; tokens in Credential Manager |
 | Web | WebView2 | Untrusted; no host bridge |
 | Music | Commands + optional browser | Native UI; Demo catalog; no Host Bridge; APIs deferred |
+| Creative | Open registered paths only | Favorites/Recent; no Explorer; CreativeCommand boundary |
 
 Overlay hit-test / DWM are independent of widget types (PR #8).

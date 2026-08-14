@@ -133,3 +133,11 @@ See [music-widget.md](../architecture/music-widget.md).
 **Why:** Secret Base needs its own Music UX and a safe automation boundary before connecting AI or official music APIs.
 
 See [music-widget.md](../architecture/music-widget.md) and [music-commands.md](../architecture/music-commands.md).
+
+## 2026-08-14 — Creative Workspace Widget MVP
+
+**Decision:** Add `WidgetTypes.Creative` as a desk for user-registered files/folders/projects (favorites, recent, search-registered-only, open via existing `ITargetLaunchService`). Persist items in AppData `creative/workspace.json` (`schemaVersion` 1), not layout JSON. Introduce `CreativeCommand` → `CreativeCommandService` for future AI. Path pickers via `IPathPickService` / Windows Storage pickers. **No** Explorer clone, delete/move/rename, Host Bridge, or Overlay changes.
+
+**Why:** Personal Desktop Environment needs a safe “return to my work” surface distinct from Blocks (app tiles) and from a full file manager.
+
+See [creative-workspace.md](../architecture/creative-workspace.md) and [creative-commands.md](../architecture/creative-commands.md).
