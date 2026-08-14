@@ -8,7 +8,7 @@
     mc:Ignorable="d">
 
     <!--
-      Creative Workspace — desk for favorite projects/files.
+      Creative Workspace — desk for Projects + favorite files/folders.
       Not a full Explorer. Move/resize on WidgetFrame.
     -->
     <Border
@@ -45,7 +45,7 @@
                 <TextBox
                     x:Name="SearchBox"
                     Grid.Column="0"
-                    PlaceholderText="Search projects…"
+                    PlaceholderText="Search projects &amp; files…"
                     FontSize="12"
                     MinHeight="28"
                     KeyDown="SearchBox_KeyDown"
@@ -73,13 +73,26 @@
                 Opacity="0.75"
                 TextWrapping="WrapWholeWords" />
 
-            <Button
-                x:Name="AddButton"
-                Grid.Row="4"
-                Content="+ Add"
-                HorizontalAlignment="Stretch"
-                Click="AddButton_Click"
-                ToolTipService.ToolTip="Add file or folder (Windows picker)" />
+            <Grid Grid.Row="4" ColumnSpacing="6">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Button
+                    x:Name="NewProjectButton"
+                    Grid.Column="0"
+                    Content="+ Project"
+                    HorizontalAlignment="Stretch"
+                    Click="NewProjectButton_Click"
+                    ToolTipService.ToolTip="Create a creative Project (registration only)" />
+                <Button
+                    x:Name="AddButton"
+                    Grid.Column="1"
+                    Content="+ File/Folder"
+                    HorizontalAlignment="Stretch"
+                    Click="AddButton_Click"
+                    ToolTipService.ToolTip="Add file or folder (Windows picker)" />
+            </Grid>
         </Grid>
     </Border>
 </UserControl>

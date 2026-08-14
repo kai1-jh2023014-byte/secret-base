@@ -92,7 +92,8 @@ public sealed partial class DesktopPage : Page
         _pathPicker = args.PathPicker;
         _creativeCommands = args.CreativeCommands
             ?? new CreativeCommandService(
-                new CreativeWorkspaceService(new JsonCreativeWorkspaceStore()));
+                new CreativeWorkspaceService(new JsonCreativeWorkspaceStore()),
+                new CreativeProjectService(new JsonCreativeProjectStore()));
 
         _theme = _themeStore.LoadOrCreateDefault();
         _layout = _layoutStore.LoadOrCreateDefault(RoomId.DefaultRoomId);
@@ -497,7 +498,8 @@ public sealed partial class DesktopPage : Page
 
             var commands = _creativeCommands
                 ?? new CreativeCommandService(
-                    new CreativeWorkspaceService(new JsonCreativeWorkspaceStore()));
+                    new CreativeWorkspaceService(new JsonCreativeWorkspaceStore()),
+                    new CreativeProjectService(new JsonCreativeProjectStore()));
             var view = new CreativeWorkspaceView();
             view.Initialize(
                 commands,
@@ -509,7 +511,8 @@ public sealed partial class DesktopPage : Page
                 {
                     instance.Configuration = updated.ToDictionary();
                     PersistLayoutNow();
-                });
+                },
+                tryLaunchTarget: TryLaunchCreativeTarget);
             if (_theme is not null)
             {
                 view.ApplyTheme(_theme);
@@ -523,22 +526,42 @@ public sealed partial class DesktopPage : Page
 
     private string? TryLaunchCreativeItem(CreativeItem item)
     {
+        return TryLaunchCreativePath(item.Path, item.Name);
+    }
+
+    /// <summary>
+    /// Opens a validated project path or https link. Never deletes/moves/renames.
+    /// </summary>
+    private string? TryLaunchCreativeTarget(string target, bool isExternalLink)
+    {
+        if (isExternalLink)
+        {
+            return TryOpenHttpsUrl(target)
+                ? null
+                : "Could not open link in the system browser.";
+        }
+
+        return TryLaunchCreativePath(target, displayName: null);
+    }
+
+    private string? TryLaunchCreativePath(string path, string? displayName)
+    {
         if (_launcher is null)
         {
             return "Launch service unavailable.";
         }
 
-        var exists = File.Exists(item.Path) || Directory.Exists(item.Path);
+        var exists = File.Exists(path) || Directory.Exists(path);
         if (!exists)
         {
             return "見つかりません — path was not found.";
         }
 
-        var inferred = BlockTargetValidator.InferType(item.Path, Directory.Exists(item.Path));
+        var inferred = BlockTargetValidator.InferType(path, Directory.Exists(path));
         var result = _launcher.TryLaunch(new TargetLaunchRequest(
-            Target: item.Path,
+            Target: path,
             ItemType: inferred.ToString(),
-            DisplayName: item.Name));
+            DisplayName: displayName ?? Path.GetFileName(path.TrimEnd('\\', '/'))));
         return result.Succeeded ? null : (result.ErrorMessage ?? "Launch failed.");
     }
 
@@ -758,8 +781,8 @@ public sealed partial class DesktopPage : Page
         var hint = new TextBlock
         {
             Text =
-                "Desk for favorite projects and files. Register paths explicitly, then open with Windows defaults. "
-                + "Not an Explorer. No delete/move. Commands: CreativeCommand → Service → safe open.",
+                "Desk for Projects (creative containers) plus favorite files/folders. "
+                + "Open only — no FS delete/move. CreativeCommand → Service → safe launch.",
             FontSize = 12,
             Opacity = 0.75,
             TextWrapping = TextWrapping.WrapWholeWords

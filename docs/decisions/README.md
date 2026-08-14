@@ -141,3 +141,11 @@ See [music-widget.md](../architecture/music-widget.md) and [music-commands.md](.
 **Why:** Personal Desktop Environment needs a safe “return to my work” surface distinct from Blocks (app tiles) and from a full file manager.
 
 See [creative-workspace.md](../architecture/creative-workspace.md) and [creative-commands.md](../architecture/creative-commands.md).
+
+## 2026-08-14 — Project Workspace MVP
+
+**Decision:** Add `CreativeProject` as a creative-activity container (Name / Description / Type / RootFolder / Resources: File|Folder|ExternalLink). Persist in AppData `creative/projects.json` (`schemaVersion` 1) beside `workspace.json`. Extend `CreativeCommand` / `CreativeCommandService` with project open/favorite/delete-registration commands. Delete Project removes registration only — never OS files. External links open in the system browser (no embedded WebView). Keep legacy `CreativeItemType.Project` folder marks. **No** Explorer clone, FS mutate APIs, Host Bridge, AI, Overlay changes, or type-forced app launches.
+
+**Why:** Evolve Creative Workspace from a file/folder launcher into a Personal Creative Environment entry point while preserving Security Boundary and Command → Service → Launch.
+
+See [creative-workspace.md](../architecture/creative-workspace.md) and [creative-commands.md](../architecture/creative-commands.md).
