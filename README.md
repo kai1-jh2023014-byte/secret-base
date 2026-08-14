@@ -2,7 +2,7 @@
 
 > Make your PC feel like *your* secret base — a Personal Desktop Environment for Windows.
 
-**v0.1 milestone status:** foundation + Clock + Text + Blocks + Theme + Arrange + Desktop Overlay (**widgets-only UX**) + **Web Widget**.  
+**v0.1 milestone status:** foundation + Clock + Text + Blocks + Theme + Arrange + Desktop Overlay + Web + **Calendar** (**widgets-only UX**; overlay click-through verified).  
 Wallpaper shows through the host; widgets float on the desktop; Exit via **Ctrl+Shift+Q** (debug chrome: **Ctrl+Shift+D**).
 
 ## Principles
@@ -97,11 +97,12 @@ Use **Ctrl+Shift+Q** to leave Secret Base (Safe Exit). **Ctrl+Shift+D** toggles 
   settings\   # reserved
 ```
 
-## Roadmap after Web Widget
+## Roadmap after Calendar
 
 1. App Launcher polish  
 2. Drag & Drop polish  
 3. Room switching  
+4. Calendar cloud providers (behind `ICalendarProvider`, consent-first)
 
 ## Architecture docs
 
@@ -109,6 +110,7 @@ Use **Ctrl+Shift+Q** to leave Secret Base (Safe Exit). **Ctrl+Shift+D** toggles 
 - [Tech stack](docs/architecture/tech-stack.md)
 - [Widget architecture](docs/architecture/widget-architecture.md)
 - [Web Widget](docs/architecture/web-widget.md)
+- [Calendar Widget](docs/architecture/calendar-widget.md)
 - [Desktop overlay](docs/architecture/desktop-overlay.md)
 - [Security boundaries](docs/architecture/security-boundaries.md)
 - [Windows Update resilience](docs/architecture/windows-update-resilience.md)

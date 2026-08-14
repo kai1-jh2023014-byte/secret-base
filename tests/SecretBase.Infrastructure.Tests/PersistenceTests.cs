@@ -1,8 +1,10 @@
 using System.Text.Json;
 using SecretBase.Core.Blocks;
+using SecretBase.Core.Calendar;
 using SecretBase.Core.Desktop;
 using SecretBase.Core.Themes;
 using SecretBase.Core.Widgets;
+using SecretBase.Core.Widgets.Calendar;
 using SecretBase.Core.Widgets.Clock;
 using SecretBase.Core.Widgets.Text;
 using SecretBase.Core.Widgets.Web;
@@ -362,6 +364,61 @@ public class LayoutPersistenceTests
                 .OrderBy(u => u, StringComparer.Ordinal)
                 .ToList();
             Assert.Equal(["https://github.com/", "https://www.notion.so/"], urls);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void SaveAndLoad_RestoresCalendarEventsAndGeometry()
+    {
+        var dir = CreateTempDir();
+        try
+        {
+            var store = new JsonLayoutStore(dir);
+            var layout = DesktopLayout.CreateDefault();
+            var config = new CalendarWidgetConfiguration
+            {
+                GoogleIcsUrl = "https://calendar.google.com/calendar/ical/demo/private/basic.ics",
+                UseSampleAgendaWhenEmpty = false,
+                Events =
+                [
+                    new CalendarEvent
+                    {
+                        Id = "ship-1",
+                        Provider = CalendarProviderIds.Local,
+                        Title = "Calendar ship",
+                        Start = DateTimeOffset.Parse("2026-08-13T09:00:00+09:00"),
+                        End = DateTimeOffset.Parse("2026-08-13T12:00:00+09:00")
+                    }
+                ]
+            };
+            var calendar = DefaultWidgetFactory.CreateCalendar(
+                layout.RoomId,
+                x: 400,
+                y: 60,
+                width: 330,
+                height: 360,
+                configuration: config);
+            layout.Widgets.Add(calendar);
+            store.Save(layout);
+
+            var restored = store.LoadOrCreateDefault(RoomId.DefaultRoomId);
+            Assert.Contains(restored.Widgets, w => w.Type == WidgetTypes.Clock);
+            Assert.Contains(restored.Widgets, w => w.Type == WidgetTypes.Text);
+            var widget = restored.Widgets.Single(w => w.Type == WidgetTypes.Calendar);
+            Assert.Equal(calendar.Id, widget.Id);
+            Assert.Equal(400, widget.Position.X);
+            Assert.Equal(60, widget.Position.Y);
+
+            var loaded = CalendarWidgetConfiguration.FromDictionary(widget.Configuration);
+            Assert.Equal(config.GoogleIcsUrl, loaded.GoogleIcsUrl);
+            Assert.False(loaded.UseSampleAgendaWhenEmpty);
+            Assert.Single(loaded.Events);
+            Assert.Equal("Calendar ship", loaded.Events[0].Title);
+            Assert.Equal(9, loaded.Events[0].Start.Hour);
         }
         finally
         {

@@ -10,4 +10,7 @@ public static class WidgetTypes
 
     /// <summary>WebView2-hosted page. Untrusted content — no host bridge.</summary>
     public const string Web = "web";
+
+    /// <summary>Local month calendar. Events via <c>ICalendarEventSource</c> (local-only in v0.1).</summary>
+    public const string Calendar = "calendar";
 }

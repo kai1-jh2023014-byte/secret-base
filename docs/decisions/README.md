@@ -94,3 +94,17 @@ See [theme-editor.md](../architecture/theme-editor.md).
 
 See [web-widget.md](../architecture/web-widget.md) and [security-boundaries.md](../architecture/security-boundaries.md).
 
+## 2026-08-13 — Calendar Widget + Integration Layer (local-only)
+
+**Decision:** Add `WidgetTypes.Calendar` with Core `CalendarMonthBuilder` + `ICalendarEventSource` (`Empty` / `Local`). Host UI in `CalendarWidgetView`. Persist optional local events in widget configuration. Not seeded into default layout — **Cal** FAB / Ctrl+Shift+C. **Do not** change Desktop Overlay hit-test / DWM (PR #8 verified). No Outlook/Google APIs in v0.1.
+
+**Why:** Month calendar on the Desktop with a provider-agnostic event layer, without cloud coupling or overlay redesign.
+
+See [calendar-widget.md](../architecture/calendar-widget.md).
+
+## 2026-08-14 — Calendar Today agenda + ICalendarProvider (Google ICS)
+
+**Decision:** Evolve Calendar into a **Today agenda** widget (not a month grid). Introduce `ICalendarProvider` + `CalendarService`, common timed `CalendarEvent`, Core `IcsCalendarParser`, and Infrastructure `GoogleCalendarIcsProvider` (user-pasted secret iCal HTTPS URL — no OAuth client in app). Sample Creative-day agenda when unconfigured. **Do not** modify Overlay / DWM / SetWindowRgn.
+
+**Why:** “Think / Manage” Creative OS layer — keep today's schedule visible; multi-provider ready (Notion later) without redesigning verified Desktop Overlay.
+
