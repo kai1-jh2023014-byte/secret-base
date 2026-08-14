@@ -1,6 +1,7 @@
 using SecretBase.Core.Desktop;
 using SecretBase.Core.Widgets.Calendar;
 using SecretBase.Core.Widgets.Clock;
+using SecretBase.Core.Widgets.Creative;
 using SecretBase.Core.Widgets.Music;
 using SecretBase.Core.Widgets.Text;
 using SecretBase.Core.Widgets.Web;
@@ -114,6 +115,30 @@ public static class DefaultWidgetFactory
             Type = WidgetTypes.Music,
             Position = new WidgetPosition(x ?? 120, y ?? 120),
             Size = new WidgetSize(width ?? 360, height ?? 420),
+            RoomId = room,
+            Configuration = config.ToDictionary()
+        };
+    }
+
+    /// <summary>
+    /// Creates a Creative Workspace Widget. Not seeded into default layout — add explicitly.
+    /// </summary>
+    public static WidgetInstance CreateCreative(
+        RoomId? roomId = null,
+        double? x = null,
+        double? y = null,
+        double? width = null,
+        double? height = null,
+        CreativeWorkspaceWidgetConfiguration? configuration = null)
+    {
+        var room = roomId ?? RoomId.DefaultRoomId;
+        var config = configuration ?? CreativeWorkspaceWidgetConfiguration.CreateDefault();
+        return new WidgetInstance
+        {
+            Id = Guid.NewGuid(),
+            Type = WidgetTypes.Creative,
+            Position = new WidgetPosition(x ?? 200, y ?? 80),
+            Size = new WidgetSize(width ?? 340, height ?? 440),
             RoomId = room,
             Configuration = config.ToDictionary()
         };

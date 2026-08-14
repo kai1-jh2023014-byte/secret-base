@@ -16,4 +16,7 @@ public static class WidgetTypes
 
     /// <summary>Music Hub widget — music sources (Spotify/YouTube web, Local placeholder). Untrusted WebView when browsing.</summary>
     public const string Music = "music";
+
+    /// <summary>Creative Workspace — user-registered projects/files/folders (open only).</summary>
+    public const string Creative = "creative";
 }

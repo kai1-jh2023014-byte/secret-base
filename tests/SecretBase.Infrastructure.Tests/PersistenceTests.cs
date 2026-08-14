@@ -1,6 +1,7 @@
 using System.Text.Json;
 using SecretBase.Core.Blocks;
 using SecretBase.Core.Calendar;
+using SecretBase.Core.Creative;
 using SecretBase.Core.Desktop;
 using SecretBase.Core.Music;
 using SecretBase.Core.Themes;
@@ -504,6 +505,7 @@ public class LayoutPersistenceTests
             layout.Widgets.Add(DefaultWidgetFactory.CreateWeb("https://github.com/"));
             layout.Widgets.Add(DefaultWidgetFactory.CreateCalendar());
             layout.Widgets.Add(DefaultWidgetFactory.CreateMusic());
+            layout.Widgets.Add(DefaultWidgetFactory.CreateCreative());
             store.Save(layout);
 
             var restored = store.LoadOrCreateDefault(RoomId.DefaultRoomId);
@@ -512,11 +514,41 @@ public class LayoutPersistenceTests
             Assert.Contains(restored.Widgets, w => w.Type == WidgetTypes.Web);
             Assert.Contains(restored.Widgets, w => w.Type == WidgetTypes.Calendar);
             Assert.Contains(restored.Widgets, w => w.Type == WidgetTypes.Music);
+            Assert.Contains(restored.Widgets, w => w.Type == WidgetTypes.Creative);
             Assert.Equal(DesktopLayout.CurrentSchemaVersion, restored.SchemaVersion);
         }
         finally
         {
             Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void CreativeWorkspaceStore_AtomicRoundTrip_AndSchemaVersion()
+    {
+        var path = Path.Combine(CreateTempDir(), "workspace.json");
+        try
+        {
+            var store = new JsonCreativeWorkspaceStore(path);
+            var service = new CreativeWorkspaceService(store);
+            Assert.True(service.TryAdd(@"D:\Art\piece.png", CreativeItemType.File, "piece", out var item, out _));
+            Assert.True(service.TryMarkOpened(item!.Id, DateTimeOffset.UtcNow, out _, out _));
+
+            var reloaded = store.LoadOrCreate();
+            Assert.Equal(CreativeWorkspaceDocument.CurrentSchemaVersion, reloaded.SchemaVersion);
+            Assert.Single(reloaded.Items);
+            Assert.Equal(@"D:\Art\piece.png", reloaded.Items[0].Path);
+            Assert.NotNull(reloaded.Items[0].LastOpened);
+            Assert.True(File.Exists(path));
+            Assert.False(File.Exists(path + ".tmp"));
+        }
+        finally
+        {
+            var dir = Path.GetDirectoryName(path);
+            if (!string.IsNullOrWhiteSpace(dir) && Directory.Exists(dir))
+            {
+                Directory.Delete(dir, recursive: true);
+            }
         }
     }
 

@@ -42,5 +42,6 @@ Highest principle:
 - ✅ Calendar Widget (Today agenda + `ICalendarProvider` / Google ICS)
 - ✅ Calendar Hub (capabilities, Mock, Google API OAuth read design, agenda cache)
 - ✅ Music Widget (native search/playback UI + MusicCommand boundary; Demo catalog)
+- ✅ Creative Workspace (favorites/recent/open registered paths; CreativeCommand boundary)
 - App Launcher polish → Room switching
 

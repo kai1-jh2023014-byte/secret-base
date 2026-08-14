@@ -1,5 +1,6 @@
 ﻿using Microsoft.UI.Xaml;
 using SecretBase.Core;
+using SecretBase.Core.Creative;
 using SecretBase.Core.Time;
 using SecretBase.Infrastructure.Logging;
 using SecretBase.Infrastructure.Persistence;
@@ -37,6 +38,10 @@ public partial class App : Application
             "compatibility",
             $"OS={info.OsDescription}; OSVersion={info.OsVersion}; Arch={info.OsArchitecture}; DotNet={info.DotNetVersion}; WASDK={info.WindowsAppSdkPackageVersion}");
 
+        var pathPicker = new WindowsPathPickService();
+        var creativeCommands = new CreativeCommandService(
+            new CreativeWorkspaceService(new JsonCreativeWorkspaceStore()));
+
         var pageArgs = new DesktopPageArgs(
             Logger: _logger,
             SafeExit: _safeExit,
@@ -46,7 +51,9 @@ public partial class App : Application
             TimeProvider: new SystemTimeProvider(),
             Launcher: new ShellTargetLaunchService(),
             Icons: new ShellFileIconService(AppDataPaths.IconsDirectory),
-            Intake: new BlockItemIntakeService(AppDataPaths.BlockItemsDirectory));
+            Intake: new BlockItemIntakeService(AppDataPaths.BlockItemsDirectory),
+            PathPicker: pathPicker,
+            CreativeCommands: creativeCommands);
 
         IDesktopOverlayService overlay = new AppWindowDesktopOverlayService();
         _window = new MainWindow(pageArgs, overlay);
