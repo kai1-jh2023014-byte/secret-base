@@ -106,5 +106,14 @@ See [calendar-widget.md](../architecture/calendar-widget.md).
 
 **Decision:** Evolve Calendar into a **Today agenda** widget (not a month grid). Introduce `ICalendarProvider` + `CalendarService`, common timed `CalendarEvent`, Core `IcsCalendarParser`, and Infrastructure `GoogleCalendarIcsProvider` (user-pasted secret iCal HTTPS URL — no OAuth client in app). Sample Creative-day agenda when unconfigured. **Do not** modify Overlay / DWM / SetWindowRgn.
 
-**Why:** “Think / Manage” Creative OS layer — keep today's schedule visible; multi-provider ready (Notion later) without redesigning verified Desktop Overlay.
+**Why:** “Think / Manage” Creative OS layer — keep today's schedule visible; multi-provider ready without redesigning verified Desktop Overlay.
 
+See [calendar-widget.md](../architecture/calendar-widget.md).
+
+## 2026-08-14 — Calendar Hub / multi-provider Integration Layer
+
+**Decision:** Enrich `ICalendarProvider` with `Capabilities` + `AuthStatus` + `CalendarInfo`; keep CRUD optional per provider. Ship `MockCalendarProvider`, JSON agenda cache (events only), `ISecureSecretStore` / Windows Credential Manager, and Google Calendar API **read** provider (loopback OAuth + PKCE, `calendar.readonly`) when the user supplies AppData OAuth client JSON. Document that **Notion Calendar** has no third-party sync API and **TimeTree Connect API** was terminated — do not ship fake providers; Web Widget/browser only. **Do not** modify Overlay / DWM / SetWindowRgn.
+
+**Why:** Personal Desktop Environment needs a real multi-service hub without forcing unofficial APIs or conflating Notion Calendar with Notion Data API.
+
+See [calendar-integration.md](../architecture/calendar-integration.md).

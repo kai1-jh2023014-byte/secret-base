@@ -45,7 +45,13 @@ coverage/
 *.pfx
 *.p12
 credentials.json
+google-oauth-client.json
+**/google-oauth-client.json
+**/credentials/
 **/secrets/
+calendar-agenda-cache.json
+**/calendar-agenda-cache.json
+
 
 ## Cursor / local tooling
 .cursor/

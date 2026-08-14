@@ -41,21 +41,22 @@ Forbidden (v0.1 and forward until redesign):
 
 Future “Web → Secret Base API” bridges, if ever added, require an explicit security design and must not ship by accident.
 
-## Calendar Integration Layer (v0.1)
+## Calendar Integration Layer
 
 ```
 CalendarWidgetView (Today agenda)
         ↓
-CalendarService
+CalendarService (isolates provider failures)
         ↓
-ICalendarProvider
-   ├─ Local (sample / config events)
+ICalendarProvider (+ Capabilities / AuthStatus)
+   ├─ Local / Mock (Core)
    ├─ Google ICS (user secret iCal URL — Infrastructure)
-   └─ Notion / OAuth Google API (future, consent-first)
+   └─ Google Calendar API OAuth read (tokens in Credential Manager via ISecureSecretStore)
 ```
 
 Common `CalendarEvent` only in Core. No provider DTOs in Core.
-v0.1 does **not** embed OAuth client secrets. Overlay hit-test / DWM remain untouched.
+**No** Notion Calendar / TimeTree fake providers (see [calendar-integration.md](calendar-integration.md)).
+**No** WebView → token injection. Overlay hit-test / DWM remain untouched.
 
 ## v0.1 hard rules
 

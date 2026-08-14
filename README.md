@@ -97,12 +97,12 @@ Use **Ctrl+Shift+Q** to leave Secret Base (Safe Exit). **Ctrl+Shift+D** toggles 
   settings\   # reserved
 ```
 
-## Roadmap after Calendar
+## Roadmap after Calendar Hub
 
 1. App Launcher polish  
 2. Drag & Drop polish  
 3. Room switching  
-4. Calendar cloud providers (behind `ICalendarProvider`, consent-first)
+4. Additional calendar/data providers only when official APIs exist (e.g. Notion *data*, never fake TimeTree sync)
 
 ## Architecture docs
 
@@ -111,6 +111,7 @@ Use **Ctrl+Shift+Q** to leave Secret Base (Safe Exit). **Ctrl+Shift+D** toggles 
 - [Widget architecture](docs/architecture/widget-architecture.md)
 - [Web Widget](docs/architecture/web-widget.md)
 - [Calendar Widget](docs/architecture/calendar-widget.md)
+- [Calendar Integration Layer](docs/architecture/calendar-integration.md)
 - [Desktop overlay](docs/architecture/desktop-overlay.md)
 - [Security boundaries](docs/architecture/security-boundaries.md)
 - [Windows Update resilience](docs/architecture/windows-update-resilience.md)

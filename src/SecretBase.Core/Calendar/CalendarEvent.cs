@@ -1,8 +1,8 @@
 namespace SecretBase.Core.Calendar;
 
 /// <summary>
-/// Common calendar event model. Provider-specific payloads (Google/Notion/…)
-/// must be mapped into this type — never stored as Core domain entities.
+/// Common calendar event model. Provider-specific payloads must be mapped here —
+/// never stored as Core domain entities.
 /// </summary>
 public sealed class CalendarEvent
 {
@@ -28,6 +28,14 @@ public sealed class CalendarEvent
     public string? Description { get; set; }
 
     public string? Url { get; set; }
+
+    /// <summary>Optional accent (#RRGGBB) for agenda color dots.</summary>
+    public string? Color { get; set; }
+
+    /// <summary>Human-readable source label (e.g. "Google Calendar · School").</summary>
+    public string? Source { get; set; }
+
+    public DateTimeOffset? LastUpdated { get; set; }
 
     public DateOnly LocalDate => DateOnly.FromDateTime(Start.DateTime);
 

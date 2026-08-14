@@ -21,7 +21,29 @@ public sealed class LocalCalendarProvider : ICalendarProvider
 
     public string? OpenUrl { get; }
 
+    public CalendarProviderCapabilities Capabilities =>
+        CalendarProviderCapabilities.ReadEvents | CalendarProviderCapabilities.ListCalendars;
+
+    public CalendarAuthStatus AuthStatus => CalendarAuthStatus.NotApplicable;
+
     public bool IsConfigured => true;
+
+    public Task<IReadOnlyList<CalendarInfo>> GetCalendarsAsync(CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        IReadOnlyList<CalendarInfo> list =
+        [
+            new CalendarInfo
+            {
+                Id = "local",
+                Name = DisplayName,
+                ProviderId = ProviderId,
+                Color = "#4A90D9",
+                IsPrimary = true
+            }
+        ];
+        return Task.FromResult(list);
+    }
 
     public Task<IReadOnlyList<CalendarEvent>> GetEventsAsync(
         CalendarQuery query,
@@ -36,6 +58,10 @@ public sealed class LocalCalendarProvider : ICalendarProvider
             .ToList();
         return Task.FromResult(result);
     }
+
+    public Task AuthenticateAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+    public Task DisconnectAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
 
     public void ReplaceAll(IEnumerable<CalendarEvent> events)
     {
@@ -69,6 +95,9 @@ public sealed class LocalCalendarProvider : ICalendarProvider
             IsAllDay = source.IsAllDay,
             Location = source.Location,
             Description = source.Description,
-            Url = source.Url
+            Url = source.Url,
+            Color = source.Color,
+            Source = source.Source ?? source.CalendarName ?? "Local",
+            LastUpdated = source.LastUpdated
         };
 }

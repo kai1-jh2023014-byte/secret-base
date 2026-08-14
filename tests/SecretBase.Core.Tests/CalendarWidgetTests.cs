@@ -79,17 +79,86 @@ public class CalendarServiceTests
         Assert.Empty(agenda);
     }
 
+    [Fact]
+    public async Task GetAgendaSnapshotAsync_IsolatesProviderFailure()
+    {
+        var day = new DateOnly(2026, 8, 13);
+        var offset = TimeSpan.FromHours(9);
+        var local = new LocalCalendarProvider(
+        [
+            new CalendarEvent
+            {
+                Title = "Ok",
+                Start = new DateTimeOffset(day.ToDateTime(new TimeOnly(10, 0)), offset),
+                End = new DateTimeOffset(day.ToDateTime(new TimeOnly(11, 0)), offset)
+            }
+        ]);
+
+        var service = new CalendarService([new ThrowingProvider(), local]);
+        var snap = await service.GetAgendaSnapshotAsync(CalendarQuery.ForDay(day));
+        Assert.Single(snap.Events);
+        Assert.Equal("Ok", snap.Events[0].Title);
+        Assert.Contains(snap.ProviderResults, r => !r.Succeeded && r.ProviderId == "boom");
+        Assert.Contains(snap.ProviderResults, r => r.Succeeded && r.ProviderId == CalendarProviderIds.Local);
+    }
+
+    [Fact]
+    public async Task MockProvider_ReturnsColoredTodayAgenda()
+    {
+        var now = new DateTimeOffset(2026, 8, 13, 8, 0, 0, TimeSpan.FromHours(9));
+        var mock = new MockCalendarProvider(() => now);
+        Assert.True(mock.Capabilities.HasFlag(CalendarProviderCapabilities.ReadEvents));
+        Assert.Equal(CalendarAuthStatus.NotApplicable, mock.AuthStatus);
+
+        var service = new CalendarService([mock]);
+        var agenda = await service.GetTodayAgendaAsync(now);
+        Assert.Equal(4, agenda.Count);
+        Assert.All(agenda, e => Assert.False(string.IsNullOrWhiteSpace(e.Color)));
+    }
+
     private sealed class ThrowingProvider : ICalendarProvider
     {
         public string ProviderId => "boom";
         public string DisplayName => "Boom";
         public string? OpenUrl => null;
+        public CalendarProviderCapabilities Capabilities => CalendarProviderCapabilities.ReadEvents;
+        public CalendarAuthStatus AuthStatus => CalendarAuthStatus.Connected;
         public bool IsConfigured => true;
+
+        public Task<IReadOnlyList<CalendarInfo>> GetCalendarsAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<CalendarInfo>>(Array.Empty<CalendarInfo>());
 
         public Task<IReadOnlyList<CalendarEvent>> GetEventsAsync(
             CalendarQuery query,
             CancellationToken cancellationToken = default) =>
             throw new InvalidOperationException("provider down");
+
+        public Task AuthenticateAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+        public Task DisconnectAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+    }
+}
+
+public class CalendarProviderCapabilitiesTests
+{
+    [Fact]
+    public void Flags_CombineWithoutImplyingWrite()
+    {
+        var caps = CalendarProviderCapabilities.ReadEvents
+            | CalendarProviderCapabilities.ListCalendars
+            | CalendarProviderCapabilities.Authentication;
+
+        Assert.True(caps.HasFlag(CalendarProviderCapabilities.ReadEvents));
+        Assert.False(caps.HasFlag(CalendarProviderCapabilities.CreateEvents));
+        Assert.False(caps.HasFlag(CalendarProviderCapabilities.DeleteEvents));
+    }
+
+    [Fact]
+    public void ProviderIds_AreStable()
+    {
+        Assert.Equal("local", CalendarProviderIds.Local);
+        Assert.Equal("google", CalendarProviderIds.Google);
+        Assert.Equal("notion", CalendarProviderIds.Notion);
     }
 }
 
@@ -146,6 +215,8 @@ public class CalendarWidgetConfigurationTests
             GoogleIcsUrl = "https://calendar.google.com/calendar/ical/example/private/basic.ics",
             OpenCalendarUrl = "https://calendar.google.com/",
             UseSampleAgendaWhenEmpty = false,
+            IncludeMockProvider = true,
+            EnableGoogleApiProvider = false,
             Events =
             [
                 new CalendarEvent
@@ -156,7 +227,9 @@ public class CalendarWidgetConfigurationTests
                     Title = "Programming",
                     Start = DateTimeOffset.Parse("2026-08-13T14:00:00+09:00", CultureInfo.InvariantCulture),
                     End = DateTimeOffset.Parse("2026-08-13T16:00:00+09:00", CultureInfo.InvariantCulture),
-                    Location = "Desk"
+                    Location = "Desk",
+                    Color = "#3498DB",
+                    Source = "Local"
                 }
             ]
         };
@@ -164,9 +237,12 @@ public class CalendarWidgetConfigurationTests
         var restored = CalendarWidgetConfiguration.FromDictionary(original.ToDictionary());
         Assert.Equal(original.GoogleIcsUrl, restored.GoogleIcsUrl);
         Assert.False(restored.UseSampleAgendaWhenEmpty);
+        Assert.True(restored.IncludeMockProvider);
+        Assert.False(restored.EnableGoogleApiProvider);
         Assert.Single(restored.Events);
         Assert.Equal("Programming", restored.Events[0].Title);
         Assert.Equal("Desk", restored.Events[0].Location);
+        Assert.Equal("#3498DB", restored.Events[0].Color);
         Assert.Equal(14, restored.Events[0].Start.Hour);
     }
 

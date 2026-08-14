@@ -1,6 +1,7 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using SecretBase.App.Desktop;
+using SecretBase.Core.Calendar;
 using SecretBase.Core.Time;
 using SecretBase.Infrastructure.Logging;
 using SecretBase.Infrastructure.Persistence;
@@ -81,4 +82,6 @@ public sealed record DesktopPageArgs(
     DesktopOverlayTarget? OverlayTarget = null,
     ITargetLaunchService? Launcher = null,
     IFileIconService? Icons = null,
-    IBlockItemIntakeService? Intake = null);
+    IBlockItemIntakeService? Intake = null,
+    ISecureSecretStore? SecretStore = null,
+    ICalendarAgendaCache? CalendarCache = null);
