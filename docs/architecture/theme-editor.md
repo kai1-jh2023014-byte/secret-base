@@ -1,10 +1,10 @@
 # Theme editor
 
-Clock, Text (boxes), and Blocks share one room `ThemeDefinition`.
+All desktop widgets and Blocks share one room `ThemeDefinition`.
 
 ## How to open
 
-- Always-visible **Aa** button (bottom-left, next to **+**)
+- Always-visible **Aa** FAB
 - Debug chrome **Theme** (Ctrl+Shift+D)
 - **Ctrl+Shift+T**
 
@@ -12,12 +12,11 @@ Clock, Text (boxes), and Blocks share one room `ThemeDefinition`.
 
 | Control | Affects |
 |---------|---------|
-| Preset | Quick looks: Default, Midnight, Warm Paper, Forest, Ocean, Soft Rose |
-| Widget / Block background | Clock, Text, Block surfaces |
-| Clock / Text / title color | Time, text body, Block titles |
-| Date / muted text | Clock date, hints |
-| Accent | **+** FAB and accents |
-| Font | Clock, Text, Block labels |
+| Preset | Default, Midnight, Warm Paper, Forest, Ocean, Soft Rose |
+| Widget / Block background | Surfaces for Clock, Text, Web, Calendar, Music, Creative, AI, Blocks |
+| Foreground / muted | Titles, body, hints |
+| Accent | Primary FAB (+) and accents |
+| Font | Shared font family |
 | Corner radius | Rounded corners |
 | Surface opacity | Widget/Block transparency |
 
@@ -26,8 +25,8 @@ Live preview in the dialog. **Apply** writes `%LocalAppData%\SecretBase\themes\d
 ## Layers
 
 - **Core:** `ThemeDefinition`, `ThemePresets`
-- **Infrastructure:** `JsonThemeStore` (unchanged schema)
+- **Infrastructure:** `JsonThemeStore`
 - **App:** Theme dialog on `DesktopPage`
-- **Widgets / BlockFrame:** existing `ApplyTheme` paths
+- **Widgets / BlockFrame / WidgetFrame:** `ApplyTheme` paths
 
-No per-widget theme registry yet — one room theme keeps V1 simple.
+One room theme keeps v0.1 simple — no per-widget theme registry.

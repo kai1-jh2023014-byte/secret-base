@@ -16,13 +16,14 @@ namespace SecretBase.Widgets.Web;
 /// No host object bridge, no Core/Platform injection, no JS→Secret Base API.
 /// Move/resize stay on <c>WidgetFrame</c> chrome (not this surface).
 /// </summary>
-public sealed partial class WebWidgetView : UserControl
+public sealed partial class WebWidgetView : UserControl, IDisposable
 {
     private WebWidgetConfiguration _configuration = WebWidgetConfiguration.CreateDefault();
     private Action<WebWidgetConfiguration>? _onConfigurationChanged;
     private bool _coreReady;
     private bool _navigatePending;
     private string? _blockedMessage;
+    private bool _disposed;
 
     public WebWidgetView()
     {
@@ -83,7 +84,40 @@ public sealed partial class WebWidgetView : UserControl
 
     private void OnUnloaded(object sender, RoutedEventArgs e)
     {
+        DisposeBrowser();
+    }
+
+    public void Dispose()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _disposed = true;
+        Loaded -= OnLoaded;
+        Unloaded -= OnUnloaded;
+        DisposeBrowser();
+    }
+
+    private void DisposeBrowser()
+    {
         DetachBrowserHandlers();
+        try
+        {
+            if (Browser.CoreWebView2 is not null)
+            {
+                Browser.CoreWebView2.Stop();
+            }
+
+            Browser.Close();
+        }
+        catch
+        {
+            // Best-effort teardown — avoid throwing during unload/re-render.
+        }
+
+        _coreReady = false;
     }
 
     private async Task EnsureBrowserAsync()

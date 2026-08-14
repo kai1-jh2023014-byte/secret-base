@@ -9,9 +9,10 @@ It does **not** replace Explorer, the Taskbar, or the Windows shell.
 ```text
 Desktop
   ├── Wallpaper / Desktop icons     ← receive input outside widget regions
-  ├── Secret Base Overlay           ← HWND shaped to widgets only (SetWindowRgn)
-  │     ├── Clock Widget            ← receives input
-  │     └── Text Widget             ← receives input
+  ├── Secret Base Overlay           ← HWND shaped to widgets + FABs (SetWindowRgn)
+  │     ├── Widgets (Clock, Text, Web, Calendar, Music, Creative, AI, …)
+  │     ├── Blocks
+  │     └── FABs (+ Add Widget, Blk, Aa, Grid)
   └── Other application windows / Taskbar
 ```
 
@@ -62,17 +63,17 @@ Investigation notes: [overlay-input-and-edges.md](overlay-input-and-edges.md).
 |---------|-----------|--------------------|
 | Page / canvas background | Transparent | — |
 | Title / brand text | Hidden | — |
-| **+** Add Block | Always visible (bottom-left FAB) | Debug chrome **Add Block** |
-| **Web** Add Web Widget | Always visible | Debug chrome **Add Web**, **Ctrl+Shift+W** |
-| **Cal** Add Calendar | Always visible | Debug chrome **Add Cal**, **Ctrl+Shift+C** |
-| **♪** Add Music | Always visible | Debug chrome **Add Music**, **Ctrl+Shift+M** |
-| **CW** Add Creative Workspace | Always visible | Debug chrome **Add Creative**, **Ctrl+Shift+E** |
-| **AI** Add AI Workspace | Always visible | Debug chrome **Add AI**, **Ctrl+Shift+A** |
+| Control | Normal UX | Recovery |
+|---------|-----------|----------|
+| **+** Add Widget | Always visible (catalog) | Debug chrome **Add Widget**, **Ctrl+Shift+N** |
+| **Blk** Add Block | Always visible | Debug chrome **Add Block**, **Ctrl+Shift+B** |
+| Per-type shortcuts | W/C/M/E/A still add Web/Cal/Music/Creative/AI | See [keyboard-shortcuts.md](../guides/keyboard-shortcuts.md) |
 | **Aa** Theme | Always visible | Debug chrome **Theme**, **Ctrl+Shift+T** |
-| **Grid** Arrange | Always visible — even layout for widgets & blocks | Debug chrome **Arrange** |
+| **Grid** Arrange | Always visible | Debug chrome **Arrange** |
+| Host status | Ephemeral message above FABs | Also mirrored in debug chrome |
 | Status / widget count | Hidden | **Ctrl+Shift+D** shows debug chrome |
 | Exit button | Hidden | Debug chrome **Exit**, or **Ctrl+Shift+Q** |
-| `WidgetFrame` | Subtle grip + resize (stronger on hover) | Same |
+| `WidgetFrame` | Grip + resize + **×** remove | Same |
 
 Arrange uses Core `DesktopWidgetLayout` / `DesktopBlockLayout` (compact equal-gap grid from top-left; Blocks sit below the widget band) and persists via the layout store.
 

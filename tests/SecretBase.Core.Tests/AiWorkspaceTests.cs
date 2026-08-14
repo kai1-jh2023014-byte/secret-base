@@ -178,4 +178,15 @@ public class AiWidgetFactoryTests
         var layout = DesktopLayout.CreateDefault();
         Assert.DoesNotContain(layout.Widgets, w => w.Type == WidgetTypes.Ai);
     }
+
+    [Fact]
+    public void CreateClock_AndCreateText_UseNewIds_NotSeedDefaults()
+    {
+        var clock = DefaultWidgetFactory.CreateClock();
+        var text = DefaultWidgetFactory.CreateText();
+        Assert.Equal(WidgetTypes.Clock, clock.Type);
+        Assert.Equal(WidgetTypes.Text, text.Type);
+        Assert.NotEqual(Guid.Parse("11111111-1111-1111-1111-111111111111"), clock.Id);
+        Assert.NotEqual(Guid.Parse("22222222-2222-2222-2222-222222222222"), text.Id);
+    }
 }

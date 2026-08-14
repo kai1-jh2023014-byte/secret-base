@@ -8,35 +8,53 @@
     Background="Transparent"
     mc:Ignorable="d">
 
-    <!-- Floating widget chrome: subtle grip + resize; fades in on hover. -->
+    <!-- Floating widget chrome: grip + resize + remove; fades in on hover. -->
     <Grid
         x:Name="RootGrid"
         Background="Transparent"
         PointerEntered="RootGrid_PointerEntered"
         PointerExited="RootGrid_PointerExited">
         <Grid.RowDefinitions>
-            <RowDefinition Height="18" />
+            <RowDefinition Height="20" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <Border
-            x:Name="DragBar"
-            Grid.Row="0"
-            Background="#18FFFFFF"
-            CornerRadius="10,10,0,0"
-            Opacity="0.35"
-            PointerPressed="DragArea_PointerPressed"
-            PointerMoved="DragArea_PointerMoved"
-            PointerReleased="DragArea_PointerReleased"
-            PointerCaptureLost="DragArea_PointerCaptureLost"
-            ToolTipService.ToolTip="Drag to move">
-            <Ellipse
-                Width="28"
-                Height="4"
-                Fill="#66FFFFFF"
-                HorizontalAlignment="Center"
-                VerticalAlignment="Center" />
-        </Border>
+        <Grid Grid.Row="0" ColumnSpacing="4">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <Border
+                x:Name="DragBar"
+                Grid.Column="0"
+                Background="#18FFFFFF"
+                CornerRadius="10,0,0,0"
+                Opacity="0.35"
+                PointerPressed="DragArea_PointerPressed"
+                PointerMoved="DragArea_PointerMoved"
+                PointerReleased="DragArea_PointerReleased"
+                PointerCaptureLost="DragArea_PointerCaptureLost"
+                ToolTipService.ToolTip="Drag to move">
+                <Ellipse
+                    Width="28"
+                    Height="4"
+                    Fill="#66FFFFFF"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center" />
+            </Border>
+            <Button
+                x:Name="RemoveButton"
+                Grid.Column="1"
+                Width="22"
+                Height="20"
+                Padding="0"
+                FontSize="11"
+                Content="×"
+                Opacity="0.35"
+                CornerRadius="0,10,0,0"
+                Click="RemoveButton_Click"
+                ToolTipService.ToolTip="Remove widget from Secret Base" />
+        </Grid>
 
         <Border
             x:Name="ContentHost"

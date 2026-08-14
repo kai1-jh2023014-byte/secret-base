@@ -10,7 +10,7 @@
 
     <!--
       Widgets + Blocks desktop layer.
-      + Add Block · Web · Cal · Aa Theme · Grid Arrange (always visible).
+      + Add Widget · Blk · Aa Theme · Grid Arrange (always visible).
       Debug chrome: Ctrl+Shift+D. Safe Exit: Ctrl+Shift+Q.
     -->
     <Grid x:Name="RootGrid" Background="Transparent">
@@ -51,6 +51,10 @@
                 Key="A"
                 Modifiers="Control,Shift"
                 Invoked="AddAiAccelerator_Invoked" />
+            <KeyboardAccelerator
+                Key="N"
+                Modifiers="Control,Shift"
+                Invoked="AddWidgetAccelerator_Invoked" />
         </Grid.KeyboardAccelerators>
 
         <Canvas
@@ -58,99 +62,64 @@
             Background="Transparent" />
 
         <StackPanel
-            Orientation="Horizontal"
+            Orientation="Vertical"
             HorizontalAlignment="Left"
             VerticalAlignment="Bottom"
             Margin="16,16"
-            Spacing="10">
-            <Button
-                x:Name="AddBlockFab"
-                Width="48"
-                Height="48"
-                Content="+"
-                FontSize="28"
-                FontWeight="SemiBold"
-                Padding="0"
-                CornerRadius="14"
-                Click="AddBlockButton_Click"
-                ToolTipService.ToolTip="Add Block" />
-            <Button
-                x:Name="AddWebFab"
-                Width="48"
-                Height="48"
-                Content="Web"
-                FontSize="12"
-                FontWeight="SemiBold"
-                Padding="0"
-                CornerRadius="14"
-                Click="AddWebButton_Click"
-                ToolTipService.ToolTip="Add Web Widget" />
-            <Button
-                x:Name="AddCalendarFab"
-                Width="48"
-                Height="48"
-                Content="Cal"
-                FontSize="12"
-                FontWeight="SemiBold"
-                Padding="0"
-                CornerRadius="14"
-                Click="AddCalendarButton_Click"
-                ToolTipService.ToolTip="Add Calendar Widget" />
-            <Button
-                x:Name="AddMusicFab"
-                Width="48"
-                Height="48"
-                Content="♪"
-                FontSize="18"
-                FontWeight="SemiBold"
-                Padding="0"
-                CornerRadius="14"
-                Click="AddMusicButton_Click"
-                ToolTipService.ToolTip="Add Music Widget (Ctrl+Shift+M)" />
-            <Button
-                x:Name="AddCreativeFab"
-                Width="48"
-                Height="48"
-                Content="CW"
+            Spacing="8">
+            <TextBlock
+                x:Name="HostStatusLabel"
                 FontSize="11"
-                FontWeight="SemiBold"
-                Padding="0"
-                CornerRadius="14"
-                Click="AddCreativeButton_Click"
-                ToolTipService.ToolTip="Add Creative Workspace (Ctrl+Shift+E)" />
-            <Button
-                x:Name="AddAiFab"
-                Width="48"
-                Height="48"
-                Content="AI"
-                FontSize="12"
-                FontWeight="SemiBold"
-                Padding="0"
-                CornerRadius="14"
-                Click="AddAiButton_Click"
-                ToolTipService.ToolTip="Add AI Workspace (Ctrl+Shift+A)" />
-            <Button
-                x:Name="ThemeFab"
-                Width="48"
-                Height="48"
-                Content="Aa"
-                FontSize="18"
-                FontWeight="SemiBold"
-                Padding="0"
-                CornerRadius="14"
-                Click="ThemeButton_Click"
-                ToolTipService.ToolTip="Theme — colors &amp; design" />
-            <Button
-                x:Name="ArrangeFab"
-                Width="48"
-                Height="48"
-                Content="Grid"
-                FontSize="12"
-                FontWeight="SemiBold"
-                Padding="0"
-                CornerRadius="14"
-                Click="ArrangeButton_Click"
-                ToolTipService.ToolTip="Arrange widgets &amp; blocks evenly" />
+                Opacity="0.9"
+                TextWrapping="WrapWholeWords"
+                MaxWidth="360"
+                Visibility="Collapsed" />
+            <StackPanel Orientation="Horizontal" Spacing="10">
+                <Button
+                    x:Name="AddWidgetFab"
+                    Width="48"
+                    Height="48"
+                    Content="+"
+                    FontSize="28"
+                    FontWeight="SemiBold"
+                    Padding="0"
+                    CornerRadius="14"
+                    Click="AddWidgetButton_Click"
+                    ToolTipService.ToolTip="Add Widget (Ctrl+Shift+N)" />
+                <Button
+                    x:Name="AddBlockFab"
+                    Width="48"
+                    Height="48"
+                    Content="Blk"
+                    FontSize="12"
+                    FontWeight="SemiBold"
+                    Padding="0"
+                    CornerRadius="14"
+                    Click="AddBlockButton_Click"
+                    ToolTipService.ToolTip="Add Block (Ctrl+Shift+B)" />
+                <Button
+                    x:Name="ThemeFab"
+                    Width="48"
+                    Height="48"
+                    Content="Aa"
+                    FontSize="18"
+                    FontWeight="SemiBold"
+                    Padding="0"
+                    CornerRadius="14"
+                    Click="ThemeButton_Click"
+                    ToolTipService.ToolTip="Theme (Ctrl+Shift+T)" />
+                <Button
+                    x:Name="ArrangeFab"
+                    Width="48"
+                    Height="48"
+                    Content="Grid"
+                    FontSize="12"
+                    FontWeight="SemiBold"
+                    Padding="0"
+                    CornerRadius="14"
+                    Click="ArrangeButton_Click"
+                    ToolTipService.ToolTip="Arrange widgets &amp; blocks evenly" />
+            </StackPanel>
         </StackPanel>
 
         <!-- Developer / recovery chrome — hidden in normal overlay UX. -->
@@ -183,41 +152,17 @@
                     Padding="12,4"
                     ToolTipService.ToolTip="Arrange widgets &amp; blocks evenly" />
                 <Button
+                    x:Name="AddWidgetButton"
+                    Content="Add Widget"
+                    Click="AddWidgetButton_Click"
+                    Padding="12,4"
+                    ToolTipService.ToolTip="Add any widget" />
+                <Button
                     x:Name="AddBlockButton"
                     Content="Add Block"
                     Click="AddBlockButton_Click"
                     Padding="12,4"
                     ToolTipService.ToolTip="Create a Block" />
-                <Button
-                    x:Name="AddWebButton"
-                    Content="Add Web"
-                    Click="AddWebButton_Click"
-                    Padding="12,4"
-                    ToolTipService.ToolTip="Create a Web Widget" />
-                <Button
-                    x:Name="AddCalendarButton"
-                    Content="Add Cal"
-                    Click="AddCalendarButton_Click"
-                    Padding="12,4"
-                    ToolTipService.ToolTip="Create a Calendar Widget" />
-                <Button
-                    x:Name="AddMusicButton"
-                    Content="Add Music"
-                    Click="AddMusicButton_Click"
-                    Padding="12,4"
-                    ToolTipService.ToolTip="Create a Music Widget" />
-                <Button
-                    x:Name="AddCreativeButton"
-                    Content="Add Creative"
-                    Click="AddCreativeButton_Click"
-                    Padding="12,4"
-                    ToolTipService.ToolTip="Create a Creative Workspace" />
-                <Button
-                    x:Name="AddAiButton"
-                    Content="Add AI"
-                    Click="AddAiButton_Click"
-                    Padding="12,4"
-                    ToolTipService.ToolTip="Create an AI Workspace" />
                 <Button
                     x:Name="ExitButton"
                     Content="Exit"

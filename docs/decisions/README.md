@@ -165,3 +165,9 @@ See [creative-workspace.md](../architecture/creative-workspace.md) and [creative
 **Why:** Make Secret Base the safe command tower between Creative Projects and the AI tools the user already uses.
 
 See [ai-workspace.md](../architecture/ai-workspace.md).
+
+## 2026-08-14 — v0.1 Integration & Polish
+
+**Decision:** Stop stacking new product surfaces; integrate and polish for a daily-usable **v0.1**. Unify Add Widget catalog (+ / Ctrl+Shift+N), WidgetFrame remove (×), WebView2 dispose on unload, host status without debug chrome, Creative Workspace as Projects hub, README + shortcuts + v0.2 roadmap docs. No new external APIs; Overlay Platform code unchanged unless required for UX.
+
+**Why:** Features already exist — users need a coherent desk, not more widgets.
