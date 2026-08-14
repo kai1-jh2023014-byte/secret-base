@@ -3,7 +3,8 @@ namespace SecretBase.Core.Creative;
 /// <summary>Persisted projects document (AppData creative/projects.json).</summary>
 public sealed class CreativeProjectDocument
 {
-    public const int CurrentSchemaVersion = 1;
+    /// <summary>v1 = Project CRUD; v2 = Dashboard (notes, quick actions, recent).</summary>
+    public const int CurrentSchemaVersion = 2;
 
     public int SchemaVersion { get; set; } = CurrentSchemaVersion;
 

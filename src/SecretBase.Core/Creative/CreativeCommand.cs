@@ -15,7 +15,9 @@ public enum CreativeCommandKind
     OpenCreativeProjectRoot = 12,
     OpenCreativeProjectResource = 13,
     ToggleCreativeProjectFavorite = 14,
-    DeleteCreativeProjectRegistration = 15
+    DeleteCreativeProjectRegistration = 15,
+    SaveCreativeProjectNotes = 16,
+    ToggleCreativeProjectResourceQuickAction = 17
 }
 
 /// <summary>
@@ -33,6 +35,8 @@ public sealed class CreativeCommand
     public string? ProjectId { get; init; }
 
     public string? ResourceId { get; init; }
+
+    public string? Notes { get; init; }
 
     public static CreativeCommand SearchItems(string? query) =>
         new() { Kind = CreativeCommandKind.SearchItems, Query = query };
@@ -72,4 +76,20 @@ public sealed class CreativeCommand
     /// <summary>Removes Secret Base registration only — never deletes OS files.</summary>
     public static CreativeCommand DeleteCreativeProjectRegistration(string projectId) =>
         new() { Kind = CreativeCommandKind.DeleteCreativeProjectRegistration, ProjectId = projectId };
+
+    public static CreativeCommand SaveCreativeProjectNotes(string projectId, string? notes) =>
+        new()
+        {
+            Kind = CreativeCommandKind.SaveCreativeProjectNotes,
+            ProjectId = projectId,
+            Notes = notes
+        };
+
+    public static CreativeCommand ToggleCreativeProjectResourceQuickAction(string projectId, string resourceId) =>
+        new()
+        {
+            Kind = CreativeCommandKind.ToggleCreativeProjectResourceQuickAction,
+            ProjectId = projectId,
+            ResourceId = resourceId
+        };
 }

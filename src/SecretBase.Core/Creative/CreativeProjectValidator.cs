@@ -7,6 +7,7 @@ public static class CreativeProjectValidator
 {
     public const int MaxNameLength = 120;
     public const int MaxDescriptionLength = 1000;
+    public const int MaxNotesLength = 4000;
 
     public static bool TryValidateName(string? name, out string normalized, out string error)
     {
@@ -96,6 +97,26 @@ public static class CreativeProjectValidator
             Kind = kind,
             Target = path
         };
+        return true;
+    }
+
+    public static bool TryNormalizeNotes(string? notes, out string? normalized, out string? error)
+    {
+        normalized = null;
+        error = null;
+        if (string.IsNullOrEmpty(notes))
+        {
+            return true;
+        }
+
+        // Preserve intentional whitespace; only reject oversized payloads.
+        if (notes.Length > MaxNotesLength)
+        {
+            error = "Notes are too long.";
+            return false;
+        }
+
+        normalized = notes;
         return true;
     }
 }

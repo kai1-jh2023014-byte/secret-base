@@ -553,7 +553,7 @@ public class LayoutPersistenceTests
     }
 
     [Fact]
-    public void CreativeProjectStore_AtomicRoundTrip_SchemaVersion_AndMissingFile()
+    public void CreativeProjectStore_AtomicRoundTrip_SchemaMigration_AndMissingFile()
     {
         var dir = CreateTempDir();
         var path = Path.Combine(dir, "projects.json");
@@ -580,13 +580,42 @@ public class LayoutPersistenceTests
                 "https://www.youtube.com/watch?v=1",
                 out _,
                 out _));
+            Assert.True(service.TrySaveNotes(project.Id, "サビ", out _, out _));
+            var resourceId = service.FindById(project.Id)!.Resources[0].Id;
+            Assert.True(service.TryToggleResourceQuickAction(project.Id, resourceId, out _, out _));
+            Assert.True(service.TryRecordResourceOpened(
+                project.Id, resourceId, DateTimeOffset.UtcNow, out _, out _, out _));
 
             var reloaded = store.LoadOrCreate();
-            Assert.Equal(1, reloaded.SchemaVersion);
+            Assert.Equal(2, reloaded.SchemaVersion);
             Assert.Single(reloaded.Projects);
             Assert.Equal("My Song", reloaded.Projects[0].Name);
-            Assert.Single(reloaded.Projects[0].Resources);
+            Assert.Equal("サビ", reloaded.Projects[0].Notes);
+            Assert.True(reloaded.Projects[0].Resources[0].IsQuickAction);
+            Assert.Single(reloaded.Projects[0].RecentItems);
             Assert.False(File.Exists(path + ".tmp"));
+
+            // v1 document migrates to v2 on load.
+            File.WriteAllText(path, """
+                {
+                  "schemaVersion": 1,
+                  "projects": [
+                    {
+                      "id": "legacy1",
+                      "name": "Legacy Project",
+                      "projectType": "other",
+                      "rootFolder": "D:\\Legacy",
+                      "resources": []
+                    }
+                  ]
+                }
+                """);
+            var migrated = new JsonCreativeProjectStore(path).LoadOrCreate();
+            Assert.Equal(CreativeProjectDocument.CurrentSchemaVersion, migrated.SchemaVersion);
+            Assert.Single(migrated.Projects);
+            Assert.Equal("Legacy Project", migrated.Projects[0].Name);
+            Assert.NotNull(migrated.Projects[0].RecentItems);
+            Assert.Null(migrated.Projects[0].Notes);
 
             // Missing / corrupt file → empty document, no throw.
             File.WriteAllText(path, "{ not-json");

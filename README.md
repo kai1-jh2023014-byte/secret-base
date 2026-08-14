@@ -2,7 +2,7 @@
 
 > Make your PC feel like *your* secret base — a Personal Desktop Environment for Windows.
 
-**v0.1 milestone status:** foundation + Clock + Text + Blocks + Theme + Arrange + Desktop Overlay + Web + Calendar + Music + Creative Workspace + **Project Workspace** (**widgets-only UX**; overlay click-through verified).  
+**v0.1 milestone status:** foundation + Clock + Text + Blocks + Theme + Arrange + Desktop Overlay + Web + Calendar + Music + Creative Workspace + Project Workspace + **Project Dashboard** (**widgets-only UX**; overlay click-through verified).  
 Wallpaper shows through the host; widgets float on the desktop; Exit via **Ctrl+Shift+Q** (debug chrome: **Ctrl+Shift+D**).
 
 ## Principles

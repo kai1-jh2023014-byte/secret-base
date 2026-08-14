@@ -6,6 +6,7 @@ namespace SecretBase.Infrastructure.Persistence;
 
 /// <summary>
 /// Persists Creative Projects under AppData/creative/projects.json (atomic write).
+/// Migrates schemaVersion 1 → 2 (Dashboard fields) on load.
 /// </summary>
 public sealed class JsonCreativeProjectStore : ICreativeProjectStore
 {
@@ -32,7 +33,7 @@ public sealed class JsonCreativeProjectStore : ICreativeProjectStore
         {
             if (!File.Exists(_path))
             {
-                var created = new CreativeProjectDocument();
+                var created = CreativeProjectDocumentMigrator.MigrateToCurrent(new CreativeProjectDocument());
                 SaveUnlocked(created);
                 return created;
             }
@@ -42,15 +43,13 @@ public sealed class JsonCreativeProjectStore : ICreativeProjectStore
                 var json = File.ReadAllText(_path);
                 var doc = JsonSerializer.Deserialize<CreativeProjectDocument>(json, _options)
                           ?? new CreativeProjectDocument();
-                if (doc.SchemaVersion < 1)
-                {
-                    doc.SchemaVersion = CreativeProjectDocument.CurrentSchemaVersion;
-                }
+                doc = CreativeProjectDocumentMigrator.MigrateToCurrent(doc);
 
                 doc.Projects ??= [];
                 foreach (var project in doc.Projects)
                 {
                     project.Resources ??= [];
+                    project.RecentItems ??= [];
                 }
 
                 // Drop resources with invalid targets; keep projects even if root missing on disk.
@@ -61,6 +60,12 @@ public sealed class JsonCreativeProjectStore : ICreativeProjectStore
                                     && !string.IsNullOrWhiteSpace(r.Name)
                                     && CreativeProjectValidator.TryNormalizeResource(
                                         r.Kind, r.Name, r.Target, out _, out _))
+                        .ToList();
+
+                    project.RecentItems = project.RecentItems
+                        .Where(r => r is not null
+                                    && !string.IsNullOrWhiteSpace(r.Key)
+                                    && !string.IsNullOrWhiteSpace(r.Target))
                         .ToList();
 
                     if (!string.IsNullOrWhiteSpace(project.RootFolder)
@@ -75,6 +80,15 @@ public sealed class JsonCreativeProjectStore : ICreativeProjectStore
                             project.RootFolder, out var rooted, out _);
                         project.RootFolder = rooted;
                     }
+
+                    if (!CreativeProjectValidator.TryNormalizeNotes(project.Notes, out var notes, out _))
+                    {
+                        project.Notes = null;
+                    }
+                    else
+                    {
+                        project.Notes = notes;
+                    }
                 }
 
                 doc.Projects = doc.Projects
@@ -85,11 +99,11 @@ public sealed class JsonCreativeProjectStore : ICreativeProjectStore
             }
             catch (JsonException)
             {
-                return new CreativeProjectDocument();
+                return CreativeProjectDocumentMigrator.MigrateToCurrent(new CreativeProjectDocument());
             }
             catch (IOException)
             {
-                return new CreativeProjectDocument();
+                return CreativeProjectDocumentMigrator.MigrateToCurrent(new CreativeProjectDocument());
             }
         }
     }
@@ -105,11 +119,13 @@ public sealed class JsonCreativeProjectStore : ICreativeProjectStore
 
     private void SaveUnlocked(CreativeProjectDocument document)
     {
+        document = CreativeProjectDocumentMigrator.MigrateToCurrent(document);
         document.SchemaVersion = CreativeProjectDocument.CurrentSchemaVersion;
         document.Projects ??= [];
         foreach (var project in document.Projects)
         {
             project.Resources ??= [];
+            project.RecentItems ??= [];
         }
 
         var dir = Path.GetDirectoryName(_path);

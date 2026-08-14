@@ -61,6 +61,19 @@ public class CreativeProjectValidatorTests
             out _,
             out _));
     }
+
+    [Fact]
+    public void TryNormalizeNotes_BoundsLength()
+    {
+        Assert.True(CreativeProjectValidator.TryNormalizeNotes(null, out var empty, out _));
+        Assert.Null(empty);
+        Assert.True(CreativeProjectValidator.TryNormalizeNotes("サビをもう少し盛り上げる", out var notes, out _));
+        Assert.Equal("サビをもう少し盛り上げる", notes);
+        Assert.False(CreativeProjectValidator.TryNormalizeNotes(
+            new string('x', CreativeProjectValidator.MaxNotesLength + 1),
+            out _,
+            out _));
+    }
 }
 
 public class CreativeProjectServiceTests
@@ -120,6 +133,7 @@ public class CreativeProjectServiceTests
             .Select(m => m.Name)
             .ToHashSet(StringComparer.Ordinal);
         Assert.Contains(nameof(CreativeProjectService.TryDeleteRegistration), names);
+        Assert.Contains(nameof(CreativeProjectService.TryRemoveResource), names);
         Assert.DoesNotContain("TryDeleteFile", names);
         Assert.DoesNotContain("TryDeleteFolder", names);
         Assert.DoesNotContain("TryMove", names);
@@ -127,6 +141,48 @@ public class CreativeProjectServiceTests
         Assert.DoesNotContain("TryExecute", names);
         Assert.DoesNotContain("TryRunProcess", names);
         Assert.DoesNotContain("TryRunPowerShell", names);
+    }
+
+    [Fact]
+    public void Dashboard_Notes_QuickAction_AndRecentItems()
+    {
+        var service = new CreativeProjectService(new MemoryCreativeProjectStore());
+        Assert.True(service.TryCreate(
+            "My First Song",
+            "Original",
+            CreativeProjectType.Music,
+            @"D:\Music\MyFirstSong",
+            out var project,
+            out _));
+        Assert.True(service.TryAddResource(
+            project!.Id,
+            CreativeProjectResourceKind.File,
+            "Lyrics",
+            @"D:\Music\MyFirstSong\lyrics.txt",
+            out _,
+            out _));
+        var resourceId = service.FindById(project.Id)!.Resources[0].Id;
+
+        Assert.True(service.TrySaveNotes(project.Id, "サビをもう少し盛り上げる", out var noted, out _));
+        Assert.Equal("サビをもう少し盛り上げる", noted!.Notes);
+
+        Assert.True(service.TryToggleResourceQuickAction(project.Id, resourceId, out var pinned, out _));
+        Assert.True(pinned!.Resources[0].IsQuickAction);
+        Assert.Single(service.GetQuickActions(project.Id));
+
+        Assert.True(service.TryRecordResourceOpened(
+            project.Id, resourceId, DateTimeOffset.UtcNow, out var opened, out _, out _));
+        Assert.Single(opened!.RecentItems);
+        Assert.Equal("Lyrics", opened.RecentItems[0].Name);
+
+        Assert.True(service.TryRecordRootOpened(project.Id, DateTimeOffset.UtcNow, out var withRoot, out _));
+        Assert.Equal(2, withRoot!.RecentItems.Count);
+        Assert.True(withRoot.RecentItems[0].IsRoot);
+
+        // Remove resource registration does not expose FS delete; also clears recent key.
+        Assert.True(service.TryRemoveResource(project.Id, resourceId, out var afterRemove, out _));
+        Assert.Empty(afterRemove!.Resources);
+        Assert.DoesNotContain(afterRemove.RecentItems, r => r.Key == resourceId);
     }
 
     [Fact]
@@ -152,43 +208,63 @@ public class CreativeProjectServiceTests
             @"C:\src\secret-base\docs",
             out _,
             out _));
+        Assert.True(service.TrySaveNotes(p.Id, "ship dashboard", out _, out _));
 
         var reloaded = new CreativeProjectService(store);
         Assert.Single(reloaded.Projects);
         Assert.Equal("Secret Base", reloaded.Projects[0].Name);
         Assert.Equal(CreativeProjectType.Programming, reloaded.Projects[0].ProjectType);
         Assert.Single(reloaded.Projects[0].Resources);
+        Assert.Equal("ship dashboard", reloaded.Projects[0].Notes);
+        Assert.Equal(CreativeProjectDocument.CurrentSchemaVersion, store.LoadOrCreate().SchemaVersion);
     }
 
     [Fact]
-    public void Document_Json_IncludesSchemaVersion()
+    public void Document_Json_IncludesSchemaVersion_AndMigratesV1ToV2()
     {
         var doc = new CreativeProjectDocument
         {
+            SchemaVersion = CreativeProjectDocument.CurrentSchemaVersion,
             Projects =
             [
                 new CreativeProject
                 {
                     Name = "Clip",
                     ProjectType = CreativeProjectType.Video,
-                    RootFolder = @"D:\Video\Clip"
+                    RootFolder = @"D:\Video\Clip",
+                    Notes = "cut tighter"
                 }
             ]
         };
         var options = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
         var json = JsonSerializer.Serialize(doc, options);
-        Assert.Contains("\"schemaVersion\":1", json, StringComparison.Ordinal);
-        var restored = JsonSerializer.Deserialize<CreativeProjectDocument>(json, options);
-        Assert.NotNull(restored);
-        Assert.Equal(1, restored!.SchemaVersion);
-        Assert.Equal("Clip", restored.Projects[0].Name);
+        Assert.Contains("\"schemaVersion\":2", json, StringComparison.Ordinal);
+        Assert.Contains("\"notes\":\"cut tighter\"", json, StringComparison.Ordinal);
+
+        var v1 = new CreativeProjectDocument
+        {
+            SchemaVersion = 1,
+            Projects =
+            [
+                new CreativeProject
+                {
+                    Name = "Legacy",
+                    ProjectType = CreativeProjectType.Other,
+                    Resources = [new CreativeProjectResource { Name = "a", Kind = CreativeProjectResourceKind.File, Target = @"D:\a.txt" }]
+                }
+            ]
+        };
+        var migrated = CreativeProjectDocumentMigrator.MigrateToCurrent(v1);
+        Assert.Equal(2, migrated.SchemaVersion);
+        Assert.NotNull(migrated.Projects[0].RecentItems);
+        Assert.False(migrated.Projects[0].Resources[0].IsQuickAction);
     }
 }
 
 public class CreativeProjectCommandTests
 {
     [Fact]
-    public void OpenProject_Resource_Favorite_AndDeleteRegistration_Commands()
+    public void Dashboard_Open_Notes_QuickAction_Recent_AndDeleteRegistration_Commands()
     {
         var workspace = new CreativeWorkspaceService(new MemoryCreativeWorkspaceStore());
         var projects = new CreativeProjectService(new MemoryCreativeProjectStore());
@@ -214,15 +290,31 @@ public class CreativeProjectCommandTests
         Assert.True(search.Succeeded);
         Assert.Single(search.Projects);
 
+        // Open project = Dashboard entry (no auto-launch).
         var open = commands.Execute(CreativeCommand.OpenCreativeProject(project.Id));
         Assert.True(open.Succeeded);
-        Assert.True(open.ShouldLaunch);
-        Assert.Equal(@"D:\Art\Illustration", open.LaunchTarget);
+        Assert.False(open.ShouldLaunch);
+        Assert.NotNull(open.Project!.LastOpened);
+
+        var openRoot = commands.Execute(CreativeCommand.OpenCreativeProjectRoot(project.Id));
+        Assert.True(openRoot.Succeeded);
+        Assert.True(openRoot.ShouldLaunch);
+        Assert.Equal(@"D:\Art\Illustration", openRoot.LaunchTarget);
+        Assert.Contains(openRoot.Project!.RecentItems, r => r.IsRoot);
 
         var openLink = commands.Execute(CreativeCommand.OpenCreativeProjectResource(project.Id, resourceId));
         Assert.True(openLink.Succeeded);
         Assert.True(openLink.LaunchIsExternalLink);
         Assert.StartsWith("https://", openLink.LaunchTarget!, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(openLink.Project!.RecentItems, r => r.Key == resourceId);
+
+        var notes = commands.Execute(CreativeCommand.SaveCreativeProjectNotes(project.Id, "tighten composition"));
+        Assert.True(notes.Succeeded);
+        Assert.Equal("tighten composition", notes.Project!.Notes);
+
+        var quick = commands.Execute(CreativeCommand.ToggleCreativeProjectResourceQuickAction(project.Id, resourceId));
+        Assert.True(quick.Succeeded);
+        Assert.True(quick.Project!.Resources.Single(r => r.Id == resourceId).IsQuickAction);
 
         var fav = commands.Execute(CreativeCommand.ToggleCreativeProjectFavorite(project.Id));
         Assert.True(fav.Succeeded);

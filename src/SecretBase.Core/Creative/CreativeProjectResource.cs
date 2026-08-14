@@ -14,4 +14,7 @@ public sealed class CreativeProjectResource
 
     /// <summary>Absolute path (File/Folder) or http(s) URL (ExternalLink).</summary>
     public string Target { get; set; } = string.Empty;
+
+    /// <summary>When true, shown in Dashboard Quick Actions (user-explicit).</summary>
+    public bool IsQuickAction { get; set; }
 }

@@ -9,41 +9,33 @@ Natural language (future)
         ↓
 Secret Base AI (future)
         ↓
-CreativeCommand          ← registered ItemId / ProjectId / ResourceId / query only
+CreativeCommand          ← registered ItemId / ProjectId / ResourceId / query / notes only
         ↓
-CreativeCommandService   ← validate; mark opened; no OS launch here
+CreativeCommandService   ← validate; mark opened / recent; no OS launch here
         ↓
 CreativeWorkspaceService / CreativeProjectService
         ↓
 Host ITargetLaunchService or system browser (only when ShouldLaunch)
 ```
 
-AI must never:
-
-- Pass arbitrary filesystem paths to open/delete
-- Run PowerShell / cmd / free-form Process arguments
-- Elevate
-- Call Win32 directly
-- Delete/move/rename OS files (even via “Delete Project” — that is registration-only)
+AI must never pass arbitrary filesystem paths, run shell, elevate, or delete OS files.
 
 ## Command kinds
 
 | Kind | Payload | Effect |
 |------|---------|--------|
 | `SearchItems` | `Query` | Search registered file/folder items |
-| `OpenItem` | `ItemId` | Mark Recent + request launch |
-| `OpenFolder` | `ItemId` | Same; item must be Folder/legacy Project |
-| `OpenProject` | `ItemId` | Legacy: item must be `CreativeItemType.Project` |
+| `OpenItem` / `OpenFolder` / `OpenProject` | `ItemId` | Workspace item launch (legacy Project = folder mark) |
 | `ToggleFavorite` | `ItemId` | Flip item favorite |
-| `SearchProjects` | `Query` | Search `CreativeProject` registrations |
-| `OpenCreativeProject` | `ProjectId` | Mark opened; launch root if present |
-| `OpenCreativeProjectRoot` | `ProjectId` | Launch root folder (required) |
-| `OpenCreativeProjectResource` | `ProjectId` + `ResourceId` | Launch path or https link |
+| `SearchProjects` | `Query` | Search `CreativeProject` |
+| `OpenCreativeProject` | `ProjectId` | Dashboard entry — mark opened, **no auto-launch** |
+| `OpenCreativeProjectRoot` | `ProjectId` | Launch root + record Recent |
+| `OpenCreativeProjectResource` | `ProjectId` + `ResourceId` | Launch path/https + record Recent |
 | `ToggleCreativeProjectFavorite` | `ProjectId` | Flip project favorite |
-| `DeleteCreativeProjectRegistration` | `ProjectId` | Remove Secret Base registration only |
-
-`CreativeCommandResult.ShouldLaunch` + `LaunchTarget` (+ `LaunchIsExternalLink`) tell the host what to open.
+| `DeleteCreativeProjectRegistration` | `ProjectId` | Remove registration only |
+| `SaveCreativeProjectNotes` | `ProjectId` + `Notes` | Persist plain-text notes |
+| `ToggleCreativeProjectResourceQuickAction` | `ProjectId` + `ResourceId` | Pin/unpin Quick Action |
 
 ## Not in scope
 
-Delete / Move / Rename filesystem targets / Batch / “Run this exe with args” / volume / process kill / embedded Project WebView / AI implementation.
+FS delete/move/rename, batch, “run exe with args”, process kill, AI implementation, Windows Search.
