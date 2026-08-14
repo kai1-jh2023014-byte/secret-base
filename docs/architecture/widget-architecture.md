@@ -43,8 +43,9 @@ Widgets are the building blocks of the Secret Base Desktop. Clock was the first
 
 ## Persistence
 
-- First-run seeds Clock + Text only (Web/Calendar/Music/Creative/AI via FABs)
+- First-run seeds Clock + Text only (more via **Add Widget** catalog / shortcuts)
 - `schemaVersion` **2** (Blocks); widget types additive; Creative items in `creative/workspace.json`; Projects in `creative/projects.json`
+- WidgetFrame: move / resize / **remove (×)**; WebView2 disposed on unload/re-render
 
 ## Security
 

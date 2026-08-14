@@ -1,6 +1,6 @@
 # Secret Base Architecture Overview
 
-Secret Base is an **overlay-style Personal Desktop Environment** for Windows.
+Secret Base is an **overlay-style Personal Creative Desktop Environment** for Windows.
 
 Highest principle:
 
@@ -11,40 +11,47 @@ Highest principle:
 | Project | Responsibility |
 |---------|----------------|
 | `SecretBase.App` | WinUI shell, Desktop host UI, composition root |
-| `SecretBase.Core` | Domain models (Desktop/Room/Security). No Windows API calls |
-| `SecretBase.Infrastructure` | Logging, AppData paths, JSON layout/theme persistence |
-| `SecretBase.Platform.Abstractions` | OS-facing contracts (`ICompatibilityService`, `ISafeExitService`, `IDesktopOverlayService`) |
-| `SecretBase.Platform.Windows` | Windows adapter implementations only (AppWindow overlay, Safe Exit, compatibility) |
-| `SecretBase.Widgets` | Built-in widget views (Clock, Text, Web, Calendar) + theme painting helpers |
-
-## Why this split
-
-- Windows Update / API churn is isolated in `Platform.Windows`.
-- Core stays testable without UI or OS hooks.
-- Future Plugin / AI code cannot "reach through" Core into Win32 by accident.
+| `SecretBase.Core` | Domain models, Commands, validation. No Windows API calls |
+| `SecretBase.Infrastructure` | Logging, AppData paths, JSON persistence |
+| `SecretBase.Platform.Abstractions` | OS-facing contracts |
+| `SecretBase.Platform.Windows` | Overlay HWND, Safe Exit, launch, Cursor discovery |
+| `SecretBase.Widgets` | Built-in widget views + theme painting |
 
 ## Process model (v0.1)
 
 - Unpackaged WinUI 3 app (`WindowsPackageType=None`).
-- Closing the window / Exit button ends the process only.
+- Closing / Safe Exit ends the process only after layout save.
 - No Explorer hooks, no Taskbar replacement, no shell registry mutation.
 
-## Next milestones
+## v0.1 surface
 
-- ✅ Clock Widget (reference implementation)
-- ✅ Text Widget
-- ✅ Desktop Overlay (chromeless work-area host; widgets-only UX)
-- ✅ Widget-shaped input (`SetWindowRgn`) + DWM edge suppress (see overlay-input-and-edges.md)
-- ✅ Block rooms (layout schema v2; launch via Platform `ITargetLaunchService`)
-- ✅ Theme editor (presets + colors for Clock / Text / Blocks)
-- ✅ Desktop arrange (**Grid** FAB — even widget/block placement)
-- ✅ Web Widget (WebView2; Untrusted; no host bridge)
-- ✅ Calendar Widget (Today agenda + `ICalendarProvider` / Google ICS)
-- ✅ Calendar Hub (capabilities, Mock, Google API OAuth read design, agenda cache)
-- ✅ Music Widget (native search/playback UI + MusicCommand boundary; Demo catalog)
-- ✅ Creative Workspace (favorites/recent/open registered paths; CreativeCommand boundary)
-- ✅ Project Workspace (CreativeProject containers + projects.json; open-only; registration delete)
-- ✅ Project Dashboard (Quick Actions / Recent / Notes; schemaVersion 2 migration)
-- ✅ AI Workspace (Cursor + official AI websites; Project → Open in Cursor)
-- App Launcher polish → Room switching
+- ✅ Desktop Overlay (chromeless work-area; widgets-only click-through)
+- ✅ Widgets: Clock, Text, Web, Calendar, Music, Creative (Projects + Dashboard), AI
+- ✅ Blocks (launch tiles)
+- ✅ Theme + Arrange
+- ✅ Projects → Dashboard → Cursor / ChatGPT / resources / notes
+- ✅ Persistence under `%LocalAppData%\SecretBase`
+- ⏭ See [v0.2 roadmap](../guides/v0.2-roadmap.md)
 
+## Security spine
+
+```
+UI / future AI
+    ↓
+Command (CreativeCommand / AiCommand / MusicCommand …)
+    ↓
+Service (validated ids / queries only)
+    ↓
+Platform (ITargetLaunchService / ICursorLaunchService / browser)
+```
+
+Web Widget: WebView2 with **no Host Bridge**. Dangerous URL schemes rejected.
+
+## Related docs
+
+- [Widget architecture](widget-architecture.md)
+- [Desktop overlay](desktop-overlay.md)
+- [Security boundaries](security-boundaries.md)
+- [Creative Workspace](creative-workspace.md)
+- [AI Workspace](ai-workspace.md)
+- [Keyboard shortcuts](../guides/keyboard-shortcuts.md)

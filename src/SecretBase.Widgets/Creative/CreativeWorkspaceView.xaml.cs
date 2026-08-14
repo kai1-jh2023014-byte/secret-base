@@ -174,7 +174,7 @@ public sealed partial class CreativeWorkspaceView : UserControl
             return;
         }
 
-        HeaderText.Text = "Creative Workspace";
+        HeaderText.Text = "Projects";
 
         if (searching)
         {
@@ -210,7 +210,8 @@ public sealed partial class CreativeWorkspaceView : UserControl
         ContentList.Children.Add(CreateSectionHeader("★ Projects"));
         if (projects.Count == 0)
         {
-            ContentList.Children.Add(CreateMuted("Create a Project to gather files, folders, and links."));
+            ContentList.Children.Add(CreateMuted("No projects yet."));
+            ContentList.Children.Add(CreateMuted("Create your first creative project — files, folders, links, and AI tools in one place."));
         }
         else
         {
@@ -263,7 +264,8 @@ public sealed partial class CreativeWorkspaceView : UserControl
         }
         else if (favorites.Count == 0 && recent.Count == 0 && allOrFiltered.Count == 0 && projects.Count == 0)
         {
-            ContentList.Children.Add(CreateMuted("Your desk is empty. Create a Project or add a file."));
+            ContentList.Children.Add(CreateMuted("Your Creative Workspace is ready."));
+            ContentList.Children.Add(CreateMuted("Use + Project to start, or + File/Folder for quick shortcuts."));
         }
     }
 

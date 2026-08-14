@@ -27,7 +27,7 @@ public sealed class DesktopLayout
         {
             RoomId = RoomId.DefaultRoomId,
             SchemaVersion = CurrentSchemaVersion,
-            // First-run seed (no Add Widget UI yet): Clock + Text. Blocks start empty.
+            // First-run seed: Clock + Text. Add more via Add Widget (+).
             Widgets =
             [
                 DefaultWidgetFactory.CreateDefaultClock(),

@@ -1,10 +1,10 @@
 # Creative Workspace
 
-A desk for **Projects** with **Dashboards** (creative activity bases) plus favorite files/folders — **not** a Windows Explorer replacement.
+A desk for **Projects** (hub) with **Dashboards** (work bases) plus favorite files/folders — **not** a Windows Explorer replacement.
 
 ## Purpose
 
-> Open a Project and know what you are making, what to open next, and how to resume.
+> Projects list → Dashboard → tools / AI / notes. The fastest way back to what you are making.
 
 Projects group root folders, files, folders, and https links. The **Project Dashboard** shows Quick Actions, Recent (Secret Base opens only), Resources, and Notes.
 

@@ -75,6 +75,8 @@ public sealed class JsonLayoutStore : ILayoutStore
             layout.SchemaVersion = DesktopLayout.CurrentSchemaVersion;
         }
 
+        // Safety net: never leave a blank overlay with zero widgets after load.
+        // Users can still remove widgets during a session; next launch restores a Clock.
         if (layout.Widgets.Count == 0)
         {
             layout.Widgets.Add(DefaultWidgetFactory.CreateDefaultClock(layout.RoomId));
