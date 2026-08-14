@@ -40,7 +40,8 @@ public partial class App : Application
 
         var pathPicker = new WindowsPathPickService();
         var creativeCommands = new CreativeCommandService(
-            new CreativeWorkspaceService(new JsonCreativeWorkspaceStore()));
+            new CreativeWorkspaceService(new JsonCreativeWorkspaceStore()),
+            new CreativeProjectService(new JsonCreativeProjectStore()));
 
         var pageArgs = new DesktopPageArgs(
             Logger: _logger,

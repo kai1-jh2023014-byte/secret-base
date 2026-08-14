@@ -1,12 +1,12 @@
 # Creative Workspace
 
-A desk for the projects, folders, and files you return to often — **not** a Windows Explorer replacement.
+A desk for **Projects** (creative activity containers) plus favorite files/folders — **not** a Windows Explorer replacement.
 
 ## Purpose
 
 > The fastest way back to what you are making.
 
-Favorites + Recent + Search over **registered** items only. Open with Windows defaults after an explicit click.
+Projects group root folders, files, folders, and https links for one creative activity. Files/Folders registrations remain available alongside Projects.
 
 ## Type
 
@@ -15,6 +15,7 @@ Favorites + Recent + Search over **registered** items only. Open with Windows de
 | `WidgetTypes` | `"creative"` |
 | Widget config | `CreativeWorkspaceWidgetConfiguration` (UI prefs only) |
 | Workspace data | `%LocalAppData%\SecretBase\creative\workspace.json` |
+| Projects data | `%LocalAppData%\SecretBase\creative\projects.json` |
 | View | `CreativeWorkspaceView` |
 
 ## How to add
@@ -26,77 +27,109 @@ Favorites + Recent + Search over **registered** items only. Open with Windows de
 ```
 Creative Workspace UI
         ↓
-CreativeCommandService   ← future AI entry
+CreativeCommandService   ← future AI entry (ids / queries only)
         ↓
-CreativeWorkspaceService ← favorites / recent / search / register
+CreativeWorkspaceService  +  CreativeProjectService
         ↓
-ICreativeWorkspaceStore  ← JSON AppData
+ICreativeWorkspaceStore   +  ICreativeProjectStore  ← JSON AppData
         ↓
-(on Open) ITargetLaunchService  ← existing Block launcher (UseShellExecute)
+(on Open) ITargetLaunchService / system browser  ← host only
 ```
 
 Path pickers: `IPathPickService` → `WindowsPathPickService` (standard FileOpenPicker / FolderPicker).
 
+Legacy note: `CreativeItemType.Project` still means “folder marked as project” in `workspace.json`. Rich containers use `CreativeProject` in `projects.json`.
+
+## Project model (MVP)
+
+```
+CreativeProject
+├── Name / Description / Type (Music, Programming, Video, Design, Writing, Other)
+├── RootFolder (optional absolute path)
+├── Favorite / DateAdded / LastOpened
+└── Resources[]  → File | Folder | ExternalLink
+```
+
+Type is metadata only — it does **not** force a specific app to launch.
+
 ## MVP features
 
-1. Add File / Add Folder (optional “as Project”)
-2. Favorites (★)
-3. Recent (max 10)
-4. Search registered Name / Path / Type only
-5. Open registered item → Windows association / Explorer
-6. Missing path → “見つかりません” (item kept)
+1. Project CRUD: Create / Edit / Delete **registration only** / Open / Favorite
+2. Project Detail: root, files, folders, external links
+3. Add File / Folder / https link to a Project
+4. Projects list in Creative Workspace (+ existing Favorites / Recent / Files & Folders)
+5. Open → Windows association / Explorer / system browser
+6. Missing path → “見つかりません” (registration kept)
 7. Theme + WidgetFrame move/resize
-8. Persistence with `schemaVersion: 1`
+8. Persistence with `schemaVersion: 1` on both JSON documents
 
 ## Explicitly not in MVP
 
-Full Explorer, in-widget folder browse, delete/move/rename, batch ops, FS watcher, whole-PC search, PowerShell, elevation, AI, cloud drive sync, Git.
+Full Explorer, embedded WebView for Project links, delete/move/rename of OS files, batch ops, FS watcher, whole-PC search, PowerShell, elevation, AI, cloud drive sync, Git, type-forced app launches, Overlay changes.
 
 ## Security
 
 ```
-User adds path (picker)
+User creates Project / adds resource (picker or https)
         ↓
-Workspace stores reference
+projects.json stores references only
         ↓
-User clicks registered item
+User clicks Open (project / resource id)
         ↓
-CreativeCommand.OpenItem (id only — never free-form AI paths)
+CreativeCommand (id only — never free-form AI paths)
         ↓
-ITargetLaunchService (documented shell open)
+Host ITargetLaunchService or https browser open
 ```
 
-- No Host Bridge
-- No arbitrary command lines (reuses `BlockTargetValidator`)
-- Commands never delete/move/rename
+- **Delete Project** removes Secret Base registration only — never deletes Windows files/folders
+- No Host Bridge, no arbitrary command lines, no process kill, no registry/taskbar/Explorer hacks
 - Future AI must emit `CreativeCommand` only — see [creative-commands.md](creative-commands.md)
 
-## Persistence fragment
+## Persistence fragments
+
+`creative/workspace.json` — file/folder item shortcuts (unchanged).
+
+`creative/projects.json`:
 
 ```json
 {
   "schemaVersion": 1,
-  "items": [
+  "projects": [
     {
       "id": "...",
-      "name": "Secret Base",
-      "path": "C:\\Users\\…\\secret-base",
-      "itemType": "Project",
+      "name": "My First Song",
+      "description": "My first original song.",
+      "projectType": "music",
+      "rootFolder": "D:\\Music\\MyFirstSong",
       "isFavorite": true,
       "dateAdded": "…",
-      "lastOpened": "…"
+      "lastOpened": "…",
+      "resources": [
+        {
+          "id": "...",
+          "name": "Project File",
+          "kind": "file",
+          "target": "D:\\Music\\MyFirstSong\\MyFirstSong.cwp"
+        },
+        {
+          "id": "...",
+          "name": "YouTube",
+          "kind": "externalLink",
+          "target": "https://www.youtube.com/..."
+        }
+      ]
     }
   ]
 }
 ```
 
-Widget layout JSON only stores type/geometry + small UI flags — **not** the item list.
+Widget layout JSON only stores type/geometry + small UI flags — **not** project lists.
 
 ## Windows manual checklist
 
 1. Overlay click-through / Exit / restore still OK (**unverified on Linux agent**).
 2. Clock / Text / Web / Calendar / Music / Blocks unchanged.
-3. CW → Add File / Folder → appears in list.
-4. ★ favorite / search / open / Recent update.
-5. Delete file outside Secret Base → open shows 見つかりません.
-6. Restart restores workspace.json + widget presence.
+3. CW → **+ Project** → Name / Description / Type / Root → appears under ★ Projects.
+4. Project Detail → Add File / Folder / Link → Open uses defaults / browser.
+5. Remove from Secret Base → registration gone; OS files remain.
+6. Restart restores `projects.json` + `workspace.json` + widget presence.

@@ -43,5 +43,6 @@ Highest principle:
 - ✅ Calendar Hub (capabilities, Mock, Google API OAuth read design, agenda cache)
 - ✅ Music Widget (native search/playback UI + MusicCommand boundary; Demo catalog)
 - ✅ Creative Workspace (favorites/recent/open registered paths; CreativeCommand boundary)
+- ✅ Project Workspace (CreativeProject containers + projects.json; open-only; registration delete)
 - App Launcher polish → Room switching
 

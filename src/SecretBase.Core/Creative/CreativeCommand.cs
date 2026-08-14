@@ -6,8 +6,16 @@ public enum CreativeCommandKind
     SearchItems = 0,
     OpenItem = 1,
     OpenFolder = 2,
+    /// <summary>Legacy: open a CreativeItem marked as Project (folder registration).</summary>
     OpenProject = 3,
-    ToggleFavorite = 4
+    ToggleFavorite = 4,
+
+    SearchProjects = 10,
+    OpenCreativeProject = 11,
+    OpenCreativeProjectRoot = 12,
+    OpenCreativeProjectResource = 13,
+    ToggleCreativeProjectFavorite = 14,
+    DeleteCreativeProjectRegistration = 15
 }
 
 /// <summary>
@@ -21,6 +29,10 @@ public sealed class CreativeCommand
     public string? Query { get; init; }
 
     public string? ItemId { get; init; }
+
+    public string? ProjectId { get; init; }
+
+    public string? ResourceId { get; init; }
 
     public static CreativeCommand SearchItems(string? query) =>
         new() { Kind = CreativeCommandKind.SearchItems, Query = query };
@@ -36,4 +48,28 @@ public sealed class CreativeCommand
 
     public static CreativeCommand ToggleFavorite(string itemId) =>
         new() { Kind = CreativeCommandKind.ToggleFavorite, ItemId = itemId };
+
+    public static CreativeCommand SearchProjects(string? query) =>
+        new() { Kind = CreativeCommandKind.SearchProjects, Query = query };
+
+    public static CreativeCommand OpenCreativeProject(string projectId) =>
+        new() { Kind = CreativeCommandKind.OpenCreativeProject, ProjectId = projectId };
+
+    public static CreativeCommand OpenCreativeProjectRoot(string projectId) =>
+        new() { Kind = CreativeCommandKind.OpenCreativeProjectRoot, ProjectId = projectId };
+
+    public static CreativeCommand OpenCreativeProjectResource(string projectId, string resourceId) =>
+        new()
+        {
+            Kind = CreativeCommandKind.OpenCreativeProjectResource,
+            ProjectId = projectId,
+            ResourceId = resourceId
+        };
+
+    public static CreativeCommand ToggleCreativeProjectFavorite(string projectId) =>
+        new() { Kind = CreativeCommandKind.ToggleCreativeProjectFavorite, ProjectId = projectId };
+
+    /// <summary>Removes Secret Base registration only — never deletes OS files.</summary>
+    public static CreativeCommand DeleteCreativeProjectRegistration(string projectId) =>
+        new() { Kind = CreativeCommandKind.DeleteCreativeProjectRegistration, ProjectId = projectId };
 }

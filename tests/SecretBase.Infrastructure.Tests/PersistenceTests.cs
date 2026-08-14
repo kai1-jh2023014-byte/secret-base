@@ -552,6 +552,57 @@ public class LayoutPersistenceTests
         }
     }
 
+    [Fact]
+    public void CreativeProjectStore_AtomicRoundTrip_SchemaVersion_AndMissingFile()
+    {
+        var dir = CreateTempDir();
+        var path = Path.Combine(dir, "projects.json");
+        try
+        {
+            Assert.False(File.Exists(path));
+            var store = new JsonCreativeProjectStore(path);
+            var created = store.LoadOrCreate();
+            Assert.Equal(CreativeProjectDocument.CurrentSchemaVersion, created.SchemaVersion);
+            Assert.True(File.Exists(path));
+
+            var service = new CreativeProjectService(store);
+            Assert.True(service.TryCreate(
+                "My Song",
+                "demo",
+                CreativeProjectType.Music,
+                @"D:\Music\MySong",
+                out var project,
+                out _));
+            Assert.True(service.TryAddResource(
+                project!.Id,
+                CreativeProjectResourceKind.ExternalLink,
+                "YouTube",
+                "https://www.youtube.com/watch?v=1",
+                out _,
+                out _));
+
+            var reloaded = store.LoadOrCreate();
+            Assert.Equal(1, reloaded.SchemaVersion);
+            Assert.Single(reloaded.Projects);
+            Assert.Equal("My Song", reloaded.Projects[0].Name);
+            Assert.Single(reloaded.Projects[0].Resources);
+            Assert.False(File.Exists(path + ".tmp"));
+
+            // Missing / corrupt file → empty document, no throw.
+            File.WriteAllText(path, "{ not-json");
+            var recovered = new JsonCreativeProjectStore(path).LoadOrCreate();
+            Assert.Empty(recovered.Projects);
+            Assert.Equal(CreativeProjectDocument.CurrentSchemaVersion, recovered.SchemaVersion);
+        }
+        finally
+        {
+            if (Directory.Exists(dir))
+            {
+                Directory.Delete(dir, recursive: true);
+            }
+        }
+    }
+
     private static string CreateTempDir()
     {
         var dir = Path.Combine(Path.GetTempPath(), "secret-base-tests", Guid.NewGuid().ToString("N"));

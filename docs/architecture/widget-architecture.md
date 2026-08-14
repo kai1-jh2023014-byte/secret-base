@@ -44,7 +44,7 @@ Widgets are the building blocks of the Secret Base Desktop. Clock was the first
 ## Persistence
 
 - First-run seeds Clock + Text only (Web/Calendar/Music/Creative via FABs)
-- `schemaVersion` **2** (Blocks); widget types additive; Creative items in separate `creative/workspace.json`
+- `schemaVersion` **2** (Blocks); widget types additive; Creative items in `creative/workspace.json`; Projects in `creative/projects.json`
 
 ## Security
 

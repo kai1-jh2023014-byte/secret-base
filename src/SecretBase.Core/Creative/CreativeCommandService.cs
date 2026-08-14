@@ -1,22 +1,29 @@
 namespace SecretBase.Core.Creative;
 
 /// <summary>
-/// Validates CreativeCommands against the registered workspace only.
+/// Validates CreativeCommands against registered workspace/projects only.
 /// Never accepts free-form paths from AI; never deletes/moves/runs shell.
-/// Host performs actual open via <c>ITargetLaunchService</c> when <see cref="CreativeCommandResult.ShouldLaunch"/>.
+/// Host performs actual open via <c>ITargetLaunchService</c> / browser when
+/// <see cref="CreativeCommandResult.ShouldLaunch"/>.
 /// </summary>
 public sealed class CreativeCommandService
 {
     public const int MaxQueryLength = 200;
 
     private readonly CreativeWorkspaceService _workspace;
+    private readonly CreativeProjectService? _projects;
 
-    public CreativeCommandService(CreativeWorkspaceService workspace)
+    public CreativeCommandService(
+        CreativeWorkspaceService workspace,
+        CreativeProjectService? projects = null)
     {
         _workspace = workspace ?? throw new ArgumentNullException(nameof(workspace));
+        _projects = projects;
     }
 
     public CreativeWorkspaceService Workspace => _workspace;
+
+    public CreativeProjectService? Projects => _projects;
 
     public CreativeCommandResult Execute(CreativeCommand command)
     {
@@ -29,6 +36,12 @@ public sealed class CreativeCommandService
             CreativeCommandKind.OpenFolder => Open(command, requireType: CreativeItemType.Folder),
             CreativeCommandKind.OpenProject => Open(command, requireType: CreativeItemType.Project),
             CreativeCommandKind.ToggleFavorite => ToggleFavorite(command),
+            CreativeCommandKind.SearchProjects => SearchProjects(command),
+            CreativeCommandKind.OpenCreativeProject => OpenCreativeProject(command, openRoot: false),
+            CreativeCommandKind.OpenCreativeProjectRoot => OpenCreativeProject(command, openRoot: true),
+            CreativeCommandKind.OpenCreativeProjectResource => OpenCreativeProjectResource(command),
+            CreativeCommandKind.ToggleCreativeProjectFavorite => ToggleCreativeProjectFavorite(command),
+            CreativeCommandKind.DeleteCreativeProjectRegistration => DeleteCreativeProjectRegistration(command),
             _ => CreativeCommandResult.Fail(command.Kind, "Unknown creative command.")
         };
     }
@@ -80,7 +93,11 @@ public sealed class CreativeCommandService
             return CreativeCommandResult.Fail(command.Kind, error ?? "Could not update Recent.");
         }
 
-        return CreativeCommandResult.Ok(command.Kind, item: updated, shouldLaunch: true);
+        return CreativeCommandResult.Ok(
+            command.Kind,
+            item: updated,
+            shouldLaunch: true,
+            launchTarget: updated!.Path);
     }
 
     private CreativeCommandResult ToggleFavorite(CreativeCommand command)
@@ -96,5 +113,184 @@ public sealed class CreativeCommandService
         }
 
         return CreativeCommandResult.Ok(CreativeCommandKind.ToggleFavorite, item: item);
+    }
+
+    private CreativeCommandResult RequireProjects(CreativeCommandKind kind, out CreativeProjectService projects)
+    {
+        projects = _projects!;
+        if (_projects is null)
+        {
+            return CreativeCommandResult.Fail(kind, "Projects are not available.");
+        }
+
+        return CreativeCommandResult.Ok(kind);
+    }
+
+    private CreativeCommandResult SearchProjects(CreativeCommand command)
+    {
+        var gate = RequireProjects(CreativeCommandKind.SearchProjects, out var projects);
+        if (!gate.Succeeded)
+        {
+            return gate;
+        }
+
+        var query = command.Query?.Trim() ?? string.Empty;
+        if (query.Length > MaxQueryLength)
+        {
+            return CreativeCommandResult.Fail(CreativeCommandKind.SearchProjects, "Search query is too long.");
+        }
+
+        if (query.Contains("://", StringComparison.Ordinal)
+            || query.Contains("..", StringComparison.Ordinal))
+        {
+            return CreativeCommandResult.Fail(CreativeCommandKind.SearchProjects, "Search query is not allowed.");
+        }
+
+        return CreativeCommandResult.Ok(
+            CreativeCommandKind.SearchProjects,
+            projects: projects.Search(query));
+    }
+
+    private CreativeCommandResult OpenCreativeProject(CreativeCommand command, bool openRoot)
+    {
+        var kind = openRoot
+            ? CreativeCommandKind.OpenCreativeProjectRoot
+            : CreativeCommandKind.OpenCreativeProject;
+        var gate = RequireProjects(kind, out var projects);
+        if (!gate.Succeeded)
+        {
+            return gate;
+        }
+
+        if (string.IsNullOrWhiteSpace(command.ProjectId))
+        {
+            return CreativeCommandResult.Fail(kind, "Project id is missing.");
+        }
+
+        var project = projects.FindById(command.ProjectId);
+        if (project is null)
+        {
+            return CreativeCommandResult.Fail(kind, "Project is not registered.");
+        }
+
+        if (!projects.TryMarkOpened(project.Id, DateTimeOffset.UtcNow, out var updated, out var error))
+        {
+            return CreativeCommandResult.Fail(kind, error ?? "Could not update project.");
+        }
+
+        if (!openRoot)
+        {
+            // Open project = open root when present; otherwise succeed without launch (detail UI).
+            if (string.IsNullOrWhiteSpace(updated!.RootFolder))
+            {
+                return CreativeCommandResult.Ok(kind, project: updated, shouldLaunch: false);
+            }
+        }
+        else if (string.IsNullOrWhiteSpace(updated!.RootFolder))
+        {
+            return CreativeCommandResult.Fail(kind, "Project has no root folder.");
+        }
+
+        return CreativeCommandResult.Ok(
+            kind,
+            project: updated,
+            shouldLaunch: true,
+            launchTarget: updated.RootFolder);
+    }
+
+    private CreativeCommandResult OpenCreativeProjectResource(CreativeCommand command)
+    {
+        var gate = RequireProjects(CreativeCommandKind.OpenCreativeProjectResource, out var projects);
+        if (!gate.Succeeded)
+        {
+            return gate;
+        }
+
+        if (string.IsNullOrWhiteSpace(command.ProjectId) || string.IsNullOrWhiteSpace(command.ResourceId))
+        {
+            return CreativeCommandResult.Fail(
+                CreativeCommandKind.OpenCreativeProjectResource,
+                "Project or resource id is missing.");
+        }
+
+        var project = projects.FindById(command.ProjectId);
+        if (project is null)
+        {
+            return CreativeCommandResult.Fail(
+                CreativeCommandKind.OpenCreativeProjectResource,
+                "Project is not registered.");
+        }
+
+        var resource = project.Resources.FirstOrDefault(r =>
+            string.Equals(r.Id, command.ResourceId, StringComparison.Ordinal));
+        if (resource is null)
+        {
+            return CreativeCommandResult.Fail(
+                CreativeCommandKind.OpenCreativeProjectResource,
+                "Resource is not registered.");
+        }
+
+        _ = projects.TryMarkOpened(project.Id, DateTimeOffset.UtcNow, out var updated, out _);
+
+        var isLink = resource.Kind == CreativeProjectResourceKind.ExternalLink;
+        return CreativeCommandResult.Ok(
+            CreativeCommandKind.OpenCreativeProjectResource,
+            project: updated ?? project,
+            resource: resource,
+            shouldLaunch: true,
+            launchTarget: resource.Target,
+            launchIsExternalLink: isLink);
+    }
+
+    private CreativeCommandResult ToggleCreativeProjectFavorite(CreativeCommand command)
+    {
+        var gate = RequireProjects(CreativeCommandKind.ToggleCreativeProjectFavorite, out var projects);
+        if (!gate.Succeeded)
+        {
+            return gate;
+        }
+
+        if (string.IsNullOrWhiteSpace(command.ProjectId))
+        {
+            return CreativeCommandResult.Fail(
+                CreativeCommandKind.ToggleCreativeProjectFavorite,
+                "Project id is missing.");
+        }
+
+        if (!projects.TryToggleFavorite(command.ProjectId!, out var project, out var error))
+        {
+            return CreativeCommandResult.Fail(
+                CreativeCommandKind.ToggleCreativeProjectFavorite,
+                error ?? "Toggle failed.");
+        }
+
+        return CreativeCommandResult.Ok(
+            CreativeCommandKind.ToggleCreativeProjectFavorite,
+            project: project);
+    }
+
+    private CreativeCommandResult DeleteCreativeProjectRegistration(CreativeCommand command)
+    {
+        var gate = RequireProjects(CreativeCommandKind.DeleteCreativeProjectRegistration, out var projects);
+        if (!gate.Succeeded)
+        {
+            return gate;
+        }
+
+        if (string.IsNullOrWhiteSpace(command.ProjectId))
+        {
+            return CreativeCommandResult.Fail(
+                CreativeCommandKind.DeleteCreativeProjectRegistration,
+                "Project id is missing.");
+        }
+
+        if (!projects.TryDeleteRegistration(command.ProjectId!, out var error))
+        {
+            return CreativeCommandResult.Fail(
+                CreativeCommandKind.DeleteCreativeProjectRegistration,
+                error ?? "Delete registration failed.");
+        }
+
+        return CreativeCommandResult.Ok(CreativeCommandKind.DeleteCreativeProjectRegistration);
     }
 }
