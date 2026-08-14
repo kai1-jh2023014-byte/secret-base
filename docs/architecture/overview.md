@@ -40,5 +40,6 @@ Highest principle:
 - ✅ Desktop arrange (**Grid** FAB — even widget/block placement)
 - ✅ Web Widget (WebView2; Untrusted; no host bridge)
 - ✅ Calendar Widget (Today agenda + `ICalendarProvider` / Google ICS)
+- ✅ Calendar Hub (capabilities, Mock, Google API OAuth read design, agenda cache)
 - App Launcher polish → Room switching
 

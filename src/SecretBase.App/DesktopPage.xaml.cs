@@ -20,6 +20,7 @@ using SecretBase.Infrastructure.Calendar;
 using SecretBase.Infrastructure.Logging;
 using SecretBase.Infrastructure.Persistence;
 using SecretBase.Platform.Abstractions;
+using SecretBase.Platform.Windows;
 using SecretBase.Widgets.Calendar;
 using SecretBase.Widgets.Clock;
 using SecretBase.Widgets.Text;
@@ -41,6 +42,8 @@ public sealed partial class DesktopPage : Page
     private ITargetLaunchService? _launcher;
     private IFileIconService? _icons;
     private IBlockItemIntakeService? _intake;
+    private ISecureSecretStore? _secretStore;
+    private ICalendarAgendaCache? _calendarCache;
     private DesktopLayout? _layout;
     private ThemeDefinition? _theme;
     private CompatibilityInfo? _compatibility;
@@ -76,6 +79,8 @@ public sealed partial class DesktopPage : Page
         _launcher = args.Launcher;
         _icons = args.Icons;
         _intake = args.Intake;
+        _secretStore = args.SecretStore ?? new WindowsCredentialSecretStore();
+        _calendarCache = args.CalendarCache ?? new JsonCalendarAgendaCache();
 
         _theme = _themeStore.LoadOrCreateDefault();
         _layout = _layoutStore.LoadOrCreateDefault(RoomId.DefaultRoomId);
@@ -93,7 +98,7 @@ public sealed partial class DesktopPage : Page
         _logger.Info("theme", "Theme editor ready (Aa button) — colors apply to Clock, Text, and Blocks.");
         _logger.Info("layout", "Arrange ready (Grid button) — even placement for widgets and blocks.");
         _logger.Info("widget", "Web Widget ready (Web button) — Untrusted WebView2, no host bridge.");
-        _logger.Info("widget", "Calendar Widget ready (Cal button) — local month grid + event source layer.");
+        _logger.Info("widget", "Calendar Hub ready (Cal button) — Local / Mock / Google ICS / Google API read.");
     }
 
     private void StyleFabButtons(ThemeDefinition theme)
@@ -402,7 +407,11 @@ public sealed partial class DesktopPage : Page
             var config = CalendarWidgetConfiguration.FromDictionary(instance.Configuration);
             instance.Configuration = config.ToDictionary();
 
-            var service = CalendarServiceFactory.Create(config, _timeProvider ?? new SystemTimeProvider());
+            var service = CalendarServiceFactory.Create(
+                config,
+                _timeProvider ?? new SystemTimeProvider(),
+                secretStore: _secretStore,
+                openBrowser: url => TryOpenBrowserUrl(url));
             var view = new CalendarWidgetView();
             view.Initialize(
                 config,
@@ -413,7 +422,8 @@ public sealed partial class DesktopPage : Page
                 {
                     instance.Configuration = updated.ToDictionary();
                     PersistLayoutNow();
-                });
+                },
+                cache: _calendarCache);
             if (_theme is not null)
             {
                 view.ApplyTheme(_theme);
@@ -441,6 +451,28 @@ public sealed partial class DesktopPage : Page
         catch (Exception ex)
         {
             _logger?.Warn("calendar", $"Open Calendar failed: {ex.Message}");
+            return false;
+        }
+    }
+
+    /// <summary>Opens https OAuth consent URLs (no secrets in query logging).</summary>
+    private bool TryOpenBrowserUrl(string url)
+    {
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri)
+            || uri.Scheme != Uri.UriSchemeHttps)
+        {
+            _logger?.Warn("calendar", "Blocked non-https OAuth browser URL.");
+            return false;
+        }
+
+        try
+        {
+            _ = Windows.System.Launcher.LaunchUriAsync(uri);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger?.Warn("calendar", $"OAuth browser launch failed: {ex.Message}");
             return false;
         }
     }
@@ -581,9 +613,20 @@ public sealed partial class DesktopPage : Page
             SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline
         };
 
+        var includeMock = new CheckBox
+        {
+            Content = "Include Mock provider (demo colors)",
+            IsChecked = false
+        };
+
         var hint = new TextBlock
         {
-            Text = "Shows today's agenda. Without an ICS URL, a local sample Creative-day agenda is used. Paste Google Calendar → Settings → Secret address in iCal format for live events. No OAuth secrets are stored in the app.",
+            Text =
+                "Today's agenda via Calendar Hub (Local + optional Google). "
+                + "Paste Google Calendar → Secret address in iCal format for ICS, "
+                + "or place google-oauth-client.json under %LocalAppData%\\SecretBase\\credentials for API read. "
+                + "Notion Calendar / TimeTree have no official sync API here — use Web Widget. "
+                + "Tokens never go in layout JSON.",
             FontSize = 12,
             Opacity = 0.75,
             TextWrapping = TextWrapping.WrapWholeWords
@@ -592,6 +635,7 @@ public sealed partial class DesktopPage : Page
         var panel = new StackPanel { Spacing = 8 };
         panel.Children.Add(hint);
         panel.Children.Add(icsBox);
+        panel.Children.Add(includeMock);
         panel.Children.Add(xBox);
         panel.Children.Add(yBox);
         panel.Children.Add(wBox);
@@ -623,6 +667,12 @@ public sealed partial class DesktopPage : Page
         }
 
         var config = CalendarWidgetConfiguration.CreateDefault();
+        config.IncludeMockProvider = includeMock.IsChecked == true;
+        if (config.IncludeMockProvider)
+        {
+            config.UseSampleAgendaWhenEmpty = false;
+        }
+
         var ics = icsBox.Text?.Trim();
         if (!string.IsNullOrWhiteSpace(ics))
         {
@@ -654,9 +704,12 @@ public sealed partial class DesktopPage : Page
         PersistLayoutNow();
         RenderDesktopObjects();
         RefreshDebugStatus();
-        _logger?.Info("calendar", string.IsNullOrWhiteSpace(config.GoogleIcsUrl)
-            ? "Added Calendar Widget (local sample agenda)."
-            : "Added Calendar Widget (Google ICS provider).");
+        _logger?.Info("calendar",
+            config.IncludeMockProvider
+                ? "Added Calendar Widget (Mock provider)."
+                : string.IsNullOrWhiteSpace(config.GoogleIcsUrl)
+                    ? "Added Calendar Widget (local sample agenda)."
+                    : "Added Calendar Widget (Google ICS provider).");
     }
 
     private async Task ShowAddWebDialogAsync()

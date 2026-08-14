@@ -5,8 +5,7 @@ namespace SecretBase.Infrastructure.Calendar;
 
 /// <summary>
 /// Google Calendar via user-provided secret iCal (ICS) HTTPS URL.
-/// No OAuth client secrets in the app — the user pastes the private ICS address
-/// from Google Calendar settings. Maps ICS → common <see cref="CalendarEvent"/>.
+/// Zero-OAuth fallback. Maps ICS → <see cref="CalendarEvent"/>.
 /// </summary>
 public sealed class GoogleCalendarIcsProvider : ICalendarProvider
 {
@@ -21,14 +20,40 @@ public sealed class GoogleCalendarIcsProvider : ICalendarProvider
 
     public string ProviderId => CalendarProviderIds.Google;
 
-    public string DisplayName => "Google Calendar";
+    public string DisplayName => "Google Calendar (ICS)";
 
     public string? OpenUrl => "https://calendar.google.com/";
+
+    public CalendarProviderCapabilities Capabilities => CalendarProviderCapabilities.ReadEvents;
+
+    public CalendarAuthStatus AuthStatus =>
+        IsConfigured ? CalendarAuthStatus.Connected : CalendarAuthStatus.NotConfigured;
 
     public bool IsConfigured =>
         !string.IsNullOrWhiteSpace(_icsUrl)
         && Uri.TryCreate(_icsUrl, UriKind.Absolute, out var uri)
         && (uri.Scheme == Uri.UriSchemeHttps || uri.Scheme == Uri.UriSchemeHttp);
+
+    public Task<IReadOnlyList<CalendarInfo>> GetCalendarsAsync(CancellationToken cancellationToken = default)
+    {
+        if (!IsConfigured)
+        {
+            return Task.FromResult<IReadOnlyList<CalendarInfo>>(Array.Empty<CalendarInfo>());
+        }
+
+        IReadOnlyList<CalendarInfo> list =
+        [
+            new CalendarInfo
+            {
+                Id = "ics",
+                Name = "Google Calendar",
+                ProviderId = ProviderId,
+                Color = "#4285F4",
+                IsPrimary = true
+            }
+        ];
+        return Task.FromResult(list);
+    }
 
     public async Task<IReadOnlyList<CalendarEvent>> GetEventsAsync(
         CalendarQuery query,
@@ -43,8 +68,22 @@ public sealed class GoogleCalendarIcsProvider : ICalendarProvider
         response.EnsureSuccessStatusCode();
         var text = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
         var parsed = IcsCalendarParser.Parse(text, CalendarProviderIds.Google, calendarName: "Google Calendar");
-        return parsed.Where(e => Overlaps(e, query)).OrderBy(e => e.Start).ToList();
+        return parsed
+            .Select(e =>
+            {
+                e.Color ??= "#4285F4";
+                e.Source ??= "Google Calendar";
+                e.LastUpdated ??= DateTimeOffset.UtcNow;
+                return e;
+            })
+            .Where(e => Overlaps(e, query))
+            .OrderBy(e => e.Start)
+            .ToList();
     }
+
+    public Task AuthenticateAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+    public Task DisconnectAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
 
     private static bool Overlaps(CalendarEvent ev, CalendarQuery query)
     {

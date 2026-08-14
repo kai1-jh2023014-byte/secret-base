@@ -1,12 +1,15 @@
 using System.Globalization;
+using Microsoft.UI;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Shapes;
 using SecretBase.Core.Calendar;
 using SecretBase.Core.Themes;
 using SecretBase.Core.Time;
 using SecretBase.Core.Widgets.Calendar;
 using SecretBase.Widgets.Theming;
+using Windows.UI;
 
 namespace SecretBase.Widgets.Calendar;
 
@@ -19,10 +22,12 @@ public sealed partial class CalendarWidgetView : UserControl
     private CalendarWidgetConfiguration _configuration = CalendarWidgetConfiguration.CreateDefault();
     private ITimeProvider _timeProvider = new SystemTimeProvider();
     private CalendarService? _service;
+    private ICalendarAgendaCache? _cache;
     private Func<string, bool>? _openUrl;
     private Action<CalendarWidgetConfiguration>? _onConfigurationChanged;
     private ThemeDefinition? _theme;
     private int _refreshGate;
+    private int _connectGate;
 
     public CalendarWidgetView()
     {
@@ -35,14 +40,17 @@ public sealed partial class CalendarWidgetView : UserControl
         CalendarService service,
         ITimeProvider? timeProvider = null,
         Func<string, bool>? openUrl = null,
-        Action<CalendarWidgetConfiguration>? onConfigurationChanged = null)
+        Action<CalendarWidgetConfiguration>? onConfigurationChanged = null,
+        ICalendarAgendaCache? cache = null)
     {
         _configuration = configuration;
         _service = service;
         _timeProvider = timeProvider ?? new SystemTimeProvider();
         _openUrl = openUrl;
         _onConfigurationChanged = onConfigurationChanged;
+        _cache = cache;
         UpdateProviderLabel();
+        UpdateConnectVisibility();
         _ = RefreshAgendaAsync();
     }
 
@@ -58,9 +66,12 @@ public sealed partial class CalendarWidgetView : UserControl
         HeaderText.Foreground = ThemePainter.Brush(theme.WidgetForeground);
         ProviderLabel.FontFamily = font;
         ProviderLabel.Foreground = ThemePainter.Brush(theme.ForegroundMuted);
+        StatusLabel.FontFamily = font;
+        StatusLabel.Foreground = ThemePainter.Brush(theme.ForegroundMuted);
 
         StyleActionButton(RefreshButton, theme);
         StyleActionButton(OpenCalendarButton, theme);
+        StyleActionButton(ConnectButton, theme);
         RestyleAgendaItems();
     }
 
@@ -83,13 +94,51 @@ public sealed partial class CalendarWidgetView : UserControl
             url = CalendarWidgetConfiguration.DefaultOpenCalendarUrl;
         }
 
-        var google = _service?.Providers.FirstOrDefault(p => p.ProviderId == CalendarProviderIds.Google);
-        if (google?.OpenUrl is { Length: > 0 } providerUrl)
+        var withOpen = _service?.Providers.FirstOrDefault(p => !string.IsNullOrWhiteSpace(p.OpenUrl));
+        if (withOpen?.OpenUrl is { Length: > 0 } providerUrl)
         {
             url = providerUrl;
         }
 
         _ = _openUrl?.Invoke(url);
+    }
+
+    private async void ConnectButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_service is null || Interlocked.Exchange(ref _connectGate, 1) == 1)
+        {
+            return;
+        }
+
+        try
+        {
+            var authProvider = _service.Providers.FirstOrDefault(p =>
+                p.Capabilities.HasFlag(CalendarProviderCapabilities.Authentication)
+                && p.AuthStatus is CalendarAuthStatus.Disconnected
+                    or CalendarAuthStatus.NotConfigured
+                    or CalendarAuthStatus.Error);
+
+            if (authProvider is null)
+            {
+                return;
+            }
+
+            StatusLabel.Visibility = Visibility.Visible;
+            StatusLabel.Text = $"Connecting {authProvider.DisplayName}…";
+            await authProvider.AuthenticateAsync();
+            StatusLabel.Text = $"{authProvider.DisplayName} connected.";
+            await RefreshAgendaAsync();
+        }
+        catch (Exception ex)
+        {
+            StatusLabel.Visibility = Visibility.Visible;
+            StatusLabel.Text = $"Connect failed: {ex.Message}";
+        }
+        finally
+        {
+            UpdateConnectVisibility();
+            Interlocked.Exchange(ref _connectGate, 0);
+        }
     }
 
     private async Task RefreshAgendaAsync()
@@ -111,7 +160,49 @@ public sealed partial class CalendarWidgetView : UserControl
             AgendaList.Children.Add(CreateMutedLine("Loading…"));
 
             var now = _timeProvider.GetLocalNow();
-            var events = await _service.GetTodayAgendaAsync(now);
+            CalendarAgendaSnapshot snapshot;
+            try
+            {
+                snapshot = await _service.GetTodaySnapshotAsync(now);
+            }
+            catch (Exception ex)
+            {
+                // Should be rare — CalendarService already isolates providers.
+                AgendaList.Children.Clear();
+                AgendaList.Children.Add(CreateMutedLine($"Could not load agenda: {ex.Message}"));
+                StatusLabel.Visibility = Visibility.Visible;
+                StatusLabel.Text = "Calendar unavailable";
+                return;
+            }
+
+            var events = snapshot.Events;
+            var anySuccess = snapshot.ProviderResults.Any(r => r.Succeeded);
+            var failures = snapshot.ProviderResults.Where(r => !r.Succeeded).ToList();
+
+            if (anySuccess)
+            {
+                try
+                {
+                    _cache?.Save(events, DateTimeOffset.UtcNow);
+                }
+                catch
+                {
+                    // Cache is best-effort.
+                }
+            }
+            else if (events.Count == 0 && _cache is not null)
+            {
+                var cached = _cache.TryLoad(out var savedAt);
+                if (cached is { Count: > 0 })
+                {
+                    events = cached;
+                    StatusLabel.Visibility = Visibility.Visible;
+                    StatusLabel.Text = savedAt is null
+                        ? "Showing cached agenda (providers unavailable)."
+                        : $"Showing cached agenda ({savedAt:u}).";
+                }
+            }
+
             AgendaList.Children.Clear();
 
             if (events.Count == 0)
@@ -126,12 +217,34 @@ public sealed partial class CalendarWidgetView : UserControl
                 }
             }
 
-            UpdateProviderLabel(events);
-        }
-        catch (Exception ex)
-        {
-            AgendaList.Children.Clear();
-            AgendaList.Children.Add(CreateMutedLine($"Could not load agenda: {ex.Message}"));
+            if (failures.Count > 0)
+            {
+                StatusLabel.Visibility = Visibility.Visible;
+                var parts = failures.Select(f =>
+                    string.IsNullOrWhiteSpace(f.ErrorMessage)
+                        ? $"{f.DisplayName} unavailable"
+                        : $"{f.DisplayName} unavailable");
+                var failureText = string.Join(" · ", parts.Distinct(StringComparer.OrdinalIgnoreCase));
+                if (StatusLabel.Text.StartsWith("Showing cached", StringComparison.Ordinal))
+                {
+                    StatusLabel.Text = $"{StatusLabel.Text} {failureText}";
+                }
+                else
+                {
+                    StatusLabel.Text = failureText;
+                }
+            }
+            else if (!StatusLabel.Text.StartsWith("Showing cached", StringComparison.Ordinal)
+                     && !StatusLabel.Text.StartsWith("Connecting", StringComparison.Ordinal)
+                     && !StatusLabel.Text.Contains("connected", StringComparison.OrdinalIgnoreCase)
+                     && !StatusLabel.Text.StartsWith("Connect failed", StringComparison.Ordinal))
+            {
+                StatusLabel.Visibility = Visibility.Collapsed;
+                StatusLabel.Text = string.Empty;
+            }
+
+            UpdateProviderLabel(events, snapshot);
+            UpdateConnectVisibility();
         }
         finally
         {
@@ -139,7 +252,32 @@ public sealed partial class CalendarWidgetView : UserControl
         }
     }
 
-    private void UpdateProviderLabel(IReadOnlyList<CalendarEvent>? events = null)
+    private void UpdateConnectVisibility()
+    {
+        if (_service is null)
+        {
+            ConnectButton.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        var needsAuth = _service.Providers.Any(p =>
+            p.Capabilities.HasFlag(CalendarProviderCapabilities.Authentication)
+            && p.IsConfigured
+            && p.AuthStatus is CalendarAuthStatus.Disconnected or CalendarAuthStatus.Error);
+
+        var missingClient = _service.Providers.Any(p =>
+            p.Capabilities.HasFlag(CalendarProviderCapabilities.Authentication)
+            && p.AuthStatus == CalendarAuthStatus.NotConfigured);
+
+        // Show Connect only when OAuth client is present but disconnected/error.
+        ConnectButton.Visibility = needsAuth && !missingClient
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+    }
+
+    private void UpdateProviderLabel(
+        IReadOnlyList<CalendarEvent>? events = null,
+        CalendarAgendaSnapshot? snapshot = null)
     {
         if (_service is null)
         {
@@ -155,13 +293,26 @@ public sealed partial class CalendarWidgetView : UserControl
 
         if (events is { Count: > 0 })
         {
-            var fromEvents = events.Select(e => e.CalendarName ?? e.Provider)
+            var fromEvents = events
+                .Select(e => e.Source ?? e.CalendarName ?? e.Provider)
                 .Where(s => !string.IsNullOrWhiteSpace(s))
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList();
             if (fromEvents.Count > 0)
             {
                 names = fromEvents!;
+            }
+        }
+        else if (snapshot is not null)
+        {
+            var connected = snapshot.ProviderResults
+                .Where(r => r.Succeeded)
+                .Select(r => r.DisplayName)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            if (connected.Count > 0)
+            {
+                names = connected;
             }
         }
 
@@ -171,7 +322,7 @@ public sealed partial class CalendarWidgetView : UserControl
     private UIElement CreateEventBlock(CalendarEvent ev)
     {
         var timeLabel = FormatTimeRange(ev);
-        var panel = new StackPanel { Spacing = 2 };
+        var textPanel = new StackPanel { Spacing = 2 };
         var time = new TextBlock
         {
             Text = timeLabel,
@@ -194,8 +345,8 @@ public sealed partial class CalendarWidgetView : UserControl
             title.FontFamily = new FontFamily(_theme.FontFamily);
         }
 
-        panel.Children.Add(time);
-        panel.Children.Add(title);
+        textPanel.Children.Add(time);
+        textPanel.Children.Add(title);
         if (!string.IsNullOrWhiteSpace(ev.Location))
         {
             var loc = new TextBlock
@@ -211,10 +362,28 @@ public sealed partial class CalendarWidgetView : UserControl
                 loc.FontFamily = new FontFamily(_theme.FontFamily);
             }
 
-            panel.Children.Add(loc);
+            textPanel.Children.Add(loc);
         }
 
-        return panel;
+        var row = new Grid { ColumnSpacing = 10 };
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+        var dot = new Ellipse
+        {
+            Width = 8,
+            Height = 8,
+            VerticalAlignment = VerticalAlignment.Top,
+            Margin = new Thickness(0, 6, 0, 0),
+            Fill = new SolidColorBrush(ParseColor(ev.Color) ?? (_theme is not null
+                ? ThemePainter.ParseColor(_theme.Accent)
+                : Colors.CornflowerBlue))
+        };
+        Grid.SetColumn(dot, 0);
+        Grid.SetColumn(textPanel, 1);
+        row.Children.Add(dot);
+        row.Children.Add(textPanel);
+        return row;
     }
 
     private TextBlock CreateMutedLine(string text)
@@ -237,7 +406,6 @@ public sealed partial class CalendarWidgetView : UserControl
 
     private void RestyleAgendaItems()
     {
-        // Rebuild so theme brushes apply after ApplyTheme.
         _ = RefreshAgendaAsync();
     }
 
@@ -251,5 +419,29 @@ public sealed partial class CalendarWidgetView : UserControl
         var start = ev.Start.DateTime;
         var end = ev.End.DateTime;
         return string.Create(CultureInfo.InvariantCulture, $"{start:HH:mm}  〜 {end:HH:mm}");
+    }
+
+    private static Color? ParseColor(string? hex)
+    {
+        if (string.IsNullOrWhiteSpace(hex))
+        {
+            return null;
+        }
+
+        var s = hex.Trim();
+        if (s.StartsWith('#'))
+        {
+            s = s[1..];
+        }
+
+        if (s.Length == 6
+            && byte.TryParse(s[..2], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var r)
+            && byte.TryParse(s[2..4], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var g)
+            && byte.TryParse(s[4..6], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var b))
+        {
+            return Color.FromArgb(255, r, g, b);
+        }
+
+        return null;
     }
 }

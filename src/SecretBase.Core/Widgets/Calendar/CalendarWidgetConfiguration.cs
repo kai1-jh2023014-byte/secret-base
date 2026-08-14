@@ -6,7 +6,7 @@ namespace SecretBase.Core.Widgets.Calendar;
 
 /// <summary>
 /// Calendar Widget settings. Visual tokens come from <c>ThemeDefinition</c>.
-/// Local timed events + optional Google Calendar secret ICS URL.
+/// Local timed events + optional Google ICS / OAuth API flags (no tokens here).
 /// </summary>
 public sealed class CalendarWidgetConfiguration
 {
@@ -19,6 +19,18 @@ public sealed class CalendarWidgetConfiguration
 
     /// <summary>When true and no events exist, seed Creative OS sample agenda for today.</summary>
     public bool UseSampleAgendaWhenEmpty { get; set; } = true;
+
+    /// <summary>Include deterministic Mock provider (UI demos / tests).</summary>
+    public bool IncludeMockProvider { get; set; }
+
+    /// <summary>
+    /// When true, wire Google Calendar API if OAuth client JSON exists under AppData
+    /// and the host supplies <c>ISecureSecretStore</c> + browser opener.
+    /// </summary>
+    public bool EnableGoogleApiProvider { get; set; } = true;
+
+    /// <summary>Optional override for OAuth client JSON path (default: AppData credentials file).</summary>
+    public string? GoogleOAuthClientConfigPath { get; set; }
 
     public List<CalendarEvent> Events { get; set; } = [];
 
@@ -51,6 +63,25 @@ public sealed class CalendarWidgetConfiguration
             result.UseSampleAgendaWhenEmpty = sample.GetBoolean();
         }
 
+        if (configuration.TryGetValue(nameof(IncludeMockProvider), out var mock) &&
+            (mock.ValueKind is JsonValueKind.True or JsonValueKind.False))
+        {
+            result.IncludeMockProvider = mock.GetBoolean();
+        }
+
+        if (configuration.TryGetValue(nameof(EnableGoogleApiProvider), out var googleApi) &&
+            (googleApi.ValueKind is JsonValueKind.True or JsonValueKind.False))
+        {
+            result.EnableGoogleApiProvider = googleApi.GetBoolean();
+        }
+
+        if (configuration.TryGetValue(nameof(GoogleOAuthClientConfigPath), out var oauthPath) &&
+            oauthPath.ValueKind == JsonValueKind.String)
+        {
+            var path = oauthPath.GetString();
+            result.GoogleOAuthClientConfigPath = string.IsNullOrWhiteSpace(path) ? null : path.Trim();
+        }
+
         if (configuration.TryGetValue(nameof(Events), out var events) &&
             events.ValueKind == JsonValueKind.Array)
         {
@@ -73,6 +104,9 @@ public sealed class CalendarWidgetConfiguration
             [nameof(GoogleIcsUrl)] = JsonSerializer.SerializeToElement(GoogleIcsUrl),
             [nameof(OpenCalendarUrl)] = JsonSerializer.SerializeToElement(OpenCalendarUrl),
             [nameof(UseSampleAgendaWhenEmpty)] = JsonSerializer.SerializeToElement(UseSampleAgendaWhenEmpty),
+            [nameof(IncludeMockProvider)] = JsonSerializer.SerializeToElement(IncludeMockProvider),
+            [nameof(EnableGoogleApiProvider)] = JsonSerializer.SerializeToElement(EnableGoogleApiProvider),
+            [nameof(GoogleOAuthClientConfigPath)] = JsonSerializer.SerializeToElement(GoogleOAuthClientConfigPath),
             [nameof(Events)] = JsonSerializer.SerializeToElement(
                 Events.Select(SerializeEvent).ToList())
         };
@@ -91,7 +125,9 @@ public sealed class CalendarWidgetConfiguration
             ["IsAllDay"] = JsonSerializer.SerializeToElement(e.IsAllDay),
             ["Location"] = JsonSerializer.SerializeToElement(e.Location),
             ["Description"] = JsonSerializer.SerializeToElement(e.Description),
-            ["Url"] = JsonSerializer.SerializeToElement(e.Url)
+            ["Url"] = JsonSerializer.SerializeToElement(e.Url),
+            ["Color"] = JsonSerializer.SerializeToElement(e.Color),
+            ["Source"] = JsonSerializer.SerializeToElement(e.Source)
         };
 
     private static bool TryReadEvent(JsonElement item, out CalendarEvent calendarEvent)
@@ -128,7 +164,9 @@ public sealed class CalendarWidgetConfiguration
                 IsAllDay = ReadBool(item, "IsAllDay"),
                 Location = ReadString(item, "Location"),
                 Description = ReadString(item, "Description") ?? ReadString(item, "Notes"),
-                Url = ReadString(item, "Url")
+                Url = ReadString(item, "Url"),
+                Color = ReadString(item, "Color"),
+                Source = ReadString(item, "Source")
             };
             return true;
         }
@@ -148,7 +186,9 @@ public sealed class CalendarWidgetConfiguration
                 Start = startDay,
                 End = startDay.AddDays(1),
                 IsAllDay = true,
-                Description = ReadString(item, "Notes")
+                Description = ReadString(item, "Notes"),
+                Color = ReadString(item, "Color"),
+                Source = ReadString(item, "Source") ?? "Local"
             };
             return true;
         }
