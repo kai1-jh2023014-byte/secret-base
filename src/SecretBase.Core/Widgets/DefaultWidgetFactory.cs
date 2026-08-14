@@ -29,6 +29,27 @@ public static class DefaultWidgetFactory
         };
     }
 
+    /// <summary>Creates an additional Clock widget (not the seeded default id).</summary>
+    public static WidgetInstance CreateClock(
+        RoomId? roomId = null,
+        double? x = null,
+        double? y = null,
+        double? width = null,
+        double? height = null)
+    {
+        var room = roomId ?? RoomId.DefaultRoomId;
+        var config = ClockWidgetConfiguration.CreateDefault();
+        return new WidgetInstance
+        {
+            Id = Guid.NewGuid(),
+            Type = WidgetTypes.Clock,
+            Position = new WidgetPosition(x ?? 48, y ?? 48),
+            Size = new WidgetSize(width ?? 280, height ?? 160),
+            RoomId = room,
+            Configuration = config.ToDictionary()
+        };
+    }
+
     public static WidgetInstance CreateDefaultText(RoomId? roomId = null)
     {
         var room = roomId ?? RoomId.DefaultRoomId;
@@ -39,6 +60,28 @@ public static class DefaultWidgetFactory
             Type = WidgetTypes.Text,
             Position = new WidgetPosition(48, 240),
             Size = new WidgetSize(320, 180),
+            RoomId = room,
+            Configuration = config.ToDictionary()
+        };
+    }
+
+    /// <summary>Creates an additional Text widget (not the seeded default id).</summary>
+    public static WidgetInstance CreateText(
+        RoomId? roomId = null,
+        double? x = null,
+        double? y = null,
+        double? width = null,
+        double? height = null,
+        TextWidgetConfiguration? configuration = null)
+    {
+        var room = roomId ?? RoomId.DefaultRoomId;
+        var config = configuration ?? TextWidgetConfiguration.CreateDefault();
+        return new WidgetInstance
+        {
+            Id = Guid.NewGuid(),
+            Type = WidgetTypes.Text,
+            Position = new WidgetPosition(x ?? 48, y ?? 240),
+            Size = new WidgetSize(width ?? 320, height ?? 180),
             RoomId = room,
             Configuration = config.ToDictionary()
         };

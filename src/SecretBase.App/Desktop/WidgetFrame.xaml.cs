@@ -11,7 +11,7 @@ using Windows.Foundation;
 namespace SecretBase.App.Desktop;
 
 /// <summary>
-/// Host chrome for a widget instance: drag move + corner resize.
+/// Host chrome for a widget instance: drag move + corner resize + remove.
 /// Kept visually light so widgets feel like floating desktop objects.
 /// </summary>
 public sealed partial class WidgetFrame : UserControl
@@ -20,6 +20,7 @@ public sealed partial class WidgetFrame : UserControl
     private readonly ThemeDefinition _theme;
     private readonly Action _onLayoutCommitted;
     private readonly Action? _onBoundsChanged;
+    private readonly Action<WidgetInstance>? _onRemoveRequested;
 
     private bool _dragging;
     private bool _resizing;
@@ -31,13 +32,15 @@ public sealed partial class WidgetFrame : UserControl
         UIElement content,
         ThemeDefinition theme,
         Action onLayoutCommitted,
-        Action? onBoundsChanged = null)
+        Action? onBoundsChanged = null,
+        Action<WidgetInstance>? onRemoveRequested = null)
     {
         InitializeComponent();
         _instance = instance;
         _theme = theme;
         _onLayoutCommitted = onLayoutCommitted;
         _onBoundsChanged = onBoundsChanged;
+        _onRemoveRequested = onRemoveRequested;
 
         ContentHost.Child = content;
         Width = instance.Size.Width;
@@ -51,8 +54,13 @@ public sealed partial class WidgetFrame : UserControl
     private void ApplyFloatingChrome(ThemeDefinition theme)
     {
         var radius = Math.Max(8, theme.CornerRadius);
-        DragBar.CornerRadius = new CornerRadius(radius, radius, 0, 0);
-        // Soft grip tint derived from theme foreground — still nearly transparent.
+        DragBar.CornerRadius = new CornerRadius(radius, 0, 0, 0);
+        RemoveButton.CornerRadius = new CornerRadius(0, radius, 0, 0);
+        RemoveButton.FontFamily = new FontFamily(theme.FontFamily);
+        RemoveButton.Foreground = ThemePainter.Brush(theme.WidgetForeground);
+        RemoveButton.Background = ThemePainter.Brush(theme.WidgetBackground, 0.35);
+        RemoveButton.BorderThickness = new Thickness(0);
+
         var grip = ThemePainter.ParseColor(theme.WidgetForeground);
         grip.A = 0x28;
         DragBar.Background = new SolidColorBrush(grip);
@@ -63,6 +71,13 @@ public sealed partial class WidgetFrame : UserControl
         var opacity = emphasized || _dragging || _resizing ? 0.95 : 0.35;
         DragBar.Opacity = opacity;
         ResizeHandle.Opacity = opacity;
+        RemoveButton.Opacity = opacity;
+    }
+
+    private void RemoveButton_Click(object sender, RoutedEventArgs e)
+    {
+        e.Handled = true;
+        _onRemoveRequested?.Invoke(_instance);
     }
 
     private void RootGrid_PointerEntered(object sender, PointerRoutedEventArgs e)

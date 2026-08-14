@@ -119,53 +119,26 @@ public sealed partial class DesktopPage : Page
 
         RenderDesktopObjects();
         _logger.Info("desktop", $"Overlay desktop shown for room '{_layout.RoomId}' with {_layout.Widgets.Count} widget(s), {_layout.Blocks.Count} block(s).");
-        _logger.Info("widget", "Clock and Text widget hosts ready.");
-        _logger.Info("block", "Block host ready (use + button to add; drop + drag icons inside a Block).");
-        _logger.Info("theme", "Theme editor ready (Aa button) — colors apply to Clock, Text, and Blocks.");
+        _logger.Info("widget", "Widget hosts ready (Clock, Text, Web, Calendar, Music, Creative, AI).");
+        _logger.Info("block", "Block host ready (use Blk button to add; drop + drag icons inside a Block).");
+        _logger.Info("theme", "Theme editor ready (Aa button) — colors apply to all widgets and Blocks.");
         _logger.Info("layout", "Arrange ready (Grid button) — even placement for widgets and blocks.");
-        _logger.Info("widget", "Web Widget ready (Web button) — Untrusted WebView2, no host bridge.");
-        _logger.Info("widget", "Calendar Hub ready (Cal button) — Local / Mock / Google ICS / Google API read.");
-        _logger.Info("widget", "Music Widget ready (♪ button) — native search/playback UI via MusicCommand; Demo catalog; no Host Bridge.");
-        _logger.Info("widget", "Creative Workspace ready (CW button) — favorites/recent/open registered paths only.");
-        _logger.Info("widget", "AI Workspace ready (AI button) — Cursor / official AI websites; Project Dashboard Open in Cursor.");
+        _logger.Info("widget", "Add Widget (+) — catalog for Clock / Text / Web / Calendar / Music / AI / Creative.");
     }
 
     private void StyleFabButtons(ThemeDefinition theme)
     {
-        AddBlockFab.Background = ThemePainter.Brush(theme.Accent, 0.92);
-        AddBlockFab.Foreground = ThemePainter.Brush(theme.Foreground);
-        AddBlockFab.BorderBrush = ThemePainter.Brush(theme.WidgetForeground, 0.35);
+        AddWidgetFab.Background = ThemePainter.Brush(theme.Accent, 0.92);
+        AddWidgetFab.Foreground = ThemePainter.Brush(theme.Foreground);
+        AddWidgetFab.BorderBrush = ThemePainter.Brush(theme.WidgetForeground, 0.35);
+        AddWidgetFab.BorderThickness = new Thickness(1);
+        AddWidgetFab.FontFamily = new FontFamily(theme.FontFamily);
+
+        AddBlockFab.Background = ThemePainter.Brush(theme.WidgetBackground, ThemePainter.EffectiveWidgetOpacity(theme));
+        AddBlockFab.Foreground = ThemePainter.Brush(theme.WidgetForeground);
+        AddBlockFab.BorderBrush = ThemePainter.Brush(theme.Accent, 0.7);
         AddBlockFab.BorderThickness = new Thickness(1);
-
-        AddWebFab.Background = ThemePainter.Brush(theme.WidgetBackground, ThemePainter.EffectiveWidgetOpacity(theme));
-        AddWebFab.Foreground = ThemePainter.Brush(theme.WidgetForeground);
-        AddWebFab.BorderBrush = ThemePainter.Brush(theme.Accent, 0.7);
-        AddWebFab.BorderThickness = new Thickness(1);
-        AddWebFab.FontFamily = new FontFamily(theme.FontFamily);
-
-        AddCalendarFab.Background = ThemePainter.Brush(theme.WidgetBackground, ThemePainter.EffectiveWidgetOpacity(theme));
-        AddCalendarFab.Foreground = ThemePainter.Brush(theme.WidgetForeground);
-        AddCalendarFab.BorderBrush = ThemePainter.Brush(theme.Accent, 0.7);
-        AddCalendarFab.BorderThickness = new Thickness(1);
-        AddCalendarFab.FontFamily = new FontFamily(theme.FontFamily);
-
-        AddMusicFab.Background = ThemePainter.Brush(theme.WidgetBackground, ThemePainter.EffectiveWidgetOpacity(theme));
-        AddMusicFab.Foreground = ThemePainter.Brush(theme.WidgetForeground);
-        AddMusicFab.BorderBrush = ThemePainter.Brush(theme.Accent, 0.7);
-        AddMusicFab.BorderThickness = new Thickness(1);
-        AddMusicFab.FontFamily = new FontFamily(theme.FontFamily);
-
-        AddCreativeFab.Background = ThemePainter.Brush(theme.WidgetBackground, ThemePainter.EffectiveWidgetOpacity(theme));
-        AddCreativeFab.Foreground = ThemePainter.Brush(theme.WidgetForeground);
-        AddCreativeFab.BorderBrush = ThemePainter.Brush(theme.Accent, 0.7);
-        AddCreativeFab.BorderThickness = new Thickness(1);
-        AddCreativeFab.FontFamily = new FontFamily(theme.FontFamily);
-
-        AddAiFab.Background = ThemePainter.Brush(theme.WidgetBackground, ThemePainter.EffectiveWidgetOpacity(theme));
-        AddAiFab.Foreground = ThemePainter.Brush(theme.WidgetForeground);
-        AddAiFab.BorderBrush = ThemePainter.Brush(theme.Accent, 0.7);
-        AddAiFab.BorderThickness = new Thickness(1);
-        AddAiFab.FontFamily = new FontFamily(theme.FontFamily);
+        AddBlockFab.FontFamily = new FontFamily(theme.FontFamily);
 
         ThemeFab.Background = ThemePainter.Brush(theme.WidgetBackground, ThemePainter.EffectiveWidgetOpacity(theme));
         ThemeFab.Foreground = ThemePainter.Brush(theme.WidgetForeground);
@@ -178,6 +151,12 @@ public sealed partial class DesktopPage : Page
         ArrangeFab.BorderBrush = ThemePainter.Brush(theme.Accent, 0.7);
         ArrangeFab.BorderThickness = new Thickness(1);
         ArrangeFab.FontFamily = new FontFamily(theme.FontFamily);
+
+        if (HostStatusLabel is not null)
+        {
+            HostStatusLabel.Foreground = ThemePainter.Brush(theme.ForegroundMuted);
+            HostStatusLabel.FontFamily = new FontFamily(theme.FontFamily);
+        }
     }
 
     private void ApplyDesktopTheme(ThemeDefinition theme)
@@ -189,6 +168,12 @@ public sealed partial class DesktopPage : Page
         StatusText.FontFamily = new FontFamily(theme.FontFamily);
         DebugChrome.Background = ThemePainter.Brush(theme.WidgetBackground, ThemePainter.EffectiveWidgetOpacity(theme));
         DebugChrome.CornerRadius = new CornerRadius(Math.Max(8, theme.CornerRadius / 2));
+
+        if (HostStatusLabel is not null)
+        {
+            HostStatusLabel.Foreground = ThemePainter.Brush(theme.ForegroundMuted);
+            HostStatusLabel.FontFamily = new FontFamily(theme.FontFamily);
+        }
     }
 
     private void RefreshDebugStatus()
@@ -260,7 +245,8 @@ public sealed partial class DesktopPage : Page
                 content,
                 _theme,
                 onLayoutCommitted: PersistLayoutNow,
-                onBoundsChanged: SyncInteractiveInputRegions);
+                onBoundsChanged: SyncInteractiveInputRegions,
+                onRemoveRequested: RemoveWidget);
             Canvas.SetLeft(frame, instance.Position.X);
             Canvas.SetTop(frame, instance.Position.Y);
             frame.Loaded += (_, _) => SyncInteractiveInputRegions();
@@ -287,14 +273,7 @@ public sealed partial class DesktopPage : Page
                 onLayoutCommitted: PersistLayoutNow,
                 onDeleteRequested: DeleteBlock,
                 onBoundsChanged: SyncInteractiveInputRegions,
-                onStatus: message =>
-                {
-                    _logger?.Info("block", message);
-                    if (_debugChromeVisible)
-                    {
-                        StatusText.Text = message;
-                    }
-                });
+                onStatus: ShowHostStatus);
             Canvas.SetLeft(frame, block.Position.X);
             Canvas.SetTop(frame, block.Position.Y);
             frame.Loaded += (_, _) => SyncInteractiveInputRegions();
@@ -326,34 +305,14 @@ public sealed partial class DesktopPage : Page
             rects.Add(chromeRect);
         }
 
+        if (TryCreateClientRect(AddWidgetFab, scale, out var addWidgetFabRect))
+        {
+            rects.Add(addWidgetFabRect);
+        }
+
         if (TryCreateClientRect(AddBlockFab, scale, out var fabRect))
         {
             rects.Add(fabRect);
-        }
-
-        if (TryCreateClientRect(AddWebFab, scale, out var webFabRect))
-        {
-            rects.Add(webFabRect);
-        }
-
-        if (TryCreateClientRect(AddCalendarFab, scale, out var calendarFabRect))
-        {
-            rects.Add(calendarFabRect);
-        }
-
-        if (TryCreateClientRect(AddMusicFab, scale, out var musicFabRect))
-        {
-            rects.Add(musicFabRect);
-        }
-
-        if (TryCreateClientRect(AddCreativeFab, scale, out var creativeFabRect))
-        {
-            rects.Add(creativeFabRect);
-        }
-
-        if (TryCreateClientRect(AddAiFab, scale, out var aiFabRect))
-        {
-            rects.Add(aiFabRect);
         }
 
         if (TryCreateClientRect(ThemeFab, scale, out var themeFabRect))
@@ -461,6 +420,7 @@ public sealed partial class DesktopPage : Page
                 view.ApplyTheme(_theme);
             }
 
+            _widgetDisposables.Add(view);
             return view;
         }
 
@@ -727,7 +687,7 @@ public sealed partial class DesktopPage : Page
         try
         {
             _layoutStore?.Save(layout);
-            _logger?.Info("widget", "Seeded default Text widget (no Add Widget UI yet).");
+            _logger?.Info("widget", "Seeded default Text widget.");
         }
         catch (Exception ex)
         {
@@ -791,578 +751,192 @@ public sealed partial class DesktopPage : Page
         await ShowAddBlockDialogAsync();
     }
 
-    private async void AddWebButton_Click(object sender, RoutedEventArgs e) =>
-        await ShowAddWebDialogAsync();
+    private async void AddWidgetButton_Click(object sender, RoutedEventArgs e) =>
+        await ShowAddWidgetCatalogAsync();
+
+    private async void AddWidgetAccelerator_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        args.Handled = true;
+        await ShowAddWidgetCatalogAsync();
+    }
 
     private async void AddWebAccelerator_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
     {
         args.Handled = true;
-        await ShowAddWebDialogAsync();
+        await AddWidgetByTypeAsync(WidgetTypes.Web);
     }
-
-    private async void AddCalendarButton_Click(object sender, RoutedEventArgs e) =>
-        await ShowAddCalendarDialogAsync();
 
     private async void AddCalendarAccelerator_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
     {
         args.Handled = true;
-        await ShowAddCalendarDialogAsync();
+        await AddWidgetByTypeAsync(WidgetTypes.Calendar);
     }
-
-    private async void AddMusicButton_Click(object sender, RoutedEventArgs e) =>
-        await ShowAddMusicDialogAsync();
 
     private async void AddMusicAccelerator_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
     {
         args.Handled = true;
-        await ShowAddMusicDialogAsync();
+        await AddWidgetByTypeAsync(WidgetTypes.Music);
     }
-
-    private async void AddCreativeButton_Click(object sender, RoutedEventArgs e) =>
-        await ShowAddCreativeDialogAsync();
 
     private async void AddCreativeAccelerator_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
     {
         args.Handled = true;
-        await ShowAddCreativeDialogAsync();
+        await AddWidgetByTypeAsync(WidgetTypes.Creative);
     }
-
-    private async void AddAiButton_Click(object sender, RoutedEventArgs e) =>
-        await ShowAddAiDialogAsync();
 
     private async void AddAiAccelerator_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
     {
         args.Handled = true;
-        await ShowAddAiDialogAsync();
+        await AddWidgetByTypeAsync(WidgetTypes.Ai);
     }
 
-    private async Task ShowAddAiDialogAsync()
+    private async Task ShowAddWidgetCatalogAsync()
     {
-        if (_layout is null || _theme is null)
+        if (_layout is null)
         {
             return;
         }
 
         AllowFullWindowInput();
 
-        var xBox = new NumberBox
+        var choices = new (string Label, string Type)[]
         {
-            Header = "X",
-            Value = 240,
-            Minimum = 0,
-            SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline
-        };
-        var yBox = new NumberBox
-        {
-            Header = "Y",
-            Value = 100,
-            Minimum = 0,
-            SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline
-        };
-        var wBox = new NumberBox
-        {
-            Header = "Width",
-            Value = 300,
-            Minimum = Math.Max(_theme.WidgetMinWidth, 260),
-            SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline
-        };
-        var hBox = new NumberBox
-        {
-            Header = "Height",
-            Value = 420,
-            Minimum = Math.Max(_theme.WidgetMinHeight, 300),
-            SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline
+            ("Clock", WidgetTypes.Clock),
+            ("Text", WidgetTypes.Text),
+            ("Web", WidgetTypes.Web),
+            ("Calendar", WidgetTypes.Calendar),
+            ("Music", WidgetTypes.Music),
+            ("AI", WidgetTypes.Ai),
+            ("Creative", WidgetTypes.Creative),
         };
 
-        var hint = new TextBlock
+        var list = new ListView
         {
-            Text =
-                "AI Workspace launches Cursor (with Project root from Dashboard) and official AI websites. "
-                + "Not an in-app LLM. No arbitrary exe / PowerShell.",
-            FontSize = 12,
-            Opacity = 0.75,
-            TextWrapping = TextWrapping.WrapWholeWords
+            SelectionMode = ListViewSelectionMode.Single,
+            Height = 280
         };
+        foreach (var (label, type) in choices)
+        {
+            list.Items.Add(new ListViewItem { Content = label, Tag = type });
+        }
+
+        list.SelectedIndex = 0;
 
         var panel = new StackPanel { Spacing = 8 };
-        panel.Children.Add(hint);
-        panel.Children.Add(xBox);
-        panel.Children.Add(yBox);
-        panel.Children.Add(wBox);
-        panel.Children.Add(hBox);
+        panel.Children.Add(new TextBlock
+        {
+            Text = "Choose a widget type to add to the desktop.",
+            FontSize = 12,
+            Opacity = 0.8,
+            TextWrapping = TextWrapping.WrapWholeWords
+        });
+        panel.Children.Add(list);
 
         var dialog = new ContentDialog
         {
-            Title = "Add AI Workspace",
-            Content = panel,
+            Title = "Add Widget",
             PrimaryButtonText = "Add",
             CloseButtonText = "Cancel",
             DefaultButton = ContentDialogButton.Primary,
+            Content = panel,
             XamlRoot = XamlRoot
         };
 
-        if (await dialog.ShowAsync() != ContentDialogResult.Primary)
+        ContentDialogResult result;
+        try
+        {
+            result = await dialog.ShowAsync();
+        }
+        finally
         {
             SyncInteractiveInputRegions();
+        }
+
+        if (result != ContentDialogResult.Primary)
+        {
             return;
         }
 
-        var cascade = _layout.Widgets.Count(w => w.Type == WidgetTypes.Ai) * 24;
-        var widget = DefaultWidgetFactory.CreateAi(
-            x: xBox.Value + cascade,
-            y: yBox.Value + cascade,
-            width: wBox.Value,
-            height: hBox.Value);
+        if (list.SelectedItem is ListViewItem item && item.Tag is string type)
+        {
+            await AddWidgetByTypeAsync(type);
+        }
+    }
+
+    private Task AddWidgetByTypeAsync(string type)
+    {
+        if (_layout is null)
+        {
+            return Task.CompletedTask;
+        }
+
+        var cascade = _layout.Widgets.Count(w =>
+            string.Equals(w.Type, type, StringComparison.OrdinalIgnoreCase)) * 24;
+
+        WidgetInstance? widget = type switch
+        {
+            WidgetTypes.Clock => DefaultWidgetFactory.CreateClock(
+                _layout.RoomId, 48 + cascade, 48 + cascade),
+            WidgetTypes.Text => DefaultWidgetFactory.CreateText(
+                _layout.RoomId, 48 + cascade, 240 + cascade),
+            WidgetTypes.Web => DefaultWidgetFactory.CreateWeb(
+                roomId: _layout.RoomId, x: 96 + cascade, y: 96 + cascade),
+            WidgetTypes.Calendar => DefaultWidgetFactory.CreateCalendar(
+                _layout.RoomId, 360 + cascade, 48 + cascade),
+            WidgetTypes.Music => DefaultWidgetFactory.CreateMusic(
+                _layout.RoomId, 120 + cascade, 120 + cascade),
+            WidgetTypes.Ai => DefaultWidgetFactory.CreateAi(
+                _layout.RoomId, 240 + cascade, 100 + cascade),
+            WidgetTypes.Creative => DefaultWidgetFactory.CreateCreative(
+                _layout.RoomId, 200 + cascade, 80 + cascade),
+            _ => null
+        };
+
+        if (widget is null)
+        {
+            ShowHostStatus($"Unknown widget type: {type}");
+            return Task.CompletedTask;
+        }
+
         _layout.Widgets.Add(widget);
         PersistLayoutNow();
-        RenderDesktop();
+        RenderDesktopObjects();
+        ShowHostStatus($"Added {type} widget.");
         SyncInteractiveInputRegions();
-        _logger?.Info("widget", $"AI Workspace added ({widget.Id}).");
+        RefreshDebugStatus();
+        _logger?.Info("widget", $"Added widget {type} ({widget.Id}).");
+        return Task.CompletedTask;
     }
 
-    private async Task ShowAddCreativeDialogAsync()
+    private void RemoveWidget(WidgetInstance instance)
     {
-        if (_layout is null || _theme is null)
+        if (_layout is null)
         {
             return;
         }
 
-        AllowFullWindowInput();
-
-        var xBox = new NumberBox
-        {
-            Header = "X",
-            Value = 200,
-            Minimum = 0,
-            SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline
-        };
-        var yBox = new NumberBox
-        {
-            Header = "Y",
-            Value = 80,
-            Minimum = 0,
-            SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline
-        };
-        var wBox = new NumberBox
-        {
-            Header = "Width",
-            Value = 340,
-            Minimum = Math.Max(_theme.WidgetMinWidth, 280),
-            SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline
-        };
-        var hBox = new NumberBox
-        {
-            Header = "Height",
-            Value = 440,
-            Minimum = Math.Max(_theme.WidgetMinHeight, 320),
-            SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline
-        };
-
-        var hint = new TextBlock
-        {
-            Text =
-                "Desk for Projects with Dashboards (Quick Actions, Recent, Notes) plus favorite files/folders. "
-                + "Open only — no FS delete/move. CreativeCommand → Service → safe launch.",
-            FontSize = 12,
-            Opacity = 0.75,
-            TextWrapping = TextWrapping.WrapWholeWords
-        };
-
-        var panel = new StackPanel { Spacing = 8 };
-        panel.Children.Add(hint);
-        panel.Children.Add(xBox);
-        panel.Children.Add(yBox);
-        panel.Children.Add(wBox);
-        panel.Children.Add(hBox);
-
-        var dialog = new ContentDialog
-        {
-            Title = "Add Creative Workspace",
-            PrimaryButtonText = "Create",
-            CloseButtonText = "Cancel",
-            DefaultButton = ContentDialogButton.Primary,
-            Content = panel,
-            XamlRoot = XamlRoot
-        };
-
-        ContentDialogResult result;
-        try
-        {
-            result = await dialog.ShowAsync();
-        }
-        finally
-        {
-            SyncInteractiveInputRegions();
-        }
-
-        if (result != ContentDialogResult.Primary)
-        {
-            return;
-        }
-
-        var cascade = _layout.Widgets.Count(w => w.Type == WidgetTypes.Creative) * 24;
-        var widget = DefaultWidgetFactory.CreateCreative(
-            _layout.RoomId,
-            xBox.Value + cascade,
-            yBox.Value + cascade,
-            wBox.Value,
-            hBox.Value);
-
-        _layout.Widgets.Add(widget);
+        _layout.Widgets.RemoveAll(w => w.Id == instance.Id);
         PersistLayoutNow();
         RenderDesktopObjects();
-        RefreshDebugStatus();
-        _logger?.Info("creative", "Added Creative Workspace Widget.");
+        ShowHostStatus($"Removed widget ({instance.Type}).");
+        _logger?.Info("widget", $"Removed widget {instance.Type} ({instance.Id}).");
     }
 
-    private async Task ShowAddMusicDialogAsync()
+    private void ShowHostStatus(string message)
     {
-        if (_layout is null || _theme is null)
+        _logger?.Info("desktop", message);
+        if (HostStatusLabel is not null)
         {
-            return;
+            HostStatusLabel.Text = message;
+            HostStatusLabel.Visibility = Visibility.Visible;
         }
 
-        AllowFullWindowInput();
-
-        var xBox = new NumberBox
+        if (_debugChromeVisible)
         {
-            Header = "X",
-            Value = 120,
-            Minimum = 0,
-            SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline
-        };
-        var yBox = new NumberBox
-        {
-            Header = "Y",
-            Value = 120,
-            Minimum = 0,
-            SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline
-        };
-        var wBox = new NumberBox
-        {
-            Header = "Width",
-            Value = 360,
-            Minimum = Math.Max(_theme.WidgetMinWidth, 280),
-            SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline
-        };
-        var hBox = new NumberBox
-        {
-            Header = "Height",
-            Value = 420,
-            Minimum = Math.Max(_theme.WidgetMinHeight, 280),
-            SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline
-        };
-
-        var hint = new TextBlock
-        {
-            Text =
-                "Native Music UI: search Demo catalog, select a track, play/pause/next. "
-                + "Spotify/YouTube APIs are not connected — optional browser open for registered web sources. "
-                + "Commands go MusicCommand → Provider (future AI-ready). No Host Bridge.",
-            FontSize = 12,
-            Opacity = 0.75,
-            TextWrapping = TextWrapping.WrapWholeWords
-        };
-
-        var panel = new StackPanel { Spacing = 8 };
-        panel.Children.Add(hint);
-        panel.Children.Add(xBox);
-        panel.Children.Add(yBox);
-        panel.Children.Add(wBox);
-        panel.Children.Add(hBox);
-
-        var dialog = new ContentDialog
-        {
-            Title = "Add Music Widget",
-            PrimaryButtonText = "Create",
-            CloseButtonText = "Cancel",
-            DefaultButton = ContentDialogButton.Primary,
-            Content = panel,
-            XamlRoot = XamlRoot
-        };
-
-        ContentDialogResult result;
-        try
-        {
-            result = await dialog.ShowAsync();
-        }
-        finally
-        {
-            SyncInteractiveInputRegions();
+            StatusText.Text = message;
         }
 
-        if (result != ContentDialogResult.Primary)
-        {
-            return;
-        }
-
-        var cascade = _layout.Widgets.Count(w => w.Type == WidgetTypes.Music) * 24;
-        var widget = DefaultWidgetFactory.CreateMusic(
-            _layout.RoomId,
-            xBox.Value + cascade,
-            yBox.Value + cascade,
-            wBox.Value,
-            hBox.Value);
-
-        _layout.Widgets.Add(widget);
-        PersistLayoutNow();
-        RenderDesktopObjects();
-        RefreshDebugStatus();
-        _logger?.Info("music", "Added Music Widget (Spotify / YouTube / Local sources).");
-    }
-
-    private async Task ShowAddCalendarDialogAsync()
-    {
-        if (_layout is null || _theme is null)
-        {
-            return;
-        }
-
-        AllowFullWindowInput();
-
-        var icsBox = new TextBox
-        {
-            Header = "Google Calendar secret ICS URL (optional)",
-            PlaceholderText = "https://calendar.google.com/calendar/ical/…/basic.ics"
-        };
-        var xBox = new NumberBox
-        {
-            Header = "X",
-            Value = 360,
-            Minimum = 0,
-            SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline
-        };
-        var yBox = new NumberBox
-        {
-            Header = "Y",
-            Value = 48,
-            Minimum = 0,
-            SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline
-        };
-        var wBox = new NumberBox
-        {
-            Header = "Width",
-            Value = 320,
-            Minimum = Math.Max(_theme.WidgetMinWidth, 280),
-            SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline
-        };
-        var hBox = new NumberBox
-        {
-            Header = "Height",
-            Value = 360,
-            Minimum = Math.Max(_theme.WidgetMinHeight, 280),
-            SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline
-        };
-
-        var includeMock = new CheckBox
-        {
-            Content = "Include Mock provider (demo colors)",
-            IsChecked = false
-        };
-
-        var hint = new TextBlock
-        {
-            Text =
-                "Today's agenda via Calendar Hub (Local + optional Google). "
-                + "Paste Google Calendar → Secret address in iCal format for ICS, "
-                + "or place google-oauth-client.json under %LocalAppData%\\SecretBase\\credentials for API read. "
-                + "Notion Calendar / TimeTree have no official sync API here — use Web Widget. "
-                + "Tokens never go in layout JSON.",
-            FontSize = 12,
-            Opacity = 0.75,
-            TextWrapping = TextWrapping.WrapWholeWords
-        };
-
-        var panel = new StackPanel { Spacing = 8 };
-        panel.Children.Add(hint);
-        panel.Children.Add(icsBox);
-        panel.Children.Add(includeMock);
-        panel.Children.Add(xBox);
-        panel.Children.Add(yBox);
-        panel.Children.Add(wBox);
-        panel.Children.Add(hBox);
-
-        var dialog = new ContentDialog
-        {
-            Title = "Add Calendar Widget",
-            PrimaryButtonText = "Create",
-            CloseButtonText = "Cancel",
-            DefaultButton = ContentDialogButton.Primary,
-            Content = panel,
-            XamlRoot = XamlRoot
-        };
-
-        ContentDialogResult result;
-        try
-        {
-            result = await dialog.ShowAsync();
-        }
-        finally
-        {
-            SyncInteractiveInputRegions();
-        }
-
-        if (result != ContentDialogResult.Primary)
-        {
-            return;
-        }
-
-        var config = CalendarWidgetConfiguration.CreateDefault();
-        config.IncludeMockProvider = includeMock.IsChecked == true;
-        if (config.IncludeMockProvider)
-        {
-            config.UseSampleAgendaWhenEmpty = false;
-        }
-
-        var ics = icsBox.Text?.Trim();
-        if (!string.IsNullOrWhiteSpace(ics))
-        {
-            if (!WebUrlValidator.TryNormalize(ics, out var normalized, out var error) || normalized is null)
-            {
-                _logger?.Warn("calendar", error ?? "Invalid Google ICS URL.");
-                if (_debugChromeVisible)
-                {
-                    StatusText.Text = error ?? "Invalid Google ICS URL.";
-                }
-
-                return;
-            }
-
-            config.GoogleIcsUrl = normalized;
-            config.UseSampleAgendaWhenEmpty = false;
-        }
-
-        var cascade = _layout.Widgets.Count(w => w.Type == WidgetTypes.Calendar) * 24;
-        var widget = DefaultWidgetFactory.CreateCalendar(
-            _layout.RoomId,
-            xBox.Value + cascade,
-            yBox.Value + cascade,
-            wBox.Value,
-            hBox.Value,
-            config);
-
-        _layout.Widgets.Add(widget);
-        PersistLayoutNow();
-        RenderDesktopObjects();
-        RefreshDebugStatus();
-        _logger?.Info("calendar",
-            config.IncludeMockProvider
-                ? "Added Calendar Widget (Mock provider)."
-                : string.IsNullOrWhiteSpace(config.GoogleIcsUrl)
-                    ? "Added Calendar Widget (local sample agenda)."
-                    : "Added Calendar Widget (Google ICS provider).");
-    }
-
-    private async Task ShowAddWebDialogAsync()
-    {
-        if (_layout is null || _theme is null)
-        {
-            return;
-        }
-
-        AllowFullWindowInput();
-
-        var urlBox = new TextBox
-        {
-            Header = "URL (https)",
-            Text = WebWidgetConfiguration.DefaultUrl,
-            PlaceholderText = "https://www.youtube.com/"
-        };
-        var xBox = new NumberBox
-        {
-            Header = "X",
-            Value = 96,
-            Minimum = 0,
-            SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline
-        };
-        var yBox = new NumberBox
-        {
-            Header = "Y",
-            Value = 96,
-            Minimum = 0,
-            SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline
-        };
-        var wBox = new NumberBox
-        {
-            Header = "Width",
-            Value = 560,
-            Minimum = Math.Max(_theme.WidgetMinWidth, 320),
-            SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline
-        };
-        var hBox = new NumberBox
-        {
-            Header = "Height",
-            Value = 360,
-            Minimum = Math.Max(_theme.WidgetMinHeight, 220),
-            SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline
-        };
-
-        var hint = new TextBlock
-        {
-            Text = "Web pages are Untrusted. No host bridge to Secret Base.",
-            FontSize = 12,
-            Opacity = 0.75,
-            TextWrapping = TextWrapping.WrapWholeWords
-        };
-
-        var panel = new StackPanel { Spacing = 8 };
-        panel.Children.Add(urlBox);
-        panel.Children.Add(hint);
-        panel.Children.Add(xBox);
-        panel.Children.Add(yBox);
-        panel.Children.Add(wBox);
-        panel.Children.Add(hBox);
-
-        var dialog = new ContentDialog
-        {
-            Title = "Add Web Widget",
-            PrimaryButtonText = "Create",
-            CloseButtonText = "Cancel",
-            DefaultButton = ContentDialogButton.Primary,
-            Content = panel,
-            XamlRoot = XamlRoot
-        };
-
-        ContentDialogResult result;
-        try
-        {
-            result = await dialog.ShowAsync();
-        }
-        finally
-        {
-            SyncInteractiveInputRegions();
-        }
-
-        if (result != ContentDialogResult.Primary)
-        {
-            return;
-        }
-
-        if (!WebUrlValidator.TryNormalize(urlBox.Text, out var normalized, out var error))
-        {
-            _logger?.Warn("widget", error ?? WebUrlValidator.BlockedMessage);
-            if (_debugChromeVisible)
-            {
-                StatusText.Text = error ?? WebUrlValidator.BlockedMessage;
-            }
-
-            return;
-        }
-
-        var cascade = _layout.Widgets.Count(w => w.Type == WidgetTypes.Web) * 24;
-        var widget = DefaultWidgetFactory.CreateWeb(
-            normalized,
-            _layout.RoomId,
-            xBox.Value + cascade,
-            yBox.Value + cascade,
-            wBox.Value,
-            hBox.Value);
-
-        _layout.Widgets.Add(widget);
-        PersistLayoutNow();
-        RenderDesktopObjects();
-        RefreshDebugStatus();
-        _logger?.Info("widget", $"Added Web Widget → {normalized}");
+        SyncInteractiveInputRegions();
     }
 
     private async Task ShowAddBlockDialogAsync()
@@ -1770,6 +1344,7 @@ public sealed partial class DesktopPage : Page
         catch (Exception ex)
         {
             _logger?.Error("persistence", "Failed to save layout.", ex);
+            ShowHostStatus("Could not save layout.");
         }
     }
 
