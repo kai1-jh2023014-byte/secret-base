@@ -1,6 +1,7 @@
 using SecretBase.Core.Desktop;
 using SecretBase.Core.Widgets.Calendar;
 using SecretBase.Core.Widgets.Clock;
+using SecretBase.Core.Widgets.Music;
 using SecretBase.Core.Widgets.Text;
 using SecretBase.Core.Widgets.Web;
 
@@ -89,6 +90,30 @@ public static class DefaultWidgetFactory
             Type = WidgetTypes.Calendar,
             Position = new WidgetPosition(x ?? 360, y ?? 48),
             Size = new WidgetSize(width ?? 320, height ?? 360),
+            RoomId = room,
+            Configuration = config.ToDictionary()
+        };
+    }
+
+    /// <summary>
+    /// Creates a Music Widget. Not seeded into default layout — add explicitly.
+    /// </summary>
+    public static WidgetInstance CreateMusic(
+        RoomId? roomId = null,
+        double? x = null,
+        double? y = null,
+        double? width = null,
+        double? height = null,
+        MusicWidgetConfiguration? configuration = null)
+    {
+        var room = roomId ?? RoomId.DefaultRoomId;
+        var config = configuration ?? MusicWidgetConfiguration.CreateDefault();
+        return new WidgetInstance
+        {
+            Id = Guid.NewGuid(),
+            Type = WidgetTypes.Music,
+            Position = new WidgetPosition(x ?? 120, y ?? 120),
+            Size = new WidgetSize(width ?? 360, height ?? 420),
             RoomId = room,
             Configuration = config.ToDictionary()
         };

@@ -117,3 +117,11 @@ See [calendar-widget.md](../architecture/calendar-widget.md).
 **Why:** Personal Desktop Environment needs a real multi-service hub without forcing unofficial APIs or conflating Notion Calendar with Notion Data API.
 
 See [calendar-integration.md](../architecture/calendar-integration.md).
+
+## 2026-08-14 — Music Widget / Music Hub MVP (web-open sources)
+
+**Decision:** Add `WidgetTypes.Music` with Core `MusicSource` / `MusicWidgetConfiguration` / minimal `IMusicProvider` (OpenWeb + Local placeholder). Host UI is a Sources hub that opens Spotify/YouTube/Web URLs in Untrusted WebView2 with the same harden rules as Web Widget. No Spotify/YouTube OAuth or APIs. **Do not** modify Overlay / DWM / SetWindowRgn. Not seeded into default layout — **♪** FAB / Ctrl+Shift+M.
+
+**Why:** Introduce Music as a Creative OS domain (not a generic Web Widget) while keeping security boundaries and deferring heavy API work.
+
+See [music-widget.md](../architecture/music-widget.md).

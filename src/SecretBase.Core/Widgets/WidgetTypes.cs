@@ -13,4 +13,7 @@ public static class WidgetTypes
 
     /// <summary>Local month calendar. Events via <c>ICalendarEventSource</c> (local-only in v0.1).</summary>
     public const string Calendar = "calendar";
+
+    /// <summary>Music Hub widget — music sources (Spotify/YouTube web, Local placeholder). Untrusted WebView when browsing.</summary>
+    public const string Music = "music";
 }
