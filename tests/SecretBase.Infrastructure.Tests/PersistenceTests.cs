@@ -506,6 +506,7 @@ public class LayoutPersistenceTests
             layout.Widgets.Add(DefaultWidgetFactory.CreateCalendar());
             layout.Widgets.Add(DefaultWidgetFactory.CreateMusic());
             layout.Widgets.Add(DefaultWidgetFactory.CreateCreative());
+            layout.Widgets.Add(DefaultWidgetFactory.CreateAi());
             store.Save(layout);
 
             var restored = store.LoadOrCreateDefault(RoomId.DefaultRoomId);
@@ -515,6 +516,7 @@ public class LayoutPersistenceTests
             Assert.Contains(restored.Widgets, w => w.Type == WidgetTypes.Calendar);
             Assert.Contains(restored.Widgets, w => w.Type == WidgetTypes.Music);
             Assert.Contains(restored.Widgets, w => w.Type == WidgetTypes.Creative);
+            Assert.Contains(restored.Widgets, w => w.Type == WidgetTypes.Ai);
             Assert.Equal(DesktopLayout.CurrentSchemaVersion, restored.SchemaVersion);
         }
         finally

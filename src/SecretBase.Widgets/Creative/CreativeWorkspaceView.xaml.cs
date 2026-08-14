@@ -2,6 +2,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
+using SecretBase.Core.Ai;
 using SecretBase.Core.Creative;
 using SecretBase.Core.Themes;
 using SecretBase.Core.Widgets.Creative;
@@ -22,6 +23,7 @@ public sealed partial class CreativeWorkspaceView : UserControl
     private CreativeCommandService? _commands;
     private Func<CreativeItem, string?>? _tryLaunchItem;
     private Func<string, bool, string?>? _tryLaunchTarget;
+    private Func<string?, bool, string?>? _tryLaunchCursor;
     private Func<Task<(bool ok, bool cancelled, string? path, string? error)>>? _pickFile;
     private Func<Task<(bool ok, bool cancelled, string? path, string? error)>>? _pickFolder;
     private Action<CreativeWorkspaceWidgetConfiguration>? _onConfigurationChanged;
@@ -41,12 +43,14 @@ public sealed partial class CreativeWorkspaceView : UserControl
         Func<Task<(bool ok, bool cancelled, string? path, string? error)>> pickFile,
         Func<Task<(bool ok, bool cancelled, string? path, string? error)>> pickFolder,
         Action<CreativeWorkspaceWidgetConfiguration>? onConfigurationChanged = null,
-        Func<string, bool, string?>? tryLaunchTarget = null)
+        Func<string, bool, string?>? tryLaunchTarget = null,
+        Func<string?, bool, string?>? tryLaunchCursor = null)
     {
         _commands = commands;
         _configuration = configuration;
         _tryLaunchItem = tryLaunch;
         _tryLaunchTarget = tryLaunchTarget;
+        _tryLaunchCursor = tryLaunchCursor;
         _pickFile = pickFile;
         _pickFolder = pickFolder;
         _onConfigurationChanged = onConfigurationChanged;
@@ -333,7 +337,7 @@ public sealed partial class CreativeWorkspaceView : UserControl
             ContentList.Children.Add(desc);
         }
 
-        // Quick Actions — user-explicit only (+ optional Root when present).
+        // Quick Actions — user-explicit resources + Root + AI tools.
         ContentList.Children.Add(CreateSectionHeader("Quick Actions"));
         var quickPanel = new StackPanel { Spacing = 6, Orientation = Orientation.Vertical };
         var quickResources = project.Resources.Where(r => r.IsQuickAction).ToList();
@@ -348,6 +352,48 @@ public sealed partial class CreativeWorkspaceView : UserControl
                 }));
         }
 
+        quickPanel.Children.Add(CreateActionButton(
+            "💻 Open in Cursor",
+            async () =>
+            {
+                var result = _commands.Execute(CreativeCommand.OpenProjectInCursor(project.Id));
+                if (!result.Succeeded && result.OfferCursorWebsiteFallback)
+                {
+                    var dialog = new ContentDialog
+                    {
+                        Title = "Cursor is not available",
+                        Content = "Cursor was not found on this PC. Open the official Cursor website?",
+                        PrimaryButtonText = "Open Cursor Website",
+                        CloseButtonText = "Cancel",
+                        DefaultButton = ContentDialogButton.Primary,
+                        XamlRoot = XamlRoot
+                    };
+                    if (await dialog.ShowAsync() == ContentDialogResult.Primary
+                        && _tryLaunchTarget is not null
+                        && WebUrlValidator.TryNormalize(AiBuiltinTools.CursorWebsite, out var url, out _)
+                        && url is not null)
+                    {
+                        StatusLabel.Text = _tryLaunchTarget(url, true) ?? "Opened Cursor website.";
+                    }
+                    else
+                    {
+                        StatusLabel.Text = result.ErrorMessage ?? "Cursor is not available.";
+                    }
+
+                    RefreshLists();
+                    return;
+                }
+
+                LaunchCommandResult(result);
+            }));
+        quickPanel.Children.Add(CreateActionButton(
+            "🌐 Open ChatGPT",
+            () =>
+            {
+                LaunchCommandResult(_commands.Execute(CreativeCommand.OpenAiTool(AiBuiltinTools.ChatGptId)));
+                return Task.CompletedTask;
+            }));
+
         foreach (var resource in quickResources)
         {
             var captured = resource;
@@ -361,14 +407,7 @@ public sealed partial class CreativeWorkspaceView : UserControl
                 }));
         }
 
-        if (quickPanel.Children.Count == 0)
-        {
-            ContentList.Children.Add(CreateMuted("Star a resource below to pin a Quick Action."));
-        }
-        else
-        {
-            ContentList.Children.Add(quickPanel);
-        }
+        ContentList.Children.Add(quickPanel);
 
         // Recent — Secret Base opens only.
         ContentList.Children.Add(CreateSectionHeader("Recent"));
@@ -925,7 +964,32 @@ public sealed partial class CreativeWorkspaceView : UserControl
     {
         if (!result.Succeeded)
         {
+            if (result.OfferCursorWebsiteFallback && !string.IsNullOrWhiteSpace(result.LaunchTarget)
+                && _tryLaunchTarget is not null)
+            {
+                StatusLabel.Text = result.ErrorMessage ?? "Cursor is not available.";
+                // Host may open website via fallback button flow; keep message only here.
+                RefreshLists();
+                return;
+            }
+
             StatusLabel.Text = result.ErrorMessage ?? "Open failed.";
+            RefreshLists();
+            return;
+        }
+
+        if (result.ShouldOpenCursorAtFolder || result.ShouldOpenCursorApp)
+        {
+            if (_tryLaunchCursor is null)
+            {
+                StatusLabel.Text = "Cursor launch is unavailable.";
+                return;
+            }
+
+            var cursorError = _tryLaunchCursor(
+                result.ShouldOpenCursorAtFolder ? result.CursorFolderPath : null,
+                openAppOnly: result.ShouldOpenCursorApp && !result.ShouldOpenCursorAtFolder);
+            StatusLabel.Text = cursorError ?? "Opened in Cursor.";
             RefreshLists();
             return;
         }

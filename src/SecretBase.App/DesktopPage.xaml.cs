@@ -6,12 +6,15 @@ using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Navigation;
 using SecretBase.App.Desktop;
 using SecretBase.Core;
+using SecretBase.Core.Ai;
 using SecretBase.Core.Blocks;
 using SecretBase.Core.Calendar;
+using SecretBase.Core.Creative;
 using SecretBase.Core.Desktop;
 using SecretBase.Core.Themes;
 using SecretBase.Core.Time;
 using SecretBase.Core.Widgets;
+using SecretBase.Core.Widgets.Ai;
 using SecretBase.Core.Widgets.Calendar;
 using SecretBase.Core.Widgets.Clock;
 using SecretBase.Core.Widgets.Creative;
@@ -23,6 +26,7 @@ using SecretBase.Infrastructure.Logging;
 using SecretBase.Infrastructure.Persistence;
 using SecretBase.Platform.Abstractions;
 using SecretBase.Platform.Windows;
+using SecretBase.Widgets.Ai;
 using SecretBase.Widgets.Calendar;
 using SecretBase.Widgets.Clock;
 using SecretBase.Widgets.Creative;
@@ -30,8 +34,6 @@ using SecretBase.Widgets.Music;
 using SecretBase.Widgets.Text;
 using SecretBase.Widgets.Theming;
 using SecretBase.Widgets.Web;
-using SecretBase.Core.Blocks;
-using SecretBase.Core.Creative;
 using Windows.Foundation;
 
 namespace SecretBase.App;
@@ -52,6 +54,8 @@ public sealed partial class DesktopPage : Page
     private ICalendarAgendaCache? _calendarCache;
     private IPathPickService? _pathPicker;
     private CreativeCommandService? _creativeCommands;
+    private ICursorLaunchService? _cursorLaunch;
+    private AiCommandService? _aiCommands;
     private DesktopLayout? _layout;
     private ThemeDefinition? _theme;
     private CompatibilityInfo? _compatibility;
@@ -90,10 +94,19 @@ public sealed partial class DesktopPage : Page
         _secretStore = args.SecretStore ?? new WindowsCredentialSecretStore();
         _calendarCache = args.CalendarCache ?? new JsonCalendarAgendaCache();
         _pathPicker = args.PathPicker;
+        _cursorLaunch = args.CursorLaunch ?? new WindowsCursorLaunchService();
+        var projectService = args.CreativeCommands?.Projects
+            ?? new CreativeProjectService(new JsonCreativeProjectStore());
+        _aiCommands = args.AiCommands
+            ?? new AiCommandService(
+                AiWorkspaceWidgetConfiguration.CreateDefault(),
+                projectService,
+                () => _cursorLaunch.IsAvailable);
         _creativeCommands = args.CreativeCommands
             ?? new CreativeCommandService(
                 new CreativeWorkspaceService(new JsonCreativeWorkspaceStore()),
-                new CreativeProjectService(new JsonCreativeProjectStore()));
+                projectService,
+                _aiCommands);
 
         _theme = _themeStore.LoadOrCreateDefault();
         _layout = _layoutStore.LoadOrCreateDefault(RoomId.DefaultRoomId);
@@ -114,6 +127,7 @@ public sealed partial class DesktopPage : Page
         _logger.Info("widget", "Calendar Hub ready (Cal button) — Local / Mock / Google ICS / Google API read.");
         _logger.Info("widget", "Music Widget ready (♪ button) — native search/playback UI via MusicCommand; Demo catalog; no Host Bridge.");
         _logger.Info("widget", "Creative Workspace ready (CW button) — favorites/recent/open registered paths only.");
+        _logger.Info("widget", "AI Workspace ready (AI button) — Cursor / official AI websites; Project Dashboard Open in Cursor.");
     }
 
     private void StyleFabButtons(ThemeDefinition theme)
@@ -146,6 +160,12 @@ public sealed partial class DesktopPage : Page
         AddCreativeFab.BorderBrush = ThemePainter.Brush(theme.Accent, 0.7);
         AddCreativeFab.BorderThickness = new Thickness(1);
         AddCreativeFab.FontFamily = new FontFamily(theme.FontFamily);
+
+        AddAiFab.Background = ThemePainter.Brush(theme.WidgetBackground, ThemePainter.EffectiveWidgetOpacity(theme));
+        AddAiFab.Foreground = ThemePainter.Brush(theme.WidgetForeground);
+        AddAiFab.BorderBrush = ThemePainter.Brush(theme.Accent, 0.7);
+        AddAiFab.BorderThickness = new Thickness(1);
+        AddAiFab.FontFamily = new FontFamily(theme.FontFamily);
 
         ThemeFab.Background = ThemePainter.Brush(theme.WidgetBackground, ThemePainter.EffectiveWidgetOpacity(theme));
         ThemeFab.Foreground = ThemePainter.Brush(theme.WidgetForeground);
@@ -331,6 +351,11 @@ public sealed partial class DesktopPage : Page
             rects.Add(creativeFabRect);
         }
 
+        if (TryCreateClientRect(AddAiFab, scale, out var aiFabRect))
+        {
+            rects.Add(aiFabRect);
+        }
+
         if (TryCreateClientRect(ThemeFab, scale, out var themeFabRect))
         {
             rects.Add(themeFabRect);
@@ -499,7 +524,8 @@ public sealed partial class DesktopPage : Page
             var commands = _creativeCommands
                 ?? new CreativeCommandService(
                     new CreativeWorkspaceService(new JsonCreativeWorkspaceStore()),
-                    new CreativeProjectService(new JsonCreativeProjectStore()));
+                    new CreativeProjectService(new JsonCreativeProjectStore()),
+                    _aiCommands);
             var view = new CreativeWorkspaceView();
             view.Initialize(
                 commands,
@@ -512,7 +538,28 @@ public sealed partial class DesktopPage : Page
                     instance.Configuration = updated.ToDictionary();
                     PersistLayoutNow();
                 },
-                tryLaunchTarget: TryLaunchCreativeTarget);
+                tryLaunchTarget: TryLaunchCreativeTarget,
+                tryLaunchCursor: TryLaunchCursor);
+            if (_theme is not null)
+            {
+                view.ApplyTheme(_theme);
+            }
+
+            return view;
+        }
+
+        if (instance.Type == WidgetTypes.Ai)
+        {
+            var config = AiWorkspaceWidgetConfiguration.FromDictionary(instance.Configuration);
+            instance.Configuration = config.ToDictionary();
+
+            var ai = _aiCommands
+                ?? new AiCommandService(
+                    config,
+                    _creativeCommands?.Projects,
+                    () => (_cursorLaunch ?? new WindowsCursorLaunchService()).IsAvailable);
+            var view = new AiWorkspaceView();
+            view.Initialize(ai, tryExecute: TryExecuteAiResult);
             if (_theme is not null)
             {
                 view.ApplyTheme(_theme);
@@ -563,6 +610,46 @@ public sealed partial class DesktopPage : Page
             ItemType: inferred.ToString(),
             DisplayName: displayName ?? Path.GetFileName(path.TrimEnd('\\', '/'))));
         return result.Succeeded ? null : (result.ErrorMessage ?? "Launch failed.");
+    }
+
+    private string? TryLaunchCursor(string? folderPath, bool openAppOnly)
+    {
+        var cursor = _cursorLaunch ?? new WindowsCursorLaunchService();
+        if (openAppOnly || string.IsNullOrWhiteSpace(folderPath))
+        {
+            var app = cursor.TryOpenApp();
+            return app.Succeeded ? null : (app.ErrorMessage ?? "Cursor is not available.");
+        }
+
+        var result = cursor.TryOpenFolder(folderPath);
+        return result.Succeeded ? null : (result.ErrorMessage ?? "Could not open folder in Cursor.");
+    }
+
+    private string? TryExecuteAiResult(AiCommandResult result)
+    {
+        if (!result.Succeeded)
+        {
+            return result.ErrorMessage ?? "AI open failed.";
+        }
+
+        if (result.ShouldOpenCursorAtFolder && !string.IsNullOrWhiteSpace(result.FolderPath))
+        {
+            return TryLaunchCursor(result.FolderPath, openAppOnly: false);
+        }
+
+        if (result.ShouldOpenCursorApp)
+        {
+            return TryLaunchCursor(null, openAppOnly: true);
+        }
+
+        if (result.ShouldOpenUrl && !string.IsNullOrWhiteSpace(result.Url))
+        {
+            return TryOpenHttpsUrl(result.Url!)
+                ? null
+                : "Could not open AI website in the system browser.";
+        }
+
+        return "Nothing to open.";
     }
 
     private async Task<(bool ok, bool cancelled, string? path, string? error)> PickCreativeFileAsync()
@@ -738,6 +825,99 @@ public sealed partial class DesktopPage : Page
     {
         args.Handled = true;
         await ShowAddCreativeDialogAsync();
+    }
+
+    private async void AddAiButton_Click(object sender, RoutedEventArgs e) =>
+        await ShowAddAiDialogAsync();
+
+    private async void AddAiAccelerator_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        args.Handled = true;
+        await ShowAddAiDialogAsync();
+    }
+
+    private async Task ShowAddAiDialogAsync()
+    {
+        if (_layout is null || _theme is null)
+        {
+            return;
+        }
+
+        AllowFullWindowInput();
+
+        var xBox = new NumberBox
+        {
+            Header = "X",
+            Value = 240,
+            Minimum = 0,
+            SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline
+        };
+        var yBox = new NumberBox
+        {
+            Header = "Y",
+            Value = 100,
+            Minimum = 0,
+            SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline
+        };
+        var wBox = new NumberBox
+        {
+            Header = "Width",
+            Value = 300,
+            Minimum = Math.Max(_theme.WidgetMinWidth, 260),
+            SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline
+        };
+        var hBox = new NumberBox
+        {
+            Header = "Height",
+            Value = 420,
+            Minimum = Math.Max(_theme.WidgetMinHeight, 300),
+            SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline
+        };
+
+        var hint = new TextBlock
+        {
+            Text =
+                "AI Workspace launches Cursor (with Project root from Dashboard) and official AI websites. "
+                + "Not an in-app LLM. No arbitrary exe / PowerShell.",
+            FontSize = 12,
+            Opacity = 0.75,
+            TextWrapping = TextWrapping.WrapWholeWords
+        };
+
+        var panel = new StackPanel { Spacing = 8 };
+        panel.Children.Add(hint);
+        panel.Children.Add(xBox);
+        panel.Children.Add(yBox);
+        panel.Children.Add(wBox);
+        panel.Children.Add(hBox);
+
+        var dialog = new ContentDialog
+        {
+            Title = "Add AI Workspace",
+            Content = panel,
+            PrimaryButtonText = "Add",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = XamlRoot
+        };
+
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary)
+        {
+            SyncInteractiveInputRegions();
+            return;
+        }
+
+        var cascade = _layout.Widgets.Count(w => w.Type == WidgetTypes.Ai) * 24;
+        var widget = DefaultWidgetFactory.CreateAi(
+            x: xBox.Value + cascade,
+            y: yBox.Value + cascade,
+            width: wBox.Value,
+            height: hBox.Value);
+        _layout.Widgets.Add(widget);
+        PersistLayoutNow();
+        RenderDesktop();
+        SyncInteractiveInputRegions();
+        _logger?.Info("widget", $"AI Workspace added ({widget.Id}).");
     }
 
     private async Task ShowAddCreativeDialogAsync()

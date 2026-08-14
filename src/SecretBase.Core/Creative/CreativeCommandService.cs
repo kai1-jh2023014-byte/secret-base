@@ -1,10 +1,11 @@
+using SecretBase.Core.Ai;
+
 namespace SecretBase.Core.Creative;
 
 /// <summary>
 /// Validates CreativeCommands against registered workspace/projects only.
 /// Never accepts free-form paths from AI; never deletes/moves/runs shell.
-/// Host performs actual open via <c>ITargetLaunchService</c> / browser when
-/// <see cref="CreativeCommandResult.ShouldLaunch"/>.
+/// Host performs actual open via <c>ITargetLaunchService</c> / browser / Cursor API when requested.
 /// </summary>
 public sealed class CreativeCommandService
 {
@@ -12,18 +13,23 @@ public sealed class CreativeCommandService
 
     private readonly CreativeWorkspaceService _workspace;
     private readonly CreativeProjectService? _projects;
+    private readonly AiCommandService? _ai;
 
     public CreativeCommandService(
         CreativeWorkspaceService workspace,
-        CreativeProjectService? projects = null)
+        CreativeProjectService? projects = null,
+        AiCommandService? ai = null)
     {
         _workspace = workspace ?? throw new ArgumentNullException(nameof(workspace));
         _projects = projects;
+        _ai = ai;
     }
 
     public CreativeWorkspaceService Workspace => _workspace;
 
     public CreativeProjectService? Projects => _projects;
+
+    public AiCommandService? Ai => _ai;
 
     public CreativeCommandResult Execute(CreativeCommand command)
     {
@@ -44,8 +50,48 @@ public sealed class CreativeCommandService
             CreativeCommandKind.DeleteCreativeProjectRegistration => DeleteCreativeProjectRegistration(command),
             CreativeCommandKind.SaveCreativeProjectNotes => SaveCreativeProjectNotes(command),
             CreativeCommandKind.ToggleCreativeProjectResourceQuickAction => ToggleResourceQuickAction(command),
+            CreativeCommandKind.OpenProjectInCursor => MapAi(AiCommand.OpenProjectInCursor(command.ProjectId ?? string.Empty)),
+            CreativeCommandKind.OpenAiTool => MapAi(AiCommand.OpenTool(command.ItemId ?? string.Empty)),
             _ => CreativeCommandResult.Fail(command.Kind, "Unknown creative command.")
         };
+    }
+
+    private CreativeCommandResult MapAi(AiCommand aiCommand)
+    {
+        if (_ai is null)
+        {
+            return CreativeCommandResult.Fail(aiCommand.Kind == AiCommandKind.OpenProjectInCursor
+                ? CreativeCommandKind.OpenProjectInCursor
+                : CreativeCommandKind.OpenAiTool, "AI commands are not available.");
+        }
+
+        var ai = _ai.Execute(aiCommand);
+        var kind = aiCommand.Kind == AiCommandKind.OpenProjectInCursor
+            ? CreativeCommandKind.OpenProjectInCursor
+            : CreativeCommandKind.OpenAiTool;
+
+        if (!ai.Succeeded)
+        {
+            return new CreativeCommandResult
+            {
+                Succeeded = false,
+                Kind = kind,
+                ErrorMessage = ai.ErrorMessage,
+                OfferCursorWebsiteFallback = ai.OfferCursorWebsiteFallback,
+                LaunchTarget = ai.Url,
+                LaunchIsExternalLink = ai.OfferCursorWebsiteFallback && !string.IsNullOrWhiteSpace(ai.Url)
+            };
+        }
+
+        return CreativeCommandResult.Ok(
+            kind,
+            shouldLaunch: ai.ShouldOpenUrl,
+            launchTarget: ai.Url,
+            launchIsExternalLink: ai.ShouldOpenUrl,
+            shouldOpenCursorAtFolder: ai.ShouldOpenCursorAtFolder,
+            cursorFolderPath: ai.FolderPath,
+            shouldOpenCursorApp: ai.ShouldOpenCursorApp,
+            offerCursorWebsiteFallback: ai.OfferCursorWebsiteFallback);
     }
 
     private CreativeCommandResult Search(CreativeCommand command)

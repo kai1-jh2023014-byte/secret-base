@@ -1,7 +1,9 @@
 ﻿using Microsoft.UI.Xaml;
 using SecretBase.Core;
+using SecretBase.Core.Ai;
 using SecretBase.Core.Creative;
 using SecretBase.Core.Time;
+using SecretBase.Core.Widgets.Ai;
 using SecretBase.Infrastructure.Logging;
 using SecretBase.Infrastructure.Persistence;
 using SecretBase.Infrastructure.Storage;
@@ -39,9 +41,16 @@ public partial class App : Application
             $"OS={info.OsDescription}; OSVersion={info.OsVersion}; Arch={info.OsArchitecture}; DotNet={info.DotNetVersion}; WASDK={info.WindowsAppSdkPackageVersion}");
 
         var pathPicker = new WindowsPathPickService();
+        var cursorLaunch = new WindowsCursorLaunchService();
+        var projectService = new CreativeProjectService(new JsonCreativeProjectStore());
+        var aiCommands = new AiCommandService(
+            AiWorkspaceWidgetConfiguration.CreateDefault(),
+            projectService,
+            () => cursorLaunch.IsAvailable);
         var creativeCommands = new CreativeCommandService(
             new CreativeWorkspaceService(new JsonCreativeWorkspaceStore()),
-            new CreativeProjectService(new JsonCreativeProjectStore()));
+            projectService,
+            aiCommands);
 
         var pageArgs = new DesktopPageArgs(
             Logger: _logger,
@@ -54,7 +63,9 @@ public partial class App : Application
             Icons: new ShellFileIconService(AppDataPaths.IconsDirectory),
             Intake: new BlockItemIntakeService(AppDataPaths.BlockItemsDirectory),
             PathPicker: pathPicker,
-            CreativeCommands: creativeCommands);
+            CreativeCommands: creativeCommands,
+            CursorLaunch: cursorLaunch,
+            AiCommands: aiCommands);
 
         IDesktopOverlayService overlay = new AppWindowDesktopOverlayService();
         _window = new MainWindow(pageArgs, overlay);

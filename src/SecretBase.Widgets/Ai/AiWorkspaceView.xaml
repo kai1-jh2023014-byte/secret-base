@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<UserControl
+    x:Class="SecretBase.Widgets.Ai.AiWorkspaceView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d">
+
+    <!--
+      AI Workspace — hub to Cursor / official AI websites.
+      Not an in-app LLM. No Host Bridge. Move/resize on WidgetFrame.
+    -->
+    <Border
+        x:Name="RootBorder"
+        Padding="12,10"
+        Background="#CC243447"
+        CornerRadius="16"
+        BorderThickness="1"
+        BorderBrush="#44FFFFFF"
+        MinWidth="260"
+        MinHeight="320">
+        <Grid RowSpacing="8">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <TextBlock
+                x:Name="HeaderText"
+                Grid.Row="0"
+                Text="AI Workspace"
+                FontSize="17"
+                FontWeight="SemiBold"
+                TextWrapping="WrapWholeWords" />
+
+            <TextBlock
+                x:Name="SubtitleText"
+                Grid.Row="1"
+                Text="Connect your Project to the tools you create with."
+                FontSize="11"
+                Opacity="0.75"
+                TextWrapping="WrapWholeWords" />
+
+            <ScrollViewer
+                Grid.Row="2"
+                VerticalScrollBarVisibility="Auto"
+                HorizontalScrollBarVisibility="Disabled">
+                <StackPanel x:Name="ToolsList" Spacing="8" />
+            </ScrollViewer>
+
+            <TextBlock
+                x:Name="StatusLabel"
+                Grid.Row="3"
+                FontSize="11"
+                Opacity="0.75"
+                TextWrapping="WrapWholeWords" />
+        </Grid>
+    </Border>
+</UserControl>

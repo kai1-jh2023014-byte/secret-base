@@ -45,5 +45,6 @@ Highest principle:
 - ✅ Creative Workspace (favorites/recent/open registered paths; CreativeCommand boundary)
 - ✅ Project Workspace (CreativeProject containers + projects.json; open-only; registration delete)
 - ✅ Project Dashboard (Quick Actions / Recent / Notes; schemaVersion 2 migration)
+- ✅ AI Workspace (Cursor + official AI websites; Project → Open in Cursor)
 - App Launcher polish → Room switching
 

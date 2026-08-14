@@ -157,3 +157,11 @@ See [creative-workspace.md](../architecture/creative-workspace.md) and [creative
 **Why:** Make each Project a base to *start creating* — overview, pinned opens, recent resume, notes — without becoming a file manager.
 
 See [creative-workspace.md](../architecture/creative-workspace.md) and [creative-commands.md](../architecture/creative-commands.md).
+
+## 2026-08-14 — AI Workspace & Cursor Integration MVP
+
+**Decision:** Add `WidgetTypes.Ai` as an AI launcher hub (Cursor desktop + ChatGPT/Claude/Gemini official websites). Introduce `AiCommand` / `AiCommandService` and narrow `ICursorLaunchService` (PATH + `%LocalAppData%\Programs\…`, single validated folder arg). Wire `CreativeCommand.OpenProjectInCursor` / `OpenAiTool` and Dashboard Quick Actions. Fallback to Cursor website when app missing — never auto-install. **No** LLM/API/OAuth/MCP, no Taskbar/Explorer, no Overlay rewrite, no arbitrary Process args.
+
+**Why:** Make Secret Base the safe command tower between Creative Projects and the AI tools the user already uses.
+
+See [ai-workspace.md](../architecture/ai-workspace.md).
