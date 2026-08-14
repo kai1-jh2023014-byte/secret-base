@@ -44,15 +44,18 @@ Future “Web → Secret Base API” bridges, if ever added, require an explicit
 ## Calendar Integration Layer (v0.1)
 
 ```
-CalendarWidgetView
+CalendarWidgetView (Today agenda)
         ↓
-ICalendarEventSource   (Core contract)
-   ├─ Empty / LocalConfiguration   ← shipped
-   └─ Outlook / Google (future)    ← Platform/Infrastructure only + user consent
+CalendarService
+        ↓
+ICalendarProvider
+   ├─ Local (sample / config events)
+   ├─ Google ICS (user secret iCal URL — Infrastructure)
+   └─ Notion / OAuth Google API (future, consent-first)
 ```
 
-v0.1 Calendar is **local-only** (events in layout JSON). Do not embed cloud OAuth tokens in Core
-or call calendar REST APIs from Widgets without a dedicated Platform provider and confirmation UX.
+Common `CalendarEvent` only in Core. No provider DTOs in Core.
+v0.1 does **not** embed OAuth client secrets. Overlay hit-test / DWM remain untouched.
 
 ## v0.1 hard rules
 

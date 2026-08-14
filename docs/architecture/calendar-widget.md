@@ -1,68 +1,80 @@
 # Calendar Widget & Integration Layer
 
-Local month calendar on the Secret Base Desktop. v0.1 is **local-only** —
-no Outlook / Google cloud credentials or network sync.
+Think / Manage layer: keep today's schedule visible on the Secret Base Desktop.
 
-## Type
+## UX (v0.1)
 
-| Field | Value |
-|-------|-------|
-| `WidgetTypes` | `"calendar"` |
-| Configuration | `CalendarWidgetConfiguration` |
-| View | `SecretBase.Widgets.Calendar.CalendarWidgetView` |
+Today agenda — not a full month grid:
 
-## How to add
+```
+Today
+09:00  〜 12:00
+東進
+14:00  〜 16:00
+Programming
+…
+Google Calendar / Local
+[Refresh] [Open Calendar]
+```
 
-- Always-visible **Cal** FAB
-- Debug chrome **Add Cal**
-- **Ctrl+Shift+C**
+Add via **Cal** FAB / **Ctrl+Shift+C**. Default layout still seeds only Clock + Text.
 
-Default layout still seeds only Clock + Text. Calendar is never auto-inserted.
-Does **not** change Desktop Overlay hit-testing / DWM (PR #8 foundation).
-
-## Layers
-
-| Layer | Owns |
-|-------|------|
-| **Core / Calendar** | `ICalendarEventSource`, `CalendarEvent`, `CalendarMonthBuilder`, `LocalCalendarEventSource`, `EmptyCalendarEventSource` |
-| **Core / Widgets** | `CalendarWidgetConfiguration` (FirstDayOfWeek, pinned month, local Events bag) |
-| **Widgets** | Month grid UI (prev/next/today), theme tokens |
-| **App** | `DesktopPage` wiring + Add dialog; `WidgetFrame` move/resize |
-| **Infrastructure** | Existing `JsonLayoutStore` (opaque configuration) |
+## Architecture
 
 ```
 CalendarWidgetView
         ↓
-CalendarMonthBuilder (pure)
+CalendarService
         ↓
-ICalendarEventSource
-   ├─ EmptyCalendarEventSource
-   └─ LocalCalendarEventSource  ← v0.1 (from widget configuration)
-   └─ (future) Outlook / Google providers in Platform/Infrastructure
+ICalendarProvider
+   ├─ LocalCalendarProvider      (Core — config / sample agenda)
+   ├─ GoogleCalendarIcsProvider  (Infrastructure — secret ICS HTTPS URL)
+   └─ Notion / others (future)
 ```
+
+Common model: `CalendarEvent` (Id, Provider, CalendarId/Name, Title, Start, End, IsAllDay, Location, Description, Url).
+Provider-specific DTOs never enter Core.
+
+## Google Calendar (no OAuth client in app)
+
+User pastes Google Calendar → **Settings → Integrate calendar → Secret address in iCal format**.
+`GoogleCalendarIcsProvider` fetches ICS over HTTPS and maps VEVENT → `CalendarEvent` via Core `IcsCalendarParser`.
+
+Without an ICS URL, a local Creative-day sample agenda (東進 / Programming / Guitar) is shown so the widget is useful immediately.
+
+**Open Calendar** launches `https://calendar.google.com/` (https only).
 
 ## Security
 
-- Local-only display + optional local events in layout JSON
-- No cloud OAuth, no calendar REST APIs in v0.1
-- Future providers must implement `ICalendarEventSource` behind Platform/Infrastructure and require explicit user consent (see security-boundaries.md)
+- Overlay / HWND / DWM / SetWindowRgn — **unchanged** (PR #8 verified)
+- No Google OAuth client secrets in the binary
+- ICS URL is user-provided; treat as sensitive (stored in layout JSON under AppData)
+- Future Notion/OAuth providers require explicit consent UX + Platform/Infrastructure isolation
 
-## Persistence example
+## Persistence
 
 ```json
 {
   "type": "calendar",
   "configuration": {
-    "FirstDayOfWeek": "Monday",
-    "FollowToday": true,
-    "PinnedYear": 0,
-    "PinnedMonth": 1,
+    "GoogleIcsUrl": "https://calendar.google.com/calendar/ical/…/basic.ics",
+    "OpenCalendarUrl": "https://calendar.google.com/",
+    "UseSampleAgendaWhenEmpty": false,
     "Events": [
-      { "Id": "...", "Date": "2026-08-13", "Title": "Ship Calendar", "Notes": null }
+      {
+        "Id": "…",
+        "Provider": "local",
+        "Title": "Programming",
+        "Start": "2026-08-13T14:00:00+09:00",
+        "End": "2026-08-13T16:00:00+09:00",
+        "IsAllDay": false
+      }
     ]
   }
 }
 ```
+
+Legacy Date-only events still load as all-day.
 
 ## Windows manual checklist
 
@@ -72,9 +84,8 @@ git pull
 .\run.ps1
 ```
 
-1. Clock / Text / Blocks / Web still work; Desktop click-through (PR #8) unchanged.
-2. **Cal** → create calendar → month grid shows; Today highlighted.
-3. Prev / Next / Today navigate; restart restores pinned month when FollowToday is false.
-4. Optional first event appears as a day dot + summary.
-5. Theme **Aa** tints calendar chrome.
-6. Drag via WidgetFrame grip only (not from day cells for move).
+1. Overlay click-through / edges / Exit / layout restore still OK (do not regress PR #8).
+2. Clock / Text / Blocks / Web unchanged.
+3. **Cal** → Today agenda with sample events (or ICS events after paste).
+4. Refresh / Open Calendar work.
+5. Restart restores configuration.

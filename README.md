@@ -102,7 +102,7 @@ Use **Ctrl+Shift+Q** to leave Secret Base (Safe Exit). **Ctrl+Shift+D** toggles 
 1. App Launcher polish  
 2. Drag & Drop polish  
 3. Room switching  
-4. Calendar cloud providers (behind `ICalendarEventSource`, consent-first)
+4. Calendar cloud providers (behind `ICalendarProvider`, consent-first)
 
 ## Architecture docs
 

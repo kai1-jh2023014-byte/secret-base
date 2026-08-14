@@ -8,87 +8,65 @@
     mc:Ignorable="d">
 
     <!--
-      Local month calendar. Move/resize stay on WidgetFrame DragBar —
-      navigation buttons live in the content area only.
+      Today agenda — Think / Manage layer.
+      Move/resize stay on WidgetFrame DragBar.
     -->
     <Border
         x:Name="RootBorder"
-        Padding="12,10"
+        Padding="14,12"
         Background="#CC243447"
         CornerRadius="16"
         BorderThickness="1"
         BorderBrush="#44FFFFFF">
-        <Grid RowSpacing="8">
+        <Grid RowSpacing="10">
             <Grid.RowDefinitions>
-                <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
                 <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
-            <Grid Grid.Row="0" ColumnSpacing="6">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
+            <TextBlock
+                x:Name="HeaderText"
+                Grid.Row="0"
+                Text="Today"
+                FontSize="18"
+                FontWeight="SemiBold" />
 
-                <Button
-                    x:Name="PrevButton"
-                    Grid.Column="0"
-                    Content="‹"
-                    MinWidth="32"
-                    Padding="8,2"
-                    Click="PrevButton_Click"
-                    ToolTipService.ToolTip="Previous month" />
-
-                <TextBlock
-                    x:Name="MonthTitle"
-                    Grid.Column="1"
-                    VerticalAlignment="Center"
-                    HorizontalAlignment="Center"
-                    FontSize="16"
-                    FontWeight="SemiBold"
-                    Text="2026 / 08" />
-
-                <Button
-                    x:Name="TodayButton"
-                    Grid.Column="2"
-                    Content="Today"
-                    Padding="8,2"
-                    Click="TodayButton_Click"
-                    ToolTipService.ToolTip="Jump to today" />
-
-                <Button
-                    x:Name="NextButton"
-                    Grid.Column="3"
-                    Content="›"
-                    MinWidth="32"
-                    Padding="8,2"
-                    Click="NextButton_Click"
-                    ToolTipService.ToolTip="Next month" />
-            </Grid>
-
-            <Grid
-                x:Name="WeekdayHeader"
+            <ScrollViewer
                 Grid.Row="1"
-                ColumnSpacing="2" />
-
-            <Grid
-                x:Name="DayGrid"
-                Grid.Row="2"
-                RowSpacing="2"
-                ColumnSpacing="2" />
+                VerticalScrollBarVisibility="Auto"
+                HorizontalScrollBarVisibility="Disabled">
+                <StackPanel x:Name="AgendaList" Spacing="10" />
+            </ScrollViewer>
 
             <TextBlock
-                x:Name="EventSummary"
-                Grid.Row="3"
+                x:Name="ProviderLabel"
+                Grid.Row="2"
                 FontSize="11"
-                TextWrapping="WrapWholeWords"
-                TextTrimming="CharacterEllipsis"
-                MaxLines="2"
-                Opacity="0.85" />
+                Opacity="0.8"
+                Text="Local" />
+
+            <Grid Grid.Row="3" ColumnSpacing="8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Button
+                    x:Name="RefreshButton"
+                    Grid.Column="0"
+                    Content="Refresh"
+                    HorizontalAlignment="Stretch"
+                    Click="RefreshButton_Click"
+                    ToolTipService.ToolTip="Reload today's agenda" />
+                <Button
+                    x:Name="OpenCalendarButton"
+                    Grid.Column="1"
+                    Content="Open Calendar"
+                    HorizontalAlignment="Stretch"
+                    Click="OpenCalendarButton_Click"
+                    ToolTipService.ToolTip="Open calendar in the browser" />
+            </Grid>
         </Grid>
     </Border>
 </UserControl>

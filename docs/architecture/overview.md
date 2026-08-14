@@ -39,6 +39,6 @@ Highest principle:
 - ✅ Theme editor (presets + colors for Clock / Text / Blocks)
 - ✅ Desktop arrange (**Grid** FAB — even widget/block placement)
 - ✅ Web Widget (WebView2; Untrusted; no host bridge)
-- ✅ Calendar Widget (local month grid + `ICalendarEventSource` layer)
+- ✅ Calendar Widget (Today agenda + `ICalendarProvider` / Google ICS)
 - App Launcher polish → Room switching
 

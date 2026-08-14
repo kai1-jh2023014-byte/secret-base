@@ -11,47 +11,39 @@ using SecretBase.Widgets.Theming;
 namespace SecretBase.Widgets.Calendar;
 
 /// <summary>
-/// Local-only month calendar. Uses Core <see cref="CalendarMonthBuilder"/> +
-/// <see cref="ICalendarEventSource"/> — no Outlook/Google network access in v0.1.
+/// Today agenda widget. Uses <see cref="CalendarService"/> (provider-agnostic).
+/// Does not own Overlay / HWND logic — hosted inside WidgetFrame only.
 /// </summary>
 public sealed partial class CalendarWidgetView : UserControl
 {
     private CalendarWidgetConfiguration _configuration = CalendarWidgetConfiguration.CreateDefault();
     private ITimeProvider _timeProvider = new SystemTimeProvider();
+    private CalendarService? _service;
+    private Func<string, bool>? _openUrl;
     private Action<CalendarWidgetConfiguration>? _onConfigurationChanged;
     private ThemeDefinition? _theme;
-    private int _viewYear;
-    private int _viewMonth;
-    private IReadOnlyList<CalendarDayCell> _cells = Array.Empty<CalendarDayCell>();
+    private int _refreshGate;
 
     public CalendarWidgetView()
     {
         InitializeComponent();
-        Loaded += (_, _) => RefreshMonth();
+        Loaded += (_, _) => _ = RefreshAgendaAsync();
     }
 
     public void Initialize(
         CalendarWidgetConfiguration configuration,
+        CalendarService service,
         ITimeProvider? timeProvider = null,
+        Func<string, bool>? openUrl = null,
         Action<CalendarWidgetConfiguration>? onConfigurationChanged = null)
     {
         _configuration = configuration;
+        _service = service;
         _timeProvider = timeProvider ?? new SystemTimeProvider();
+        _openUrl = openUrl;
         _onConfigurationChanged = onConfigurationChanged;
-
-        var today = DateOnly.FromDateTime(_timeProvider.GetLocalNow().DateTime);
-        if (_configuration.FollowToday || _configuration.PinnedYear < 1 || _configuration.PinnedMonth is < 1 or > 12)
-        {
-            _viewYear = today.Year;
-            _viewMonth = today.Month;
-        }
-        else
-        {
-            _viewYear = _configuration.PinnedYear;
-            _viewMonth = _configuration.PinnedMonth;
-        }
-
-        RefreshMonth();
+        UpdateProviderLabel();
+        _ = RefreshAgendaAsync();
     }
 
     public void ApplyTheme(ThemeDefinition theme)
@@ -62,18 +54,17 @@ public sealed partial class CalendarWidgetView : UserControl
         RootBorder.BorderBrush = ThemePainter.Brush(theme.WidgetForeground, 0.25);
 
         var font = new FontFamily(theme.FontFamily);
-        MonthTitle.FontFamily = font;
-        MonthTitle.Foreground = ThemePainter.Brush(theme.WidgetForeground);
-        EventSummary.FontFamily = font;
-        EventSummary.Foreground = ThemePainter.Brush(theme.ForegroundMuted);
+        HeaderText.FontFamily = font;
+        HeaderText.Foreground = ThemePainter.Brush(theme.WidgetForeground);
+        ProviderLabel.FontFamily = font;
+        ProviderLabel.Foreground = ThemePainter.Brush(theme.ForegroundMuted);
 
-        StyleNavButton(PrevButton, theme);
-        StyleNavButton(NextButton, theme);
-        StyleNavButton(TodayButton, theme);
-        RefreshMonth();
+        StyleActionButton(RefreshButton, theme);
+        StyleActionButton(OpenCalendarButton, theme);
+        RestyleAgendaItems();
     }
 
-    private static void StyleNavButton(Button button, ThemeDefinition theme)
+    private static void StyleActionButton(Button button, ThemeDefinition theme)
     {
         button.FontFamily = new FontFamily(theme.FontFamily);
         button.Background = ThemePainter.Brush(theme.WidgetBackground, ThemePainter.EffectiveWidgetOpacity(theme));
@@ -82,202 +73,183 @@ public sealed partial class CalendarWidgetView : UserControl
         button.BorderThickness = new Thickness(1);
     }
 
-    private void PrevButton_Click(object sender, RoutedEventArgs e)
+    private void RefreshButton_Click(object sender, RoutedEventArgs e) => _ = RefreshAgendaAsync();
+
+    private void OpenCalendarButton_Click(object sender, RoutedEventArgs e)
     {
-        ShiftMonth(-1);
-        PersistPinnedMonth(followToday: false);
-    }
-
-    private void NextButton_Click(object sender, RoutedEventArgs e)
-    {
-        ShiftMonth(1);
-        PersistPinnedMonth(followToday: false);
-    }
-
-    private void TodayButton_Click(object sender, RoutedEventArgs e)
-    {
-        var today = DateOnly.FromDateTime(_timeProvider.GetLocalNow().DateTime);
-        _viewYear = today.Year;
-        _viewMonth = today.Month;
-        PersistPinnedMonth(followToday: true);
-        RefreshMonth();
-    }
-
-    private void ShiftMonth(int delta)
-    {
-        var date = new DateOnly(_viewYear, _viewMonth, 1).AddMonths(delta);
-        _viewYear = date.Year;
-        _viewMonth = date.Month;
-        RefreshMonth();
-    }
-
-    private void PersistPinnedMonth(bool followToday)
-    {
-        _configuration.FollowToday = followToday;
-        _configuration.PinnedYear = _viewYear;
-        _configuration.PinnedMonth = _viewMonth;
-        _onConfigurationChanged?.Invoke(_configuration);
-    }
-
-    private void RefreshMonth()
-    {
-        var today = DateOnly.FromDateTime(_timeProvider.GetLocalNow().DateTime);
-        var source = _configuration.CreateEventSource();
-        _cells = CalendarMonthBuilder.Build(
-            _viewYear,
-            _viewMonth,
-            _configuration.FirstDayOfWeek,
-            today,
-            source);
-
-        MonthTitle.Text = new DateOnly(_viewYear, _viewMonth, 1)
-            .ToString("yyyy / MM", CultureInfo.InvariantCulture);
-
-        BuildWeekdayHeader();
-        BuildDayGrid();
-        UpdateEventSummary(today);
-    }
-
-    private void BuildWeekdayHeader()
-    {
-        WeekdayHeader.Children.Clear();
-        WeekdayHeader.ColumnDefinitions.Clear();
-        var labels = CalendarMonthBuilder.WeekdayLabels(_configuration.FirstDayOfWeek);
-        for (var i = 0; i < labels.Count; i++)
+        var url = _configuration.OpenCalendarUrl;
+        if (string.IsNullOrWhiteSpace(url))
         {
-            WeekdayHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            var text = new TextBlock
-            {
-                Text = labels[i],
-                FontSize = 11,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                Opacity = 0.75
-            };
-            if (_theme is not null)
-            {
-                text.Foreground = ThemePainter.Brush(_theme.ForegroundMuted);
-                text.FontFamily = new FontFamily(_theme.FontFamily);
-            }
-
-            Grid.SetColumn(text, i);
-            WeekdayHeader.Children.Add(text);
-        }
-    }
-
-    private void BuildDayGrid()
-    {
-        DayGrid.Children.Clear();
-        DayGrid.RowDefinitions.Clear();
-        DayGrid.ColumnDefinitions.Clear();
-
-        for (var c = 0; c < CalendarMonthBuilder.DaysInWeek; c++)
-        {
-            DayGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            url = CalendarWidgetConfiguration.DefaultOpenCalendarUrl;
         }
 
-        for (var r = 0; r < CalendarMonthBuilder.WeeksInGrid; r++)
+        var google = _service?.Providers.FirstOrDefault(p => p.ProviderId == CalendarProviderIds.Google);
+        if (google?.OpenUrl is { Length: > 0 } providerUrl)
         {
-            DayGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+            url = providerUrl;
         }
 
-        for (var i = 0; i < _cells.Count; i++)
-        {
-            var cell = _cells[i];
-            var row = i / CalendarMonthBuilder.DaysInWeek;
-            var col = i % CalendarMonthBuilder.DaysInWeek;
-
-            var dayButton = new Button
-            {
-                Padding = new Thickness(2),
-                HorizontalAlignment = HorizontalAlignment.Stretch,
-                VerticalAlignment = VerticalAlignment.Stretch,
-                Tag = cell
-            };
-            dayButton.Click += DayButton_Click;
-
-            var panel = new StackPanel
-            {
-                Spacing = 0,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center
-            };
-            var dayText = new TextBlock
-            {
-                Text = cell.Date.Day.ToString(CultureInfo.InvariantCulture),
-                FontSize = 13,
-                FontWeight = cell.IsToday ? Microsoft.UI.Text.FontWeights.Bold : Microsoft.UI.Text.FontWeights.Normal,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                Opacity = cell.IsCurrentMonth ? 1.0 : 0.35
-            };
-            var dot = new TextBlock
-            {
-                Text = cell.HasEvents ? "•" : " ",
-                FontSize = 10,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                Opacity = cell.HasEvents ? 1.0 : 0.0
-            };
-
-            if (_theme is not null)
-            {
-                dayText.Foreground = ThemePainter.Brush(
-                    cell.IsToday ? _theme.Accent : _theme.WidgetForeground);
-                dayText.FontFamily = new FontFamily(_theme.FontFamily);
-                dot.Foreground = ThemePainter.Brush(_theme.Accent);
-                dayButton.Background = cell.IsToday
-                    ? ThemePainter.Brush(_theme.Accent, 0.22)
-                    : ThemePainter.Brush(_theme.WidgetBackground, 0.01);
-                dayButton.BorderBrush = cell.IsToday
-                    ? ThemePainter.Brush(_theme.Accent, 0.8)
-                    : ThemePainter.Brush(_theme.WidgetForeground, 0.08);
-                dayButton.BorderThickness = new Thickness(cell.IsToday ? 1 : 0);
-            }
-
-            panel.Children.Add(dayText);
-            panel.Children.Add(dot);
-            dayButton.Content = panel;
-            Grid.SetRow(dayButton, row);
-            Grid.SetColumn(dayButton, col);
-            DayGrid.Children.Add(dayButton);
-        }
+        _ = _openUrl?.Invoke(url);
     }
 
-    private void DayButton_Click(object sender, RoutedEventArgs e)
+    private async Task RefreshAgendaAsync()
     {
-        if (sender is not Button { Tag: CalendarDayCell cell })
+        if (_service is null)
         {
             return;
         }
 
-        if (cell.Events.Count == 0)
+        if (Interlocked.Exchange(ref _refreshGate, 1) == 1)
         {
-            EventSummary.Text = cell.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) + " — no events";
             return;
         }
 
-        EventSummary.Text = string.Join(
-            " · ",
-            cell.Events.Select(ev => ev.Title).Take(3));
+        try
+        {
+            HeaderText.Text = "Today";
+            AgendaList.Children.Clear();
+            AgendaList.Children.Add(CreateMutedLine("Loading…"));
+
+            var now = _timeProvider.GetLocalNow();
+            var events = await _service.GetTodayAgendaAsync(now);
+            AgendaList.Children.Clear();
+
+            if (events.Count == 0)
+            {
+                AgendaList.Children.Add(CreateMutedLine("No events today"));
+            }
+            else
+            {
+                foreach (var ev in events)
+                {
+                    AgendaList.Children.Add(CreateEventBlock(ev));
+                }
+            }
+
+            UpdateProviderLabel(events);
+        }
+        catch (Exception ex)
+        {
+            AgendaList.Children.Clear();
+            AgendaList.Children.Add(CreateMutedLine($"Could not load agenda: {ex.Message}"));
+        }
+        finally
+        {
+            Interlocked.Exchange(ref _refreshGate, 0);
+        }
     }
 
-    private void UpdateEventSummary(DateOnly today)
+    private void UpdateProviderLabel(IReadOnlyList<CalendarEvent>? events = null)
     {
-        var monthEvents = _cells
-            .Where(c => c.IsCurrentMonth && c.HasEvents)
-            .SelectMany(c => c.Events)
-            .OrderBy(e => e.Date)
-            .ThenBy(e => e.Title, StringComparer.OrdinalIgnoreCase)
+        if (_service is null)
+        {
+            ProviderLabel.Text = "Local";
+            return;
+        }
+
+        var names = _service.Providers
+            .Where(p => p.IsConfigured && p.ProviderId != "empty")
+            .Select(p => p.DisplayName)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
 
-        if (monthEvents.Count == 0)
+        if (events is { Count: > 0 })
         {
-            EventSummary.Text = today.Month == _viewMonth && today.Year == _viewYear
-                ? "No local events this month"
-                : "No local events";
-            return;
+            var fromEvents = events.Select(e => e.CalendarName ?? e.Provider)
+                .Where(s => !string.IsNullOrWhiteSpace(s))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            if (fromEvents.Count > 0)
+            {
+                names = fromEvents!;
+            }
         }
 
-        EventSummary.Text = string.Join(
-            " · ",
-            monthEvents.Take(3).Select(e => $"{e.Date:MM/dd} {e.Title}"));
+        ProviderLabel.Text = names.Count == 0 ? "Local" : string.Join(" · ", names);
+    }
+
+    private UIElement CreateEventBlock(CalendarEvent ev)
+    {
+        var timeLabel = FormatTimeRange(ev);
+        var panel = new StackPanel { Spacing = 2 };
+        var time = new TextBlock
+        {
+            Text = timeLabel,
+            FontSize = 12,
+            Opacity = 0.85
+        };
+        var title = new TextBlock
+        {
+            Text = ev.Title,
+            FontSize = 15,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            TextWrapping = TextWrapping.WrapWholeWords
+        };
+
+        if (_theme is not null)
+        {
+            time.Foreground = ThemePainter.Brush(_theme.ForegroundMuted);
+            title.Foreground = ThemePainter.Brush(_theme.WidgetForeground);
+            time.FontFamily = new FontFamily(_theme.FontFamily);
+            title.FontFamily = new FontFamily(_theme.FontFamily);
+        }
+
+        panel.Children.Add(time);
+        panel.Children.Add(title);
+        if (!string.IsNullOrWhiteSpace(ev.Location))
+        {
+            var loc = new TextBlock
+            {
+                Text = ev.Location,
+                FontSize = 11,
+                Opacity = 0.75,
+                TextWrapping = TextWrapping.WrapWholeWords
+            };
+            if (_theme is not null)
+            {
+                loc.Foreground = ThemePainter.Brush(_theme.ForegroundMuted);
+                loc.FontFamily = new FontFamily(_theme.FontFamily);
+            }
+
+            panel.Children.Add(loc);
+        }
+
+        return panel;
+    }
+
+    private TextBlock CreateMutedLine(string text)
+    {
+        var block = new TextBlock
+        {
+            Text = text,
+            FontSize = 13,
+            Opacity = 0.75,
+            TextWrapping = TextWrapping.WrapWholeWords
+        };
+        if (_theme is not null)
+        {
+            block.Foreground = ThemePainter.Brush(_theme.ForegroundMuted);
+            block.FontFamily = new FontFamily(_theme.FontFamily);
+        }
+
+        return block;
+    }
+
+    private void RestyleAgendaItems()
+    {
+        // Rebuild so theme brushes apply after ApplyTheme.
+        _ = RefreshAgendaAsync();
+    }
+
+    private static string FormatTimeRange(CalendarEvent ev)
+    {
+        if (ev.IsAllDay)
+        {
+            return "All day";
+        }
+
+        var start = ev.Start.DateTime;
+        var end = ev.End.DateTime;
+        return string.Create(CultureInfo.InvariantCulture, $"{start:HH:mm}  〜 {end:HH:mm}");
     }
 }

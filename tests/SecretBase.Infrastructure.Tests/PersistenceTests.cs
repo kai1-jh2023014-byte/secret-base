@@ -381,16 +381,17 @@ public class LayoutPersistenceTests
             var layout = DesktopLayout.CreateDefault();
             var config = new CalendarWidgetConfiguration
             {
-                FirstDayOfWeek = DayOfWeek.Sunday,
-                FollowToday = false,
-                PinnedYear = 2026,
-                PinnedMonth = 8,
+                GoogleIcsUrl = "https://calendar.google.com/calendar/ical/demo/private/basic.ics",
+                UseSampleAgendaWhenEmpty = false,
                 Events =
                 [
                     new CalendarEvent
                     {
-                        Date = new DateOnly(2026, 8, 13),
-                        Title = "Calendar ship"
+                        Id = "ship-1",
+                        Provider = CalendarProviderIds.Local,
+                        Title = "Calendar ship",
+                        Start = DateTimeOffset.Parse("2026-08-13T09:00:00+09:00"),
+                        End = DateTimeOffset.Parse("2026-08-13T12:00:00+09:00")
                     }
                 ]
             };
@@ -399,7 +400,7 @@ public class LayoutPersistenceTests
                 x: 400,
                 y: 60,
                 width: 330,
-                height: 350,
+                height: 360,
                 configuration: config);
             layout.Widgets.Add(calendar);
             store.Save(layout);
@@ -413,13 +414,11 @@ public class LayoutPersistenceTests
             Assert.Equal(60, widget.Position.Y);
 
             var loaded = CalendarWidgetConfiguration.FromDictionary(widget.Configuration);
-            Assert.Equal(DayOfWeek.Sunday, loaded.FirstDayOfWeek);
-            Assert.False(loaded.FollowToday);
-            Assert.Equal(2026, loaded.PinnedYear);
-            Assert.Equal(8, loaded.PinnedMonth);
+            Assert.Equal(config.GoogleIcsUrl, loaded.GoogleIcsUrl);
+            Assert.False(loaded.UseSampleAgendaWhenEmpty);
             Assert.Single(loaded.Events);
             Assert.Equal("Calendar ship", loaded.Events[0].Title);
-            Assert.Equal(new DateOnly(2026, 8, 13), loaded.Events[0].Date);
+            Assert.Equal(9, loaded.Events[0].Start.Hour);
         }
         finally
         {

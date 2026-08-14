@@ -16,6 +16,7 @@ using SecretBase.Core.Widgets.Calendar;
 using SecretBase.Core.Widgets.Clock;
 using SecretBase.Core.Widgets.Text;
 using SecretBase.Core.Widgets.Web;
+using SecretBase.Infrastructure.Calendar;
 using SecretBase.Infrastructure.Logging;
 using SecretBase.Infrastructure.Persistence;
 using SecretBase.Platform.Abstractions;
@@ -401,12 +402,18 @@ public sealed partial class DesktopPage : Page
             var config = CalendarWidgetConfiguration.FromDictionary(instance.Configuration);
             instance.Configuration = config.ToDictionary();
 
+            var service = CalendarServiceFactory.Create(config, _timeProvider ?? new SystemTimeProvider());
             var view = new CalendarWidgetView();
-            view.Initialize(config, _timeProvider, updated =>
-            {
-                instance.Configuration = updated.ToDictionary();
-                PersistLayoutNow();
-            });
+            view.Initialize(
+                config,
+                service,
+                _timeProvider,
+                openUrl: url => TryOpenHttpsUrl(url),
+                onConfigurationChanged: updated =>
+                {
+                    instance.Configuration = updated.ToDictionary();
+                    PersistLayoutNow();
+                });
             if (_theme is not null)
             {
                 view.ApplyTheme(_theme);
@@ -416,6 +423,26 @@ public sealed partial class DesktopPage : Page
         }
 
         return null;
+    }
+
+    private bool TryOpenHttpsUrl(string url)
+    {
+        if (!WebUrlValidator.TryNormalize(url, out var normalized, out var error) || normalized is null)
+        {
+            _logger?.Warn("calendar", error ?? "Blocked calendar URL.");
+            return false;
+        }
+
+        try
+        {
+            _ = Windows.System.Launcher.LaunchUriAsync(new Uri(normalized));
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger?.Warn("calendar", $"Open Calendar failed: {ex.Message}");
+            return false;
+        }
     }
 
     private void EnsureSeedTextWidget(DesktopLayout layout)
@@ -520,15 +547,10 @@ public sealed partial class DesktopPage : Page
 
         AllowFullWindowInput();
 
-        var titleBox = new TextBox
+        var icsBox = new TextBox
         {
-            Header = "Optional first event title",
-            PlaceholderText = "Leave blank for an empty calendar"
-        };
-        var dateBox = new TextBox
-        {
-            Header = "Optional first event date (yyyy-MM-dd)",
-            Text = DateTime.Now.ToString("yyyy-MM-dd")
+            Header = "Google Calendar secret ICS URL (optional)",
+            PlaceholderText = "https://calendar.google.com/calendar/ical/…/basic.ics"
         };
         var xBox = new NumberBox
         {
@@ -554,14 +576,14 @@ public sealed partial class DesktopPage : Page
         var hBox = new NumberBox
         {
             Header = "Height",
-            Value = 340,
+            Value = 360,
             Minimum = Math.Max(_theme.WidgetMinHeight, 280),
             SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline
         };
 
         var hint = new TextBlock
         {
-            Text = "Local calendar only. No Outlook/Google cloud sync in v0.1.",
+            Text = "Shows today's agenda. Without an ICS URL, a local sample Creative-day agenda is used. Paste Google Calendar → Settings → Secret address in iCal format for live events. No OAuth secrets are stored in the app.",
             FontSize = 12,
             Opacity = 0.75,
             TextWrapping = TextWrapping.WrapWholeWords
@@ -569,8 +591,7 @@ public sealed partial class DesktopPage : Page
 
         var panel = new StackPanel { Spacing = 8 };
         panel.Children.Add(hint);
-        panel.Children.Add(titleBox);
-        panel.Children.Add(dateBox);
+        panel.Children.Add(icsBox);
         panel.Children.Add(xBox);
         panel.Children.Add(yBox);
         panel.Children.Add(wBox);
@@ -602,19 +623,22 @@ public sealed partial class DesktopPage : Page
         }
 
         var config = CalendarWidgetConfiguration.CreateDefault();
-        var title = titleBox.Text?.Trim() ?? string.Empty;
-        if (!string.IsNullOrWhiteSpace(title)
-            && DateOnly.TryParse(
-                dateBox.Text?.Trim(),
-                CultureInfo.InvariantCulture,
-                DateTimeStyles.None,
-                out var eventDate))
+        var ics = icsBox.Text?.Trim();
+        if (!string.IsNullOrWhiteSpace(ics))
         {
-            config.Events.Add(new CalendarEvent
+            if (!WebUrlValidator.TryNormalize(ics, out var normalized, out var error) || normalized is null)
             {
-                Date = eventDate,
-                Title = title
-            });
+                _logger?.Warn("calendar", error ?? "Invalid Google ICS URL.");
+                if (_debugChromeVisible)
+                {
+                    StatusText.Text = error ?? "Invalid Google ICS URL.";
+                }
+
+                return;
+            }
+
+            config.GoogleIcsUrl = normalized;
+            config.UseSampleAgendaWhenEmpty = false;
         }
 
         var cascade = _layout.Widgets.Count(w => w.Type == WidgetTypes.Calendar) * 24;
@@ -630,7 +654,9 @@ public sealed partial class DesktopPage : Page
         PersistLayoutNow();
         RenderDesktopObjects();
         RefreshDebugStatus();
-        _logger?.Info("widget", "Added Calendar Widget (local event source).");
+        _logger?.Info("calendar", string.IsNullOrWhiteSpace(config.GoogleIcsUrl)
+            ? "Added Calendar Widget (local sample agenda)."
+            : "Added Calendar Widget (Google ICS provider).");
     }
 
     private async Task ShowAddWebDialogAsync()

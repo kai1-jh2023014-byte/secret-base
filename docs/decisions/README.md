@@ -102,3 +102,9 @@ See [web-widget.md](../architecture/web-widget.md) and [security-boundaries.md](
 
 See [calendar-widget.md](../architecture/calendar-widget.md).
 
+## 2026-08-14 — Calendar Today agenda + ICalendarProvider (Google ICS)
+
+**Decision:** Evolve Calendar into a **Today agenda** widget (not a month grid). Introduce `ICalendarProvider` + `CalendarService`, common timed `CalendarEvent`, Core `IcsCalendarParser`, and Infrastructure `GoogleCalendarIcsProvider` (user-pasted secret iCal HTTPS URL — no OAuth client in app). Sample Creative-day agenda when unconfigured. **Do not** modify Overlay / DWM / SetWindowRgn.
+
+**Why:** “Think / Manage” Creative OS layer — keep today's schedule visible; multi-provider ready (Notion later) without redesigning verified Desktop Overlay.
+

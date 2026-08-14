@@ -6,18 +6,19 @@ namespace SecretBase.Core.Widgets.Calendar;
 
 /// <summary>
 /// Calendar Widget settings. Visual tokens come from <c>ThemeDefinition</c>.
-/// Optional local events persist in the layout JSON (no cloud sync in v0.1).
+/// Local timed events + optional Google Calendar secret ICS URL.
 /// </summary>
 public sealed class CalendarWidgetConfiguration
 {
-    public DayOfWeek FirstDayOfWeek { get; set; } = DayOfWeek.Monday;
+    public const string DefaultOpenCalendarUrl = "https://calendar.google.com/";
 
-    /// <summary>When true, the widget opens on today's month; otherwise uses <see cref="PinnedYear"/>/<see cref="PinnedMonth"/>.</summary>
-    public bool FollowToday { get; set; } = true;
+    /// <summary>Optional Google Calendar "secret address in iCal format" HTTPS URL.</summary>
+    public string? GoogleIcsUrl { get; set; }
 
-    public int PinnedYear { get; set; }
+    public string OpenCalendarUrl { get; set; } = DefaultOpenCalendarUrl;
 
-    public int PinnedMonth { get; set; } = 1;
+    /// <summary>When true and no events exist, seed Creative OS sample agenda for today.</summary>
+    public bool UseSampleAgendaWhenEmpty { get; set; } = true;
 
     public List<CalendarEvent> Events { get; set; } = [];
 
@@ -27,40 +28,27 @@ public sealed class CalendarWidgetConfiguration
     {
         var result = CreateDefault();
 
-        if (configuration.TryGetValue(nameof(FirstDayOfWeek), out var firstDay))
+        if (configuration.TryGetValue(nameof(GoogleIcsUrl), out var ics) &&
+            ics.ValueKind == JsonValueKind.String)
         {
-            if (firstDay.ValueKind == JsonValueKind.String &&
-                Enum.TryParse<DayOfWeek>(firstDay.GetString(), ignoreCase: true, out var parsed))
+            var url = ics.GetString();
+            result.GoogleIcsUrl = string.IsNullOrWhiteSpace(url) ? null : url.Trim();
+        }
+
+        if (configuration.TryGetValue(nameof(OpenCalendarUrl), out var open) &&
+            open.ValueKind == JsonValueKind.String)
+        {
+            var url = open.GetString();
+            if (!string.IsNullOrWhiteSpace(url))
             {
-                result.FirstDayOfWeek = parsed;
-            }
-            else if (firstDay.ValueKind == JsonValueKind.Number &&
-                     Enum.IsDefined(typeof(DayOfWeek), firstDay.GetInt32()))
-            {
-                result.FirstDayOfWeek = (DayOfWeek)firstDay.GetInt32();
+                result.OpenCalendarUrl = url.Trim();
             }
         }
 
-        if (configuration.TryGetValue(nameof(FollowToday), out var follow) &&
-            (follow.ValueKind is JsonValueKind.True or JsonValueKind.False))
+        if (configuration.TryGetValue(nameof(UseSampleAgendaWhenEmpty), out var sample) &&
+            (sample.ValueKind is JsonValueKind.True or JsonValueKind.False))
         {
-            result.FollowToday = follow.GetBoolean();
-        }
-
-        if (configuration.TryGetValue(nameof(PinnedYear), out var year) &&
-            year.ValueKind == JsonValueKind.Number)
-        {
-            result.PinnedYear = year.GetInt32();
-        }
-
-        if (configuration.TryGetValue(nameof(PinnedMonth), out var month) &&
-            month.ValueKind == JsonValueKind.Number)
-        {
-            var m = month.GetInt32();
-            if (m is >= 1 and <= 12)
-            {
-                result.PinnedMonth = m;
-            }
+            result.UseSampleAgendaWhenEmpty = sample.GetBoolean();
         }
 
         if (configuration.TryGetValue(nameof(Events), out var events) &&
@@ -82,25 +70,29 @@ public sealed class CalendarWidgetConfiguration
     {
         return new Dictionary<string, JsonElement>(StringComparer.Ordinal)
         {
-            [nameof(FirstDayOfWeek)] = JsonSerializer.SerializeToElement(FirstDayOfWeek.ToString()),
-            [nameof(FollowToday)] = JsonSerializer.SerializeToElement(FollowToday),
-            [nameof(PinnedYear)] = JsonSerializer.SerializeToElement(PinnedYear),
-            [nameof(PinnedMonth)] = JsonSerializer.SerializeToElement(PinnedMonth),
+            [nameof(GoogleIcsUrl)] = JsonSerializer.SerializeToElement(GoogleIcsUrl),
+            [nameof(OpenCalendarUrl)] = JsonSerializer.SerializeToElement(OpenCalendarUrl),
+            [nameof(UseSampleAgendaWhenEmpty)] = JsonSerializer.SerializeToElement(UseSampleAgendaWhenEmpty),
             [nameof(Events)] = JsonSerializer.SerializeToElement(
-                Events.Select(e => new Dictionary<string, JsonElement>(StringComparer.Ordinal)
-                {
-                    ["Id"] = JsonSerializer.SerializeToElement(e.Id),
-                    ["Date"] = JsonSerializer.SerializeToElement(e.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)),
-                    ["Title"] = JsonSerializer.SerializeToElement(e.Title ?? string.Empty),
-                    ["Notes"] = JsonSerializer.SerializeToElement(e.Notes)
-                }).ToList())
+                Events.Select(SerializeEvent).ToList())
         };
     }
 
-    public ICalendarEventSource CreateEventSource() =>
-        Events.Count == 0
-            ? EmptyCalendarEventSource.Instance
-            : new LocalCalendarEventSource(Events);
+    private static Dictionary<string, JsonElement> SerializeEvent(CalendarEvent e) =>
+        new(StringComparer.Ordinal)
+        {
+            ["Id"] = JsonSerializer.SerializeToElement(e.Id),
+            ["Provider"] = JsonSerializer.SerializeToElement(e.Provider),
+            ["CalendarId"] = JsonSerializer.SerializeToElement(e.CalendarId),
+            ["CalendarName"] = JsonSerializer.SerializeToElement(e.CalendarName),
+            ["Title"] = JsonSerializer.SerializeToElement(e.Title ?? string.Empty),
+            ["Start"] = JsonSerializer.SerializeToElement(e.Start.ToString("o", CultureInfo.InvariantCulture)),
+            ["End"] = JsonSerializer.SerializeToElement(e.End.ToString("o", CultureInfo.InvariantCulture)),
+            ["IsAllDay"] = JsonSerializer.SerializeToElement(e.IsAllDay),
+            ["Location"] = JsonSerializer.SerializeToElement(e.Location),
+            ["Description"] = JsonSerializer.SerializeToElement(e.Description),
+            ["Url"] = JsonSerializer.SerializeToElement(e.Url)
+        };
 
     private static bool TryReadEvent(JsonElement item, out CalendarEvent calendarEvent)
     {
@@ -110,45 +102,81 @@ public sealed class CalendarWidgetConfiguration
             return false;
         }
 
-        if (!item.TryGetProperty("Date", out var dateElement) ||
-            dateElement.ValueKind != JsonValueKind.String ||
-            !DateOnly.TryParse(dateElement.GetString(), CultureInfo.InvariantCulture, DateTimeStyles.None, out var date))
-        {
-            return false;
-        }
-
-        var title = string.Empty;
-        if (item.TryGetProperty("Title", out var titleElement) && titleElement.ValueKind == JsonValueKind.String)
-        {
-            title = titleElement.GetString() ?? string.Empty;
-        }
-
+        var title = ReadString(item, "Title");
         if (string.IsNullOrWhiteSpace(title))
         {
             return false;
         }
 
-        var id = Guid.NewGuid();
-        if (item.TryGetProperty("Id", out var idElement) &&
-            idElement.ValueKind == JsonValueKind.String &&
-            Guid.TryParse(idElement.GetString(), out var parsedId))
+        // New timed shape
+        if (TryReadDateTimeOffset(item, "Start", out var start))
         {
-            id = parsedId;
+            if (!TryReadDateTimeOffset(item, "End", out var end))
+            {
+                end = start.AddHours(1);
+            }
+
+            calendarEvent = new CalendarEvent
+            {
+                Id = ReadString(item, "Id") ?? Guid.NewGuid().ToString("N"),
+                Provider = ReadString(item, "Provider") ?? CalendarProviderIds.Local,
+                CalendarId = ReadString(item, "CalendarId"),
+                CalendarName = ReadString(item, "CalendarName"),
+                Title = title.Trim(),
+                Start = start,
+                End = end,
+                IsAllDay = ReadBool(item, "IsAllDay"),
+                Location = ReadString(item, "Location"),
+                Description = ReadString(item, "Description") ?? ReadString(item, "Notes"),
+                Url = ReadString(item, "Url")
+            };
+            return true;
         }
 
-        string? notes = null;
-        if (item.TryGetProperty("Notes", out var notesElement) && notesElement.ValueKind == JsonValueKind.String)
+        // Legacy Date-only (month-grid era) → all-day
+        if (item.TryGetProperty("Date", out var dateElement) &&
+            dateElement.ValueKind == JsonValueKind.String &&
+            DateOnly.TryParse(dateElement.GetString(), CultureInfo.InvariantCulture, DateTimeStyles.None, out var date))
         {
-            notes = notesElement.GetString();
+            var startDay = new DateTimeOffset(date.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero);
+            calendarEvent = new CalendarEvent
+            {
+                Id = ReadString(item, "Id") ?? Guid.NewGuid().ToString("N"),
+                Provider = CalendarProviderIds.Local,
+                CalendarName = "Local",
+                Title = title.Trim(),
+                Start = startDay,
+                End = startDay.AddDays(1),
+                IsAllDay = true,
+                Description = ReadString(item, "Notes")
+            };
+            return true;
         }
 
-        calendarEvent = new CalendarEvent
+        return false;
+    }
+
+    private static string? ReadString(JsonElement item, string name)
+    {
+        if (!item.TryGetProperty(name, out var el) || el.ValueKind != JsonValueKind.String)
         {
-            Id = id,
-            Date = date,
-            Title = title.Trim(),
-            Notes = notes
-        };
-        return true;
+            return null;
+        }
+
+        return el.GetString();
+    }
+
+    private static bool ReadBool(JsonElement item, string name) =>
+        item.TryGetProperty(name, out var el) && el.ValueKind is JsonValueKind.True or JsonValueKind.False && el.GetBoolean();
+
+    private static bool TryReadDateTimeOffset(JsonElement item, string name, out DateTimeOffset value)
+    {
+        value = default;
+        if (!item.TryGetProperty(name, out var el) || el.ValueKind != JsonValueKind.String)
+        {
+            return false;
+        }
+
+        return DateTimeOffset.TryParse(el.GetString(), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out value);
     }
 }

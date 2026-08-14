@@ -1,152 +1,216 @@
+using System.Globalization;
 using SecretBase.Core.Calendar;
 using SecretBase.Core.Widgets;
 using SecretBase.Core.Widgets.Calendar;
 
 namespace SecretBase.Core.Tests;
 
-public class CalendarMonthBuilderTests
+public class CalendarEventTests
 {
     [Fact]
-    public void Build_ReturnsFixedSixBySevenGrid()
+    public void OccursOn_TimedEvent_MatchesLocalDate()
     {
-        var today = new DateOnly(2026, 8, 13);
-        var cells = CalendarMonthBuilder.Build(2026, 8, DayOfWeek.Monday, today);
+        var ev = new CalendarEvent
+        {
+            Title = "Programming",
+            Start = new DateTimeOffset(2026, 8, 13, 14, 0, 0, TimeSpan.FromHours(9)),
+            End = new DateTimeOffset(2026, 8, 13, 16, 0, 0, TimeSpan.FromHours(9))
+        };
 
-        Assert.Equal(CalendarMonthBuilder.CellsInGrid, cells.Count);
-        Assert.Contains(cells, c => c.IsToday && c.Date == today);
-        Assert.Equal(31, cells.Count(c => c.IsCurrentMonth));
+        Assert.True(ev.OccursOn(new DateOnly(2026, 8, 13)));
+        Assert.False(ev.OccursOn(new DateOnly(2026, 8, 14)));
     }
 
     [Fact]
-    public void Build_AlignsFirstCellToFirstDayOfWeek()
+    public void OccursOn_AllDayExclusiveEnd_IncludesStartDayOnly()
     {
-        var cells = CalendarMonthBuilder.Build(
-            2026,
-            8,
-            DayOfWeek.Monday,
-            today: new DateOnly(2026, 8, 13));
+        var start = new DateTimeOffset(new DateOnly(2026, 8, 13).ToDateTime(TimeOnly.MinValue), TimeSpan.Zero);
+        var ev = new CalendarEvent
+        {
+            Title = "Holiday",
+            Start = start,
+            End = start.AddDays(1),
+            IsAllDay = true
+        };
 
-        Assert.Equal(DayOfWeek.Monday, cells[0].Date.DayOfWeek);
-    }
-
-    [Fact]
-    public void Build_AttachesEventsFromSource()
-    {
-        var source = new LocalCalendarEventSource(
-        [
-            new CalendarEvent { Date = new DateOnly(2026, 8, 13), Title = "Ship Calendar" },
-            new CalendarEvent { Date = new DateOnly(2026, 8, 20), Title = "Review" }
-        ]);
-
-        var cells = CalendarMonthBuilder.Build(
-            2026,
-            8,
-            DayOfWeek.Monday,
-            today: new DateOnly(2026, 8, 1),
-            source);
-
-        var day = cells.Single(c => c.Date == new DateOnly(2026, 8, 13));
-        Assert.True(day.HasEvents);
-        Assert.Equal("Ship Calendar", day.Events[0].Title);
-    }
-
-    [Fact]
-    public void WeekdayLabels_StartAtConfiguredDay()
-    {
-        var labels = CalendarMonthBuilder.WeekdayLabels(DayOfWeek.Monday);
-        Assert.Equal(["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"], labels);
+        Assert.True(ev.OccursOn(new DateOnly(2026, 8, 13)));
+        Assert.False(ev.OccursOn(new DateOnly(2026, 8, 14)));
     }
 }
 
-public class LocalCalendarEventSourceTests
+public class CalendarServiceTests
 {
     [Fact]
-    public void GetEvents_FiltersInclusiveRangeAndOrders()
+    public async Task GetTodayAgendaAsync_MergesProvidersAndOrdersByStart()
     {
-        var source = new LocalCalendarEventSource(
+        var day = new DateOnly(2026, 8, 13);
+        var offset = TimeSpan.FromHours(9);
+        var local = new LocalCalendarProvider(
         [
-            new CalendarEvent { Date = new DateOnly(2026, 8, 20), Title = "B" },
-            new CalendarEvent { Date = new DateOnly(2026, 8, 10), Title = "A" },
-            new CalendarEvent { Date = new DateOnly(2026, 9, 1), Title = "C" }
+            new CalendarEvent
+            {
+                Title = "Guitar",
+                Provider = CalendarProviderIds.Local,
+                Start = new DateTimeOffset(day.ToDateTime(new TimeOnly(19, 0)), offset),
+                End = new DateTimeOffset(day.ToDateTime(new TimeOnly(20, 0)), offset)
+            },
+            new CalendarEvent
+            {
+                Title = "東進",
+                Provider = CalendarProviderIds.Local,
+                Start = new DateTimeOffset(day.ToDateTime(new TimeOnly(9, 0)), offset),
+                End = new DateTimeOffset(day.ToDateTime(new TimeOnly(12, 0)), offset)
+            }
         ]);
 
-        var events = source.GetEvents(new DateOnly(2026, 8, 1), new DateOnly(2026, 8, 31));
-        Assert.Equal(2, events.Count);
-        Assert.Equal("A", events[0].Title);
-        Assert.Equal("B", events[1].Title);
+        var service = new CalendarService([local]);
+        var agenda = await service.GetTodayAgendaAsync(new DateTimeOffset(day.ToDateTime(new TimeOnly(8, 0)), offset));
+
+        Assert.Equal(2, agenda.Count);
+        Assert.Equal("東進", agenda[0].Title);
+        Assert.Equal("Guitar", agenda[1].Title);
     }
 
     [Fact]
-    public void EmptySource_ReturnsNoEvents()
+    public async Task GetAgendaAsync_SkipsFailingProvider()
     {
-        Assert.Empty(EmptyCalendarEventSource.Instance.GetEvents(
-            new DateOnly(2026, 1, 1),
-            new DateOnly(2026, 12, 31)));
+        var service = new CalendarService([new ThrowingProvider(), EmptyCalendarProvider.Instance]);
+        var agenda = await service.GetAgendaAsync(CalendarQuery.ForDay(new DateOnly(2026, 8, 13)));
+        Assert.Empty(agenda);
+    }
+
+    private sealed class ThrowingProvider : ICalendarProvider
+    {
+        public string ProviderId => "boom";
+        public string DisplayName => "Boom";
+        public string? OpenUrl => null;
+        public bool IsConfigured => true;
+
+        public Task<IReadOnlyList<CalendarEvent>> GetEventsAsync(
+            CalendarQuery query,
+            CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("provider down");
+    }
+}
+
+public class IcsCalendarParserTests
+{
+    [Fact]
+    public void Parse_ReadsVEventSummaryAndTimes()
+    {
+        var ics = """
+            BEGIN:VCALENDAR
+            BEGIN:VEVENT
+            UID:abc-123
+            SUMMARY:東進
+            DTSTART:20260813T000000Z
+            DTEND:20260813T030000Z
+            END:VEVENT
+            END:VCALENDAR
+            """;
+
+        var events = IcsCalendarParser.Parse(ics, CalendarProviderIds.Google, "Google Calendar");
+        Assert.Single(events);
+        Assert.Equal("東進", events[0].Title);
+        Assert.Equal(CalendarProviderIds.Google, events[0].Provider);
+        Assert.Equal("Google Calendar", events[0].CalendarName);
+        Assert.Equal("abc-123", events[0].Id);
+    }
+
+    [Fact]
+    public void Parse_AllDayValueDate()
+    {
+        var ics = """
+            BEGIN:VEVENT
+            UID:day-1
+            SUMMARY:Holiday
+            DTSTART;VALUE=DATE:20260813
+            DTEND;VALUE=DATE:20260814
+            END:VEVENT
+            """;
+
+        var events = IcsCalendarParser.Parse(ics, CalendarProviderIds.Google);
+        Assert.Single(events);
+        Assert.True(events[0].IsAllDay);
+        Assert.True(events[0].OccursOn(new DateOnly(2026, 8, 13)));
     }
 }
 
 public class CalendarWidgetConfigurationTests
 {
     [Fact]
-    public void RoundTrip_PreservesEventsAndFirstDay()
+    public void RoundTrip_PreservesTimedEventsAndGoogleIcsUrl()
     {
         var original = new CalendarWidgetConfiguration
         {
-            FirstDayOfWeek = DayOfWeek.Sunday,
-            FollowToday = false,
-            PinnedYear = 2026,
-            PinnedMonth = 8,
+            GoogleIcsUrl = "https://calendar.google.com/calendar/ical/example/private/basic.ics",
+            OpenCalendarUrl = "https://calendar.google.com/",
+            UseSampleAgendaWhenEmpty = false,
             Events =
             [
                 new CalendarEvent
                 {
-                    Id = Guid.Parse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"),
-                    Date = new DateOnly(2026, 8, 13),
-                    Title = "Desk day",
-                    Notes = "local only"
+                    Id = "evt-1",
+                    Provider = CalendarProviderIds.Local,
+                    CalendarName = "Local",
+                    Title = "Programming",
+                    Start = DateTimeOffset.Parse("2026-08-13T14:00:00+09:00", CultureInfo.InvariantCulture),
+                    End = DateTimeOffset.Parse("2026-08-13T16:00:00+09:00", CultureInfo.InvariantCulture),
+                    Location = "Desk"
                 }
             ]
         };
 
         var restored = CalendarWidgetConfiguration.FromDictionary(original.ToDictionary());
-        Assert.Equal(DayOfWeek.Sunday, restored.FirstDayOfWeek);
-        Assert.False(restored.FollowToday);
-        Assert.Equal(2026, restored.PinnedYear);
-        Assert.Equal(8, restored.PinnedMonth);
+        Assert.Equal(original.GoogleIcsUrl, restored.GoogleIcsUrl);
+        Assert.False(restored.UseSampleAgendaWhenEmpty);
         Assert.Single(restored.Events);
-        Assert.Equal(original.Events[0].Id, restored.Events[0].Id);
-        Assert.Equal(new DateOnly(2026, 8, 13), restored.Events[0].Date);
-        Assert.Equal("Desk day", restored.Events[0].Title);
-        Assert.Equal("local only", restored.Events[0].Notes);
+        Assert.Equal("Programming", restored.Events[0].Title);
+        Assert.Equal("Desk", restored.Events[0].Location);
+        Assert.Equal(14, restored.Events[0].Start.Hour);
     }
 
     [Fact]
-    public void FromDictionary_MissingKeys_UsesDefaults()
+    public void FromDictionary_LegacyDateOnly_BecomesAllDay()
     {
-        var restored = CalendarWidgetConfiguration.FromDictionary(
-            new Dictionary<string, System.Text.Json.JsonElement>());
-        Assert.Equal(DayOfWeek.Monday, restored.FirstDayOfWeek);
-        Assert.True(restored.FollowToday);
-        Assert.Empty(restored.Events);
+        var bag = new Dictionary<string, System.Text.Json.JsonElement>
+        {
+            ["Events"] = System.Text.Json.JsonSerializer.SerializeToElement(new[]
+            {
+                new Dictionary<string, object?>
+                {
+                    ["Id"] = "legacy",
+                    ["Date"] = "2026-08-13",
+                    ["Title"] = "Legacy note",
+                    ["Notes"] = "old"
+                }
+            })
+        };
+
+        var restored = CalendarWidgetConfiguration.FromDictionary(bag);
+        Assert.Single(restored.Events);
+        Assert.True(restored.Events[0].IsAllDay);
+        Assert.Equal("Legacy note", restored.Events[0].Title);
+        Assert.Equal("old", restored.Events[0].Description);
     }
 
     [Fact]
-    public void CreateEventSource_Empty_UsesEmptyProvider()
-    {
-        var config = CalendarWidgetConfiguration.CreateDefault();
-        Assert.Equal("empty", config.CreateEventSource().SourceId);
-    }
-
-    [Fact]
-    public void CreateCalendar_SetsTypeWithoutTouchingDefaultLayoutSeed()
+    public void CreateCalendar_DoesNotSeedDefaultLayout()
     {
         var widget = DefaultWidgetFactory.CreateCalendar();
         Assert.Equal(WidgetTypes.Calendar, widget.Type);
-        Assert.Equal(320, widget.Size.Width);
-        Assert.Equal(340, widget.Size.Height);
-
         var layout = SecretBase.Core.Desktop.DesktopLayout.CreateDefault();
         Assert.Equal(2, layout.Widgets.Count);
         Assert.DoesNotContain(layout.Widgets, w => w.Type == WidgetTypes.Calendar);
+    }
+
+    [Fact]
+    public void SampleCreativeDay_HasThreeTimedBlocks()
+    {
+        var samples = SampleCalendarEvents.CreateCreativeDay(new DateOnly(2026, 8, 13), TimeSpan.FromHours(9));
+        Assert.Equal(3, samples.Count);
+        Assert.Equal("東進", samples[0].Title);
+        Assert.Equal("Programming", samples[1].Title);
+        Assert.Equal("Guitar", samples[2].Title);
     }
 }
