@@ -28,6 +28,16 @@ public sealed class CreativeCommandResult
     /// <summary>True when LaunchTarget is an external https link.</summary>
     public bool LaunchIsExternalLink { get; init; }
 
+    /// <summary>Host should launch Cursor at <see cref="CursorFolderPath"/>.</summary>
+    public bool ShouldOpenCursorAtFolder { get; init; }
+
+    public string? CursorFolderPath { get; init; }
+
+    /// <summary>Host should launch Cursor with no folder.</summary>
+    public bool ShouldOpenCursorApp { get; init; }
+
+    public bool OfferCursorWebsiteFallback { get; init; }
+
     public static CreativeCommandResult Ok(
         CreativeCommandKind kind,
         IReadOnlyList<CreativeItem>? items = null,
@@ -37,7 +47,11 @@ public sealed class CreativeCommandResult
         CreativeProject? project = null,
         CreativeProjectResource? resource = null,
         string? launchTarget = null,
-        bool launchIsExternalLink = false) =>
+        bool launchIsExternalLink = false,
+        bool shouldOpenCursorAtFolder = false,
+        string? cursorFolderPath = null,
+        bool shouldOpenCursorApp = false,
+        bool offerCursorWebsiteFallback = false) =>
         new()
         {
             Succeeded = true,
@@ -49,7 +63,11 @@ public sealed class CreativeCommandResult
             Resource = resource,
             LaunchTarget = launchTarget,
             ShouldLaunch = shouldLaunch,
-            LaunchIsExternalLink = launchIsExternalLink
+            LaunchIsExternalLink = launchIsExternalLink,
+            ShouldOpenCursorAtFolder = shouldOpenCursorAtFolder,
+            CursorFolderPath = cursorFolderPath,
+            ShouldOpenCursorApp = shouldOpenCursorApp,
+            OfferCursorWebsiteFallback = offerCursorWebsiteFallback
         };
 
     public static CreativeCommandResult Fail(CreativeCommandKind kind, string error) =>

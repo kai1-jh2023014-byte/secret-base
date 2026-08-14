@@ -17,7 +17,13 @@ public enum CreativeCommandKind
     ToggleCreativeProjectFavorite = 14,
     DeleteCreativeProjectRegistration = 15,
     SaveCreativeProjectNotes = 16,
-    ToggleCreativeProjectResourceQuickAction = 17
+    ToggleCreativeProjectResourceQuickAction = 17,
+
+    /// <summary>Open registered project root in Cursor (narrow Platform launch).</summary>
+    OpenProjectInCursor = 18,
+
+    /// <summary>Open a built-in AI tool (website or Cursor app).</summary>
+    OpenAiTool = 19
 }
 
 /// <summary>
@@ -92,4 +98,10 @@ public sealed class CreativeCommand
             ProjectId = projectId,
             ResourceId = resourceId
         };
+
+    public static CreativeCommand OpenProjectInCursor(string projectId) =>
+        new() { Kind = CreativeCommandKind.OpenProjectInCursor, ProjectId = projectId };
+
+    public static CreativeCommand OpenAiTool(string toolId) =>
+        new() { Kind = CreativeCommandKind.OpenAiTool, ItemId = toolId };
 }

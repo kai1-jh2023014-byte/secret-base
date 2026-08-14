@@ -1,6 +1,7 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using SecretBase.App.Desktop;
+using SecretBase.Core.Ai;
 using SecretBase.Core.Calendar;
 using SecretBase.Core.Creative;
 using SecretBase.Core.Time;
@@ -88,4 +89,6 @@ public sealed record DesktopPageArgs(
     ISecureSecretStore? SecretStore = null,
     ICalendarAgendaCache? CalendarCache = null,
     IPathPickService? PathPicker = null,
-    CreativeCommandService? CreativeCommands = null);
+    CreativeCommandService? CreativeCommands = null,
+    ICursorLaunchService? CursorLaunch = null,
+    AiCommandService? AiCommands = null);

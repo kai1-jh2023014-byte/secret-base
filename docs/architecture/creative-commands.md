@@ -35,7 +35,12 @@ AI must never pass arbitrary filesystem paths, run shell, elevate, or delete OS 
 | `DeleteCreativeProjectRegistration` | `ProjectId` | Remove registration only |
 | `SaveCreativeProjectNotes` | `ProjectId` + `Notes` | Persist plain-text notes |
 | `ToggleCreativeProjectResourceQuickAction` | `ProjectId` + `ResourceId` | Pin/unpin Quick Action |
+| `OpenProjectInCursor` | `ProjectId` | Resolve root → narrow Cursor launch (or website fallback) |
+| `OpenAiTool` | tool id in `ItemId` | Built-in AI website / Cursor app via `AiCommandService` |
+
+See also [ai-workspace.md](ai-workspace.md).
 
 ## Not in scope
 
-FS delete/move/rename, batch, “run exe with args”, process kill, AI implementation, Windows Search.
+FS delete/move/rename, batch, free-form “run exe with args”, process kill, AI implementation, Windows Search.
+Arbitrary Cursor CLI flags are not accepted — only a validated project folder path.

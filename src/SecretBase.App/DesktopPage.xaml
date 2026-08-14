@@ -47,6 +47,10 @@
                 Key="E"
                 Modifiers="Control,Shift"
                 Invoked="AddCreativeAccelerator_Invoked" />
+            <KeyboardAccelerator
+                Key="A"
+                Modifiers="Control,Shift"
+                Invoked="AddAiAccelerator_Invoked" />
         </Grid.KeyboardAccelerators>
 
         <Canvas
@@ -114,6 +118,17 @@
                 CornerRadius="14"
                 Click="AddCreativeButton_Click"
                 ToolTipService.ToolTip="Add Creative Workspace (Ctrl+Shift+E)" />
+            <Button
+                x:Name="AddAiFab"
+                Width="48"
+                Height="48"
+                Content="AI"
+                FontSize="12"
+                FontWeight="SemiBold"
+                Padding="0"
+                CornerRadius="14"
+                Click="AddAiButton_Click"
+                ToolTipService.ToolTip="Add AI Workspace (Ctrl+Shift+A)" />
             <Button
                 x:Name="ThemeFab"
                 Width="48"
@@ -197,6 +212,12 @@
                     Click="AddCreativeButton_Click"
                     Padding="12,4"
                     ToolTipService.ToolTip="Create a Creative Workspace" />
+                <Button
+                    x:Name="AddAiButton"
+                    Content="Add AI"
+                    Click="AddAiButton_Click"
+                    Padding="12,4"
+                    ToolTipService.ToolTip="Create an AI Workspace" />
                 <Button
                     x:Name="ExitButton"
                     Content="Exit"

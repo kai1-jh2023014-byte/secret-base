@@ -19,4 +19,7 @@ public static class WidgetTypes
 
     /// <summary>Creative Workspace — user-registered projects/files/folders (open only).</summary>
     public const string Creative = "creative";
+
+    /// <summary>AI Workspace — launch Cursor / official AI websites with Project context.</summary>
+    public const string Ai = "ai";
 }
