@@ -42,6 +42,8 @@ public sealed class CreativeCommandService
             CreativeCommandKind.OpenCreativeProjectResource => OpenCreativeProjectResource(command),
             CreativeCommandKind.ToggleCreativeProjectFavorite => ToggleCreativeProjectFavorite(command),
             CreativeCommandKind.DeleteCreativeProjectRegistration => DeleteCreativeProjectRegistration(command),
+            CreativeCommandKind.SaveCreativeProjectNotes => SaveCreativeProjectNotes(command),
+            CreativeCommandKind.ToggleCreativeProjectResourceQuickAction => ToggleResourceQuickAction(command),
             _ => CreativeCommandResult.Fail(command.Kind, "Unknown creative command.")
         };
     }
@@ -173,29 +175,32 @@ public sealed class CreativeCommandService
             return CreativeCommandResult.Fail(kind, "Project is not registered.");
         }
 
-        if (!projects.TryMarkOpened(project.Id, DateTimeOffset.UtcNow, out var updated, out var error))
-        {
-            return CreativeCommandResult.Fail(kind, error ?? "Could not update project.");
-        }
-
+        // OpenCreativeProject without forcing root = Dashboard entry (no auto-launch).
         if (!openRoot)
         {
-            // Open project = open root when present; otherwise succeed without launch (detail UI).
-            if (string.IsNullOrWhiteSpace(updated!.RootFolder))
+            if (!projects.TryMarkOpened(project.Id, DateTimeOffset.UtcNow, out var marked, out var markError))
             {
-                return CreativeCommandResult.Ok(kind, project: updated, shouldLaunch: false);
+                return CreativeCommandResult.Fail(kind, markError ?? "Could not update project.");
             }
+
+            return CreativeCommandResult.Ok(kind, project: marked, shouldLaunch: false);
         }
-        else if (string.IsNullOrWhiteSpace(updated!.RootFolder))
+
+        if (string.IsNullOrWhiteSpace(project.RootFolder))
         {
             return CreativeCommandResult.Fail(kind, "Project has no root folder.");
+        }
+
+        if (!projects.TryRecordRootOpened(project.Id, DateTimeOffset.UtcNow, out var updated, out var error))
+        {
+            return CreativeCommandResult.Fail(kind, error ?? "Could not update project.");
         }
 
         return CreativeCommandResult.Ok(
             kind,
             project: updated,
             shouldLaunch: true,
-            launchTarget: updated.RootFolder);
+            launchTarget: updated!.RootFolder);
     }
 
     private CreativeCommandResult OpenCreativeProjectResource(CreativeCommand command)
@@ -213,29 +218,23 @@ public sealed class CreativeCommandService
                 "Project or resource id is missing.");
         }
 
-        var project = projects.FindById(command.ProjectId);
-        if (project is null)
+        if (!projects.TryRecordResourceOpened(
+                command.ProjectId!,
+                command.ResourceId!,
+                DateTimeOffset.UtcNow,
+                out var updated,
+                out var resource,
+                out var error))
         {
             return CreativeCommandResult.Fail(
                 CreativeCommandKind.OpenCreativeProjectResource,
-                "Project is not registered.");
+                error ?? "Resource is not registered.");
         }
 
-        var resource = project.Resources.FirstOrDefault(r =>
-            string.Equals(r.Id, command.ResourceId, StringComparison.Ordinal));
-        if (resource is null)
-        {
-            return CreativeCommandResult.Fail(
-                CreativeCommandKind.OpenCreativeProjectResource,
-                "Resource is not registered.");
-        }
-
-        _ = projects.TryMarkOpened(project.Id, DateTimeOffset.UtcNow, out var updated, out _);
-
-        var isLink = resource.Kind == CreativeProjectResourceKind.ExternalLink;
+        var isLink = resource!.Kind == CreativeProjectResourceKind.ExternalLink;
         return CreativeCommandResult.Ok(
             CreativeCommandKind.OpenCreativeProjectResource,
-            project: updated ?? project,
+            project: updated,
             resource: resource,
             shouldLaunch: true,
             launchTarget: resource.Target,
@@ -292,5 +291,61 @@ public sealed class CreativeCommandService
         }
 
         return CreativeCommandResult.Ok(CreativeCommandKind.DeleteCreativeProjectRegistration);
+    }
+
+    private CreativeCommandResult SaveCreativeProjectNotes(CreativeCommand command)
+    {
+        var gate = RequireProjects(CreativeCommandKind.SaveCreativeProjectNotes, out var projects);
+        if (!gate.Succeeded)
+        {
+            return gate;
+        }
+
+        if (string.IsNullOrWhiteSpace(command.ProjectId))
+        {
+            return CreativeCommandResult.Fail(
+                CreativeCommandKind.SaveCreativeProjectNotes,
+                "Project id is missing.");
+        }
+
+        if (!projects.TrySaveNotes(command.ProjectId!, command.Notes, out var project, out var error))
+        {
+            return CreativeCommandResult.Fail(
+                CreativeCommandKind.SaveCreativeProjectNotes,
+                error ?? "Could not save notes.");
+        }
+
+        return CreativeCommandResult.Ok(CreativeCommandKind.SaveCreativeProjectNotes, project: project);
+    }
+
+    private CreativeCommandResult ToggleResourceQuickAction(CreativeCommand command)
+    {
+        var gate = RequireProjects(CreativeCommandKind.ToggleCreativeProjectResourceQuickAction, out var projects);
+        if (!gate.Succeeded)
+        {
+            return gate;
+        }
+
+        if (string.IsNullOrWhiteSpace(command.ProjectId) || string.IsNullOrWhiteSpace(command.ResourceId))
+        {
+            return CreativeCommandResult.Fail(
+                CreativeCommandKind.ToggleCreativeProjectResourceQuickAction,
+                "Project or resource id is missing.");
+        }
+
+        if (!projects.TryToggleResourceQuickAction(
+                command.ProjectId!,
+                command.ResourceId!,
+                out var project,
+                out var error))
+        {
+            return CreativeCommandResult.Fail(
+                CreativeCommandKind.ToggleCreativeProjectResourceQuickAction,
+                error ?? "Toggle failed.");
+        }
+
+        return CreativeCommandResult.Ok(
+            CreativeCommandKind.ToggleCreativeProjectResourceQuickAction,
+            project: project);
     }
 }

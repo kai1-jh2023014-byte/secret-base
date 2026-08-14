@@ -781,7 +781,7 @@ public sealed partial class DesktopPage : Page
         var hint = new TextBlock
         {
             Text =
-                "Desk for Projects (creative containers) plus favorite files/folders. "
+                "Desk for Projects with Dashboards (Quick Actions, Recent, Notes) plus favorite files/folders. "
                 + "Open only — no FS delete/move. CreativeCommand → Service → safe launch.",
             FontSize = 12,
             Opacity = 0.75,

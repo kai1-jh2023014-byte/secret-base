@@ -19,9 +19,15 @@ public sealed class CreativeProject
 
     public bool IsFavorite { get; set; }
 
+    /// <summary>Plain-text project notes (Dashboard). Not a Markdown editor.</summary>
+    public string? Notes { get; set; }
+
     public DateTimeOffset DateAdded { get; set; } = DateTimeOffset.UtcNow;
 
     public DateTimeOffset? LastOpened { get; set; }
 
     public List<CreativeProjectResource> Resources { get; set; } = [];
+
+    /// <summary>Items opened via Secret Base (not OS-wide indexing).</summary>
+    public List<CreativeProjectRecentItem> RecentItems { get; set; } = [];
 }

@@ -1,10 +1,13 @@
 namespace SecretBase.Core.Creative;
 
 /// <summary>
-/// CRUD for CreativeProject registrations. Never deletes/moves OS files.
+/// CRUD for CreativeProject registrations and Dashboard state.
+/// Never deletes/moves OS files. Remove resource = registration only.
 /// </summary>
 public sealed class CreativeProjectService
 {
+    public const int MaxRecentItems = 10;
+
     private readonly ICreativeProjectStore _store;
     private CreativeProjectDocument _document;
     private readonly object _gate = new();
@@ -12,10 +15,10 @@ public sealed class CreativeProjectService
     public CreativeProjectService(ICreativeProjectStore store)
     {
         _store = store ?? throw new ArgumentNullException(nameof(store));
-        _document = _store.LoadOrCreate();
-        if (_document.SchemaVersion < 1)
+        _document = CreativeProjectDocumentMigrator.MigrateToCurrent(_store.LoadOrCreate());
+        if (_document.SchemaVersion != CreativeProjectDocument.CurrentSchemaVersion)
         {
-            _document.SchemaVersion = CreativeProjectDocument.CurrentSchemaVersion;
+            Persist();
         }
     }
 
@@ -69,7 +72,8 @@ public sealed class CreativeProjectService
                     p.Name.Contains(q, StringComparison.OrdinalIgnoreCase)
                     || (p.Description?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false)
                     || p.ProjectType.ToString().Contains(q, StringComparison.OrdinalIgnoreCase)
-                    || (p.RootFolder?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false));
+                    || (p.RootFolder?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false)
+                    || (p.Notes?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false));
             }
 
             return source
@@ -158,8 +162,7 @@ public sealed class CreativeProjectService
 
         lock (_gate)
         {
-            var existing = _document.Projects.FirstOrDefault(p =>
-                string.Equals(p.Id, id, StringComparison.Ordinal));
+            var existing = FindMutable(id);
             if (existing is null)
             {
                 error = "Project not found.";
@@ -182,8 +185,7 @@ public sealed class CreativeProjectService
         error = null;
         lock (_gate)
         {
-            var existing = _document.Projects.FirstOrDefault(p =>
-                string.Equals(p.Id, id, StringComparison.Ordinal));
+            var existing = FindMutable(id);
             if (existing is null)
             {
                 error = "Project not found.";
@@ -202,8 +204,7 @@ public sealed class CreativeProjectService
         error = null;
         lock (_gate)
         {
-            var existing = _document.Projects.FirstOrDefault(p =>
-                string.Equals(p.Id, id, StringComparison.Ordinal));
+            var existing = FindMutable(id);
             if (existing is null)
             {
                 error = "Project not found.";
@@ -217,14 +218,85 @@ public sealed class CreativeProjectService
         }
     }
 
+    public bool TrySaveNotes(string id, string? notes, out CreativeProject? project, out string? error)
+    {
+        project = null;
+        error = null;
+        if (!CreativeProjectValidator.TryNormalizeNotes(notes, out var normalized, out var notesError))
+        {
+            error = notesError;
+            return false;
+        }
+
+        lock (_gate)
+        {
+            var existing = FindMutable(id);
+            if (existing is null)
+            {
+                error = "Project not found.";
+                return false;
+            }
+
+            existing.Notes = normalized;
+            Persist();
+            project = Clone(existing);
+            return true;
+        }
+    }
+
+    public bool TryToggleResourceQuickAction(
+        string projectId,
+        string resourceId,
+        out CreativeProject? project,
+        out string? error)
+    {
+        project = null;
+        error = null;
+        lock (_gate)
+        {
+            var existing = FindMutable(projectId);
+            if (existing is null)
+            {
+                error = "Project not found.";
+                return false;
+            }
+
+            var resource = existing.Resources.FirstOrDefault(r =>
+                string.Equals(r.Id, resourceId, StringComparison.Ordinal));
+            if (resource is null)
+            {
+                error = "Resource not found.";
+                return false;
+            }
+
+            resource.IsQuickAction = !resource.IsQuickAction;
+            Persist();
+            project = Clone(existing);
+            return true;
+        }
+    }
+
+    public IReadOnlyList<CreativeProjectResource> GetQuickActions(string? projectId)
+    {
+        var project = FindById(projectId);
+        if (project is null)
+        {
+            return Array.Empty<CreativeProjectResource>();
+        }
+
+        return project.Resources
+            .Where(r => r.IsQuickAction)
+            .OrderBy(r => r.Name, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
     public bool TryMarkOpened(string id, DateTimeOffset openedAt, out CreativeProject? project, out string? error)
     {
         project = null;
         error = null;
         lock (_gate)
         {
-            var existing = _document.Projects.FirstOrDefault(p =>
-                string.Equals(p.Id, id, StringComparison.Ordinal));
+            var existing = FindMutable(id);
             if (existing is null)
             {
                 error = "Project not found.";
@@ -234,6 +306,99 @@ public sealed class CreativeProjectService
             existing.LastOpened = openedAt;
             Persist();
             project = Clone(existing);
+            return true;
+        }
+    }
+
+    /// <summary>Records root folder open in Recent (Secret Base open only).</summary>
+    public bool TryRecordRootOpened(
+        string projectId,
+        DateTimeOffset openedAt,
+        out CreativeProject? project,
+        out string? error)
+    {
+        project = null;
+        error = null;
+        lock (_gate)
+        {
+            var existing = FindMutable(projectId);
+            if (existing is null)
+            {
+                error = "Project not found.";
+                return false;
+            }
+
+            if (string.IsNullOrWhiteSpace(existing.RootFolder))
+            {
+                error = "Project has no root folder.";
+                return false;
+            }
+
+            existing.LastOpened = openedAt;
+            PushRecent(existing, new CreativeProjectRecentItem
+            {
+                Key = CreativeProjectRecentItem.RootKey,
+                Name = "Root Folder",
+                Kind = CreativeProjectResourceKind.Folder,
+                Target = existing.RootFolder!,
+                IsRoot = true,
+                OpenedAt = openedAt
+            });
+            Persist();
+            project = Clone(existing);
+            return true;
+        }
+    }
+
+    /// <summary>Records resource open in Recent (Secret Base open only).</summary>
+    public bool TryRecordResourceOpened(
+        string projectId,
+        string resourceId,
+        DateTimeOffset openedAt,
+        out CreativeProject? project,
+        out CreativeProjectResource? resource,
+        out string? error)
+    {
+        project = null;
+        resource = null;
+        error = null;
+        lock (_gate)
+        {
+            var existing = FindMutable(projectId);
+            if (existing is null)
+            {
+                error = "Project not found.";
+                return false;
+            }
+
+            var found = existing.Resources.FirstOrDefault(r =>
+                string.Equals(r.Id, resourceId, StringComparison.Ordinal));
+            if (found is null)
+            {
+                error = "Resource not found.";
+                return false;
+            }
+
+            existing.LastOpened = openedAt;
+            PushRecent(existing, new CreativeProjectRecentItem
+            {
+                Key = found.Id,
+                Name = found.Name,
+                Kind = found.Kind,
+                Target = found.Target,
+                IsRoot = false,
+                OpenedAt = openedAt
+            });
+            Persist();
+            project = Clone(existing);
+            resource = new CreativeProjectResource
+            {
+                Id = found.Id,
+                Name = found.Name,
+                Kind = found.Kind,
+                Target = found.Target,
+                IsQuickAction = found.IsQuickAction
+            };
             return true;
         }
     }
@@ -257,8 +422,7 @@ public sealed class CreativeProjectService
 
         lock (_gate)
         {
-            var existing = _document.Projects.FirstOrDefault(p =>
-                string.Equals(p.Id, projectId, StringComparison.Ordinal));
+            var existing = FindMutable(projectId);
             if (existing is null)
             {
                 error = "Project not found.";
@@ -279,14 +443,14 @@ public sealed class CreativeProjectService
         }
     }
 
+    /// <summary>Removes resource registration only — never deletes OS files.</summary>
     public bool TryRemoveResource(string projectId, string resourceId, out CreativeProject? project, out string? error)
     {
         project = null;
         error = null;
         lock (_gate)
         {
-            var existing = _document.Projects.FirstOrDefault(p =>
-                string.Equals(p.Id, projectId, StringComparison.Ordinal));
+            var existing = FindMutable(projectId);
             if (existing is null)
             {
                 error = "Project not found.";
@@ -302,9 +466,25 @@ public sealed class CreativeProjectService
             }
 
             existing.Resources.Remove(resource);
+            existing.RecentItems.RemoveAll(r =>
+                string.Equals(r.Key, resourceId, StringComparison.Ordinal));
             Persist();
             project = Clone(existing);
             return true;
+        }
+    }
+
+    private CreativeProject? FindMutable(string id) =>
+        _document.Projects.FirstOrDefault(p => string.Equals(p.Id, id, StringComparison.Ordinal));
+
+    private static void PushRecent(CreativeProject project, CreativeProjectRecentItem entry)
+    {
+        project.RecentItems.RemoveAll(r =>
+            string.Equals(r.Key, entry.Key, StringComparison.Ordinal));
+        project.RecentItems.Insert(0, entry);
+        if (project.RecentItems.Count > MaxRecentItems)
+        {
+            project.RecentItems.RemoveRange(MaxRecentItems, project.RecentItems.Count - MaxRecentItems);
         }
     }
 
@@ -323,14 +503,31 @@ public sealed class CreativeProjectService
             ProjectType = p.ProjectType,
             RootFolder = p.RootFolder,
             IsFavorite = p.IsFavorite,
+            Notes = p.Notes,
             DateAdded = p.DateAdded,
             LastOpened = p.LastOpened,
-            Resources = p.Resources.Select(r => new CreativeProjectResource
-            {
-                Id = r.Id,
-                Name = r.Name,
-                Kind = r.Kind,
-                Target = r.Target
-            }).ToList()
+            Resources = p.Resources.Select(CloneResource).ToList(),
+            RecentItems = p.RecentItems.Select(CloneRecent).ToList()
+        };
+
+    private static CreativeProjectResource CloneResource(CreativeProjectResource r) =>
+        new()
+        {
+            Id = r.Id,
+            Name = r.Name,
+            Kind = r.Kind,
+            Target = r.Target,
+            IsQuickAction = r.IsQuickAction
+        };
+
+    private static CreativeProjectRecentItem CloneRecent(CreativeProjectRecentItem r) =>
+        new()
+        {
+            Key = r.Key,
+            Name = r.Name,
+            Kind = r.Kind,
+            Target = r.Target,
+            IsRoot = r.IsRoot,
+            OpenedAt = r.OpenedAt
         };
 }

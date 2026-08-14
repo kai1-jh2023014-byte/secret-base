@@ -149,3 +149,11 @@ See [creative-workspace.md](../architecture/creative-workspace.md) and [creative
 **Why:** Evolve Creative Workspace from a file/folder launcher into a Personal Creative Environment entry point while preserving Security Boundary and Command → Service → Launch.
 
 See [creative-workspace.md](../architecture/creative-workspace.md) and [creative-commands.md](../architecture/creative-commands.md).
+
+## 2026-08-14 — Creative Project Dashboard MVP
+
+**Decision:** Evolve Project Detail into a **Project Dashboard** inside the existing Creative Workspace widget (no new window manager). Extend `CreativeProject` with `Notes`, resource `IsQuickAction`, and `RecentItems` (Secret Base opens only). Bump `projects.json` to `schemaVersion` **2** with `CreativeProjectDocumentMigrator` (1 → 2). Add commands `SaveCreativeProjectNotes` and `ToggleCreativeProjectResourceQuickAction`. `OpenCreativeProject` marks opened without auto-launch (Dashboard entry); root/resource opens still use existing launch boundary. Type remains glyph/label only. **No** AI, FS watcher, Windows Search, Markdown editor, Kanban, Overlay changes.
+
+**Why:** Make each Project a base to *start creating* — overview, pinned opens, recent resume, notes — without becoming a file manager.
+
+See [creative-workspace.md](../architecture/creative-workspace.md) and [creative-commands.md](../architecture/creative-commands.md).

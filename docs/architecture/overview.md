@@ -44,5 +44,6 @@ Highest principle:
 - ✅ Music Widget (native search/playback UI + MusicCommand boundary; Demo catalog)
 - ✅ Creative Workspace (favorites/recent/open registered paths; CreativeCommand boundary)
 - ✅ Project Workspace (CreativeProject containers + projects.json; open-only; registration delete)
+- ✅ Project Dashboard (Quick Actions / Recent / Notes; schemaVersion 2 migration)
 - App Launcher polish → Room switching
 

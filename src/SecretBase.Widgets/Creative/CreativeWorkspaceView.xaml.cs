@@ -145,7 +145,7 @@ public sealed partial class CreativeWorkspaceView : UserControl
 
         if (!string.IsNullOrEmpty(_detailProjectId))
         {
-            ShowProjectDetail(_detailProjectId);
+            ShowProjectDashboard(_detailProjectId);
             return;
         }
 
@@ -263,7 +263,7 @@ public sealed partial class CreativeWorkspaceView : UserControl
         }
     }
 
-    private void ShowProjectDetail(string projectId)
+    private void ShowProjectDashboard(string projectId)
     {
         ContentList.Children.Clear();
         if (_commands?.Projects is null)
@@ -283,39 +283,114 @@ public sealed partial class CreativeWorkspaceView : UserControl
         }
 
         _detailProjectId = project.Id;
+
         HeaderText.Text = $"{ProjectTypeGlyph(project.ProjectType)} {project.Name}";
 
-        ContentList.Children.Add(CreateMuted(project.ProjectType.ToString()));
+        var headerRow = new Grid { ColumnSpacing = 6, Margin = new Thickness(0, 0, 0, 4) };
+        headerRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        headerRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var typeLabel = CreateMuted(ProjectTypeLabel(project.ProjectType));
+        var favButton = new Button
+        {
+            Content = project.IsFavorite ? "★" : "☆",
+            MinWidth = 36,
+            ToolTipService.ToolTip = "Favorite"
+        };
+        favButton.Click += (_, _) =>
+        {
+            var result = _commands.Execute(CreativeCommand.ToggleCreativeProjectFavorite(project.Id));
+            StatusLabel.Text = result.Succeeded
+                ? (result.Project!.IsFavorite ? "Favorited" : "Unfavorited")
+                : (result.ErrorMessage ?? "Favorite failed.");
+            RefreshLists();
+        };
+        if (_theme is not null)
+        {
+            StyleActionButton(favButton, _theme, accent: project.IsFavorite);
+        }
+
+        Grid.SetColumn(typeLabel, 0);
+        Grid.SetColumn(favButton, 1);
+        headerRow.Children.Add(typeLabel);
+        headerRow.Children.Add(favButton);
+        ContentList.Children.Add(headerRow);
+
         if (!string.IsNullOrWhiteSpace(project.Description))
         {
-            ContentList.Children.Add(new TextBlock
+            var desc = new TextBlock
             {
                 Text = project.Description,
                 FontSize = 12,
                 TextWrapping = TextWrapping.WrapWholeWords,
-                Margin = new Thickness(0, 4, 0, 8)
-            });
+                Margin = new Thickness(0, 2, 0, 8)
+            };
+            if (_theme is not null)
+            {
+                desc.FontFamily = new FontFamily(_theme.FontFamily);
+                desc.Foreground = ThemePainter.Brush(_theme.WidgetForeground);
+            }
+
+            ContentList.Children.Add(desc);
         }
 
+        // Quick Actions — user-explicit only (+ optional Root when present).
+        ContentList.Children.Add(CreateSectionHeader("Quick Actions"));
+        var quickPanel = new StackPanel { Spacing = 6, Orientation = Orientation.Vertical };
+        var quickResources = project.Resources.Where(r => r.IsQuickAction).ToList();
         if (!string.IsNullOrWhiteSpace(project.RootFolder))
         {
-            ContentList.Children.Add(CreateSectionHeader("📁 Root Folder"));
-            ContentList.Children.Add(CreateResourceOpenButton(
-                "Open root folder",
-                project.RootFolder!,
-                () => LaunchCommandResult(
-                    _commands.Execute(CreativeCommand.OpenCreativeProjectRoot(project.Id)))));
+            quickPanel.Children.Add(CreateActionButton(
+                "📁 Root Folder",
+                () =>
+                {
+                    LaunchCommandResult(_commands.Execute(CreativeCommand.OpenCreativeProjectRoot(project.Id)));
+                    return Task.CompletedTask;
+                }));
+        }
+
+        foreach (var resource in quickResources)
+        {
+            var captured = resource;
+            quickPanel.Children.Add(CreateActionButton(
+                $"{ResourceGlyph(captured.Kind)} {captured.Name}",
+                () =>
+                {
+                    LaunchCommandResult(
+                        _commands.Execute(CreativeCommand.OpenCreativeProjectResource(project.Id, captured.Id)));
+                    return Task.CompletedTask;
+                }));
+        }
+
+        if (quickPanel.Children.Count == 0)
+        {
+            ContentList.Children.Add(CreateMuted("Star a resource below to pin a Quick Action."));
         }
         else
         {
-            ContentList.Children.Add(CreateMuted("No root folder set."));
+            ContentList.Children.Add(quickPanel);
         }
 
+        // Recent — Secret Base opens only.
+        ContentList.Children.Add(CreateSectionHeader("Recent"));
+        if (project.RecentItems.Count == 0)
+        {
+            ContentList.Children.Add(CreateMuted("Open something from this Project to see it here."));
+        }
+        else
+        {
+            foreach (var recent in project.RecentItems)
+            {
+                ContentList.Children.Add(CreateRecentRow(project.Id, recent));
+            }
+        }
+
+        // Resources grouped.
         var files = project.Resources.Where(r => r.Kind == CreativeProjectResourceKind.File).ToList();
         var folders = project.Resources.Where(r => r.Kind == CreativeProjectResourceKind.Folder).ToList();
         var links = project.Resources.Where(r => r.Kind == CreativeProjectResourceKind.ExternalLink).ToList();
 
-        ContentList.Children.Add(CreateSectionHeader("📄 Files"));
+        ContentList.Children.Add(CreateSectionHeader("Resources"));
+        ContentList.Children.Add(CreateSectionHeader("Files"));
         if (files.Count == 0)
         {
             ContentList.Children.Add(CreateMuted("No files registered."));
@@ -328,7 +403,7 @@ public sealed partial class CreativeWorkspaceView : UserControl
             }
         }
 
-        ContentList.Children.Add(CreateSectionHeader("📁 Folders"));
+        ContentList.Children.Add(CreateSectionHeader("Folders"));
         if (folders.Count == 0)
         {
             ContentList.Children.Add(CreateMuted("No folders registered."));
@@ -341,7 +416,7 @@ public sealed partial class CreativeWorkspaceView : UserControl
             }
         }
 
-        ContentList.Children.Add(CreateSectionHeader("🔗 External Links"));
+        ContentList.Children.Add(CreateSectionHeader("Links"));
         if (links.Count == 0)
         {
             ContentList.Children.Add(CreateMuted("No links registered."));
@@ -354,25 +429,36 @@ public sealed partial class CreativeWorkspaceView : UserControl
             }
         }
 
-        var actions = new StackPanel { Spacing = 6, Margin = new Thickness(0, 10, 0, 0) };
-        actions.Children.Add(CreateActionButton(
-            project.IsFavorite ? "★ Favorite" : "☆ Favorite",
-            () =>
-            {
-                var result = _commands.Execute(CreativeCommand.ToggleCreativeProjectFavorite(project.Id));
-                StatusLabel.Text = result.Succeeded
-                    ? (result.Project!.IsFavorite ? "Favorited" : "Unfavorited")
-                    : (result.ErrorMessage ?? "Favorite failed.");
-                RefreshLists();
-                return Task.CompletedTask;
-            }));
-        actions.Children.Add(CreateActionButton("Open", () =>
+        // Notes
+        ContentList.Children.Add(CreateSectionHeader("Notes"));
+        var notesBox = new TextBox
         {
-            var result = _commands.Execute(CreativeCommand.OpenCreativeProject(project.Id));
-            LaunchCommandResult(result);
+            Text = project.Notes ?? string.Empty,
+            AcceptsReturn = true,
+            TextWrapping = TextWrapping.Wrap,
+            MinHeight = 88,
+            PlaceholderText = "What are you working on?"
+        };
+        if (_theme is not null)
+        {
+            notesBox.FontFamily = new FontFamily(_theme.FontFamily);
+        }
+
+        ContentList.Children.Add(notesBox);
+        ContentList.Children.Add(CreateActionButton("Save Notes", () =>
+        {
+            var result = _commands.Execute(CreativeCommand.SaveCreativeProjectNotes(project.Id, notesBox.Text));
+            StatusLabel.Text = result.Succeeded ? "Notes saved." : (result.ErrorMessage ?? "Save failed.");
+            if (result.Succeeded)
+            {
+                RefreshLists();
+            }
+
             return Task.CompletedTask;
         }));
-        actions.Children.Add(CreateActionButton("Edit", () => ShowEditProjectDialogAsync(project)));
+
+        var actions = new StackPanel { Spacing = 6, Margin = new Thickness(0, 10, 0, 0) };
+        actions.Children.Add(CreateActionButton("Edit Project", () => ShowEditProjectDialogAsync(project)));
         actions.Children.Add(CreateActionButton("+ Add File", () => AddResourceAsync(project.Id, CreativeProjectResourceKind.File)));
         actions.Children.Add(CreateActionButton("+ Add Folder", () => AddResourceAsync(project.Id, CreativeProjectResourceKind.Folder)));
         actions.Children.Add(CreateActionButton("+ Add Link", () => AddLinkAsync(project.Id)));
@@ -384,15 +470,61 @@ public sealed partial class CreativeWorkspaceView : UserControl
             return Task.CompletedTask;
         }));
         ContentList.Children.Add(actions);
+    }
 
+    private UIElement CreateRecentRow(string projectId, CreativeProjectRecentItem recent)
+    {
+        var button = new Button
+        {
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            HorizontalContentAlignment = HorizontalAlignment.Left,
+            Padding = new Thickness(8, 6, 8, 6),
+            Content = new StackPanel
+            {
+                Spacing = 2,
+                Children =
+                {
+                    new TextBlock
+                    {
+                        Text = $"{(recent.IsRoot ? "📁" : ResourceGlyph(recent.Kind))}  {recent.Name}",
+                        FontSize = 12,
+                        FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                        TextWrapping = TextWrapping.WrapWholeWords
+                    },
+                    new TextBlock
+                    {
+                        Text = recent.Target,
+                        FontSize = 10,
+                        Opacity = 0.75,
+                        TextWrapping = TextWrapping.WrapWholeWords
+                    }
+                }
+            }
+        };
+        button.Click += (_, _) =>
+        {
+            if (_commands is null)
+            {
+                return;
+            }
+
+            if (recent.IsRoot)
+            {
+                LaunchCommandResult(_commands.Execute(CreativeCommand.OpenCreativeProjectRoot(projectId)));
+            }
+            else
+            {
+                LaunchCommandResult(
+                    _commands.Execute(CreativeCommand.OpenCreativeProjectResource(projectId, recent.Key)));
+            }
+        };
         if (_theme is not null)
         {
-            foreach (var child in ContentList.Children.OfType<TextBlock>())
-            {
-                child.FontFamily = new FontFamily(_theme.FontFamily);
-                child.Foreground = ThemePainter.Brush(_theme.WidgetForeground);
-            }
+            StyleActionButton(button, _theme);
+            ThemeTextInButton(button);
         }
+
+        return button;
     }
 
     private UIElement CreateProjectRow(CreativeProject project)
@@ -423,8 +555,8 @@ public sealed partial class CreativeWorkspaceView : UserControl
         panel.Children.Add(new TextBlock
         {
             Text = string.IsNullOrWhiteSpace(project.Description)
-                ? project.ProjectType.ToString()
-                : $"{project.ProjectType} · {project.Description}",
+                ? ProjectTypeLabel(project.ProjectType)
+                : $"{ProjectTypeLabel(project.ProjectType)} · {project.Description}",
             FontSize = 10,
             Opacity = 0.75,
             TextWrapping = TextWrapping.WrapWholeWords
@@ -497,6 +629,28 @@ public sealed partial class CreativeWorkspaceView : UserControl
                 _commands.Execute(CreativeCommand.OpenCreativeProjectResource(projectId, resource.Id)));
         };
 
+        var star = new Button
+        {
+            Content = resource.IsQuickAction ? "★" : "☆",
+            MinWidth = 32,
+            ToolTipService.ToolTip = "Pin as Quick Action"
+        };
+        star.Click += (_, _) =>
+        {
+            if (_commands is null)
+            {
+                return;
+            }
+
+            var wasPinned = resource.IsQuickAction;
+            var result = _commands.Execute(
+                CreativeCommand.ToggleCreativeProjectResourceQuickAction(projectId, resource.Id));
+            StatusLabel.Text = result.Succeeded
+                ? (wasPinned ? "Removed from Quick Actions." : "Pinned to Quick Actions.")
+                : (result.ErrorMessage ?? "Toggle failed.");
+            RefreshLists();
+        };
+
         var remove = new Button
         {
             Content = "×",
@@ -524,6 +678,7 @@ public sealed partial class CreativeWorkspaceView : UserControl
         if (_theme is not null)
         {
             StyleActionButton(open, _theme);
+            StyleActionButton(star, _theme, accent: resource.IsQuickAction);
             StyleActionButton(remove, _theme);
             ThemeTextInButton(open);
         }
@@ -531,38 +686,14 @@ public sealed partial class CreativeWorkspaceView : UserControl
         var row = new Grid { ColumnSpacing = 6 };
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         Grid.SetColumn(open, 0);
-        Grid.SetColumn(remove, 1);
+        Grid.SetColumn(star, 1);
+        Grid.SetColumn(remove, 2);
         row.Children.Add(open);
+        row.Children.Add(star);
         row.Children.Add(remove);
         return row;
-    }
-
-    private UIElement CreateResourceOpenButton(string label, string subtitle, Action onClick)
-    {
-        var button = new Button
-        {
-            HorizontalAlignment = HorizontalAlignment.Stretch,
-            HorizontalContentAlignment = HorizontalAlignment.Left,
-            Padding = new Thickness(8, 6, 8, 6),
-            Content = new StackPanel
-            {
-                Spacing = 2,
-                Children =
-                {
-                    new TextBlock { Text = label, FontSize = 12, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold },
-                    new TextBlock { Text = subtitle, FontSize = 10, Opacity = 0.75, TextWrapping = TextWrapping.WrapWholeWords }
-                }
-            }
-        };
-        button.Click += (_, _) => onClick();
-        if (_theme is not null)
-        {
-            StyleActionButton(button, _theme);
-            ThemeTextInButton(button);
-        }
-
-        return button;
     }
 
     private Button CreateActionButton(string label, Func<Task> onClick)
@@ -695,6 +826,17 @@ public sealed partial class CreativeWorkspaceView : UserControl
             _ => "📦"
         };
 
+    private static string ProjectTypeLabel(CreativeProjectType type) =>
+        type switch
+        {
+            CreativeProjectType.Music => "Music Project",
+            CreativeProjectType.Programming => "Programming Project",
+            CreativeProjectType.Video => "Video Project",
+            CreativeProjectType.Design => "Design Project",
+            CreativeProjectType.Writing => "Writing Project",
+            _ => "Creative Project"
+        };
+
     private static string ResourceGlyph(CreativeProjectResourceKind kind) =>
         kind switch
         {
@@ -705,8 +847,9 @@ public sealed partial class CreativeWorkspaceView : UserControl
 
     private void ProjectOpen_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is Button { Tag: string id })
+        if (sender is Button { Tag: string id } && _commands is not null)
         {
+            _ = _commands.Execute(CreativeCommand.OpenCreativeProject(id));
             _detailProjectId = id;
             RefreshLists();
         }

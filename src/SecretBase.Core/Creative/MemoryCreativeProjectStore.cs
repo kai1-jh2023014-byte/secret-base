@@ -6,19 +6,20 @@ public sealed class MemoryCreativeProjectStore : ICreativeProjectStore
     private CreativeProjectDocument _document = new();
 
     public CreativeProjectDocument LoadOrCreate() =>
-        new()
+        CreativeProjectDocumentMigrator.MigrateToCurrent(new CreativeProjectDocument
         {
             SchemaVersion = _document.SchemaVersion,
             Projects = _document.Projects.Select(Clone).ToList()
-        };
+        });
 
     public void Save(CreativeProjectDocument document)
     {
         ArgumentNullException.ThrowIfNull(document);
+        var migrated = CreativeProjectDocumentMigrator.MigrateToCurrent(document);
         _document = new CreativeProjectDocument
         {
             SchemaVersion = CreativeProjectDocument.CurrentSchemaVersion,
-            Projects = document.Projects.Select(Clone).ToList()
+            Projects = migrated.Projects.Select(Clone).ToList()
         };
     }
 
@@ -31,6 +32,7 @@ public sealed class MemoryCreativeProjectStore : ICreativeProjectStore
             ProjectType = p.ProjectType,
             RootFolder = p.RootFolder,
             IsFavorite = p.IsFavorite,
+            Notes = p.Notes,
             DateAdded = p.DateAdded,
             LastOpened = p.LastOpened,
             Resources = p.Resources.Select(r => new CreativeProjectResource
@@ -38,7 +40,17 @@ public sealed class MemoryCreativeProjectStore : ICreativeProjectStore
                 Id = r.Id,
                 Name = r.Name,
                 Kind = r.Kind,
-                Target = r.Target
+                Target = r.Target,
+                IsQuickAction = r.IsQuickAction
+            }).ToList(),
+            RecentItems = p.RecentItems.Select(r => new CreativeProjectRecentItem
+            {
+                Key = r.Key,
+                Name = r.Name,
+                Kind = r.Kind,
+                Target = r.Target,
+                IsRoot = r.IsRoot,
+                OpenedAt = r.OpenedAt
             }).ToList()
         };
 }
