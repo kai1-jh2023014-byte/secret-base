@@ -510,6 +510,7 @@ public class LayoutPersistenceTests
             layout.Widgets.Add(DefaultWidgetFactory.CreateCreative());
             layout.Widgets.Add(DefaultWidgetFactory.CreateAi());
             layout.Widgets.Add(DefaultWidgetFactory.CreateApps());
+            layout.Widgets.Add(DefaultWidgetFactory.CreateAssistant());
             store.Save(layout);
 
             var restored = store.LoadOrCreateDefault(RoomId.DefaultRoomId);
@@ -521,6 +522,7 @@ public class LayoutPersistenceTests
             Assert.Contains(restored.Widgets, w => w.Type == WidgetTypes.Creative);
             Assert.Contains(restored.Widgets, w => w.Type == WidgetTypes.Ai);
             Assert.Contains(restored.Widgets, w => w.Type == WidgetTypes.Apps);
+            Assert.Contains(restored.Widgets, w => w.Type == WidgetTypes.Assistant);
             Assert.Equal(DesktopLayout.CurrentSchemaVersion, restored.SchemaVersion);
         }
         finally

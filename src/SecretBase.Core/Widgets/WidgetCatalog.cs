@@ -98,6 +98,13 @@ public static class WidgetCatalog
         },
         new()
         {
+            Id = "assistant",
+            Group = WidgetCatalogGroups.Ai,
+            Label = "Secret Base AI",
+            WidgetType = WidgetTypes.Assistant
+        },
+        new()
+        {
             Id = "apps",
             Group = WidgetCatalogGroups.Apps,
             Label = "My Apps",

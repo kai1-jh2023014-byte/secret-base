@@ -2,18 +2,18 @@
 
 > Make your PC feel like *your* secret base — a Personal Creative Desktop Environment for Windows.
 
-**v0.1** is the daily-usable overlay. **v0.2** adds an Integration Hub: grouped Add Widget catalog, Classroom via the existing Web Widget, My Apps registry, and a Command catalog for future AI — still without replacing Explorer or the Taskbar.
+**v0.1** is the daily-usable overlay. **v0.2** adds an Integration Hub plus **Secret Base AI**: a Command-gated assistant that can read Calendar / Projects / Apps and ask before opening Cursor or registered apps — still without replacing Explorer or the Taskbar.
 
 ## What you can do
 
 | Area | Experience |
 |------|------------|
 | **Overlay** | Wallpaper shows through; click outside widgets → normal Desktop |
-| **Widgets** | Clock, Text, Web, Calendar, Music, AI, Creative (Projects), My Apps |
+| **Widgets** | Clock, Text, Web, Calendar, Music, AI Workspace, Secret Base AI, Creative (Projects), My Apps |
 | **Projects** | Create a Project → Dashboard → Open Folder / Cursor / ChatGPT |
 | **Apps** | Register your own exe / folder / https URL and launch it (no Shell, no admin) |
 | **Classroom** | Opens official Google Classroom in the **existing Web Widget** (no new Classroom UI) |
-| **AI** | Launch Cursor or official ChatGPT / Claude / Gemini websites |
+| **AI** | **Secret Base AI** chat (tools → existing Commands) plus AI Workspace (Cursor / official ChatGPT / Claude / Gemini websites) |
 | **Theme** | Shared colors, fonts, corner radius, transparency |
 | **Safe Exit** | **Ctrl+Shift+Q** — save layout and leave Windows untouched |
 
@@ -69,7 +69,7 @@ Details: [docs/architecture/overview.md](docs/architecture/overview.md)
   layouts\
   themes\
   logs\
-  …
+  settings\     # assistant.json (provider/model only; API keys in Credential Manager)
 ```
 
 ## Tech stack
@@ -90,10 +90,11 @@ Details: [docs/architecture/overview.md](docs/architecture/overview.md)
 - [Security boundaries](docs/architecture/security-boundaries.md)
 - [Creative Workspace / Projects](docs/architecture/creative-workspace.md)
 - [AI Workspace](docs/architecture/ai-workspace.md)
+- [Secret Base AI](docs/architecture/ai-assistant.md)
 - [Integration Hub (v0.2)](docs/architecture/integration-hub.md)
 - [v0.2 Roadmap](docs/guides/v0.2-roadmap.md)
 - [Decision log](docs/decisions/README.md)
 
 ## v0.1 / v0.2 intentionally do **not** include
 
-ChatGPT/Claude/Gemini/Cursor APIs, AI agents, MCP, Spotify/YouTube APIs, TimeTree/Notion Calendar APIs, Google Classroom API (open the official site only), Taskbar/Explorer/Shell hacks, auto-install, or admin elevation.
+Unrestricted AI agents, MCP with OS power, Computer Use, arbitrary shell/file tools, Spotify/YouTube APIs, TimeTree/Notion Calendar APIs, Google Classroom API (open the official site only), Taskbar/Explorer/Shell hacks, auto-install, or admin elevation.

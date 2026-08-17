@@ -13,7 +13,7 @@ This repository has **no Classroom Widget** (no type, view, or Google Classroom 
 ## Layers
 
 ```
-UI / future Secret Base AI
+UI / Secret Base AI
         ↓
 IntegrationCatalog (metadata) + IntegrationCommandService (router)
         ↓
@@ -47,8 +47,10 @@ Registration is **not** admin, Shell, or plugin privilege.
 
 ## Add Widget groups
 
-Information (Clock, Text, Web, Calendar, Classroom) · Creative (Projects, Music) · AI · Apps (My Apps)
+Information (Clock, Text, Web, Calendar, Classroom) · Creative (Projects, Music) · AI (AI Workspace, Secret Base AI) · Apps (My Apps)
 
-## Out of scope (this slice)
+## Out of scope (Integration Hub slice)
 
-Secret Base AI / LLM / MCP, Classroom API OAuth, Spotify APIs, Notion/TimeTree fakes, plugin marketplace, Overlay/Explorer/Taskbar.
+Classroom API OAuth, Spotify APIs, Notion/TimeTree fakes, plugin marketplace, Overlay/Explorer/Taskbar.
+
+Secret Base AI is a **separate** adapter layer on these Commands — see [ai-assistant.md](ai-assistant.md).

@@ -2,6 +2,8 @@
 
 A hub that connects **Creative Projects** to AI tools you already use — **not** an in-app LLM.
 
+In-app chat lives in a separate widget: [Secret Base AI](ai-assistant.md) (`WidgetTypes.Assistant`). Do not merge the two.
+
 ## Purpose
 
 > Project → AI / creation tools, with a safe Command boundary for future natural language.

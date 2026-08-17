@@ -1,6 +1,7 @@
 using SecretBase.Core.Desktop;
 using SecretBase.Core.Widgets.Ai;
 using SecretBase.Core.Widgets.Apps;
+using SecretBase.Core.Widgets.Assistant;
 using SecretBase.Core.Widgets.Calendar;
 using SecretBase.Core.Widgets.Clock;
 using SecretBase.Core.Widgets.Creative;
@@ -232,6 +233,30 @@ public static class DefaultWidgetFactory
             Type = WidgetTypes.Apps,
             Position = new WidgetPosition(x ?? 280, y ?? 80),
             Size = new WidgetSize(width ?? 320, height ?? 420),
+            RoomId = room,
+            Configuration = config.ToDictionary()
+        };
+    }
+
+    /// <summary>
+    /// Creates a Secret Base AI chat widget. Not seeded into default layout — add explicitly.
+    /// </summary>
+    public static WidgetInstance CreateAssistant(
+        RoomId? roomId = null,
+        double? x = null,
+        double? y = null,
+        double? width = null,
+        double? height = null,
+        AssistantWidgetConfiguration? configuration = null)
+    {
+        var room = roomId ?? RoomId.DefaultRoomId;
+        var config = configuration ?? AssistantWidgetConfiguration.CreateDefault();
+        return new WidgetInstance
+        {
+            Id = Guid.NewGuid(),
+            Type = WidgetTypes.Assistant,
+            Position = new WidgetPosition(x ?? 320, y ?? 60),
+            Size = new WidgetSize(width ?? 360, height ?? 480),
             RoomId = room,
             Configuration = config.ToDictionary()
         };

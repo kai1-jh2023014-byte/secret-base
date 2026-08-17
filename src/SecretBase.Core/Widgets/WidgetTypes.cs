@@ -25,4 +25,7 @@ public static class WidgetTypes
 
     /// <summary>My Apps — registered custom apps (launch only; not a plugin host).</summary>
     public const string Apps = "apps";
+
+    /// <summary>Secret Base AI chat — tools over existing Commands. Not the Cursor/ChatGPT launcher.</summary>
+    public const string Assistant = "assistant";
 }

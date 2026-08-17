@@ -179,3 +179,11 @@ See [ai-workspace.md](../architecture/ai-workspace.md).
 **Why:** v0.1 already has Calendar, Music, Creative, Cursor, and launch. v0.2 should connect them for future AI (`Command → Service → Platform`) rather than stacking more widgets.
 
 See [integration-hub.md](../architecture/integration-hub.md).
+
+## 2026-08-17 — Secret Base AI (Command-gated assistant)
+
+**Decision:** Add `WidgetTypes.Assistant` chat on top of existing Commands. Introduce `IAiProvider` / `IAiToolRegistry` / `IAssistantService` adapters. Do **not** replace AI Workspace (launcher), rewrite Command services, or give the LLM Process/filesystem/Host Bridge. Store API keys only in `ISecureSecretStore` (Credential Manager). MVP provider is OpenAI HTTP; Gemini/Local are stubs.
+
+**Why:** The Integration Hub already defined the Command ladder. v0.2 AI should connect that ladder, not invent a second OS-facing stack.
+
+See [ai-assistant.md](../architecture/ai-assistant.md).

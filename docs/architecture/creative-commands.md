@@ -1,13 +1,13 @@
 # Creative Commands
 
-Allowed Creative Workspace operations for UI and **future AI**.
+Allowed Creative Workspace operations for UI and Secret Base AI.
 
 ## Boundary
 
 ```
-Natural language (future)
+Natural language
         ↓
-Secret Base AI (future)
+Secret Base AI
         ↓
 CreativeCommand          ← registered ItemId / ProjectId / ResourceId / query / notes only
         ↓
