@@ -26,7 +26,7 @@ Highest principle:
 ## v0.1 surface
 
 - ✅ Desktop Overlay (chromeless work-area; widgets-only click-through)
-- ✅ Widgets: Clock, Text, Web, Calendar, Music, Creative (Projects + Dashboard), AI
+- ✅ Widgets: Clock, Text, Web, Calendar, Music, Creative (Projects + Dashboard), AI Workspace
 - ✅ Blocks (launch tiles)
 - ✅ Theme + Arrange
 - ✅ Projects → Dashboard → Cursor / ChatGPT / resources / notes
@@ -39,12 +39,13 @@ Highest principle:
 - ✅ My Apps registry (`apps.json`) + My Apps widget
 - ✅ Classroom via existing Web Widget preset (`https://classroom.google.com/`) — **no Classroom Widget reimplementation**
 - ✅ Grouped Add Widget catalog
-- ⏭ Secret Base AI / LLM still deferred — see [v0.2 roadmap](../guides/v0.2-roadmap.md)
+- ✅ Secret Base AI (`IAiProvider` + tool registry over existing Commands; OpenAI HTTP MVP)
+- ⏭ Gemini / Local LLM HTTP, long-term memory, autonomous agents — see [v0.2 roadmap](../guides/v0.2-roadmap.md)
 
 ## Security spine
 
 ```
-UI / future AI
+UI / Secret Base AI
     ↓
 Command (CreativeCommand / AiCommand / MusicCommand / CalendarCommand / ClassroomCommand / AppCommand)
     ↓
@@ -62,5 +63,6 @@ Web Widget: WebView2 with **no Host Bridge**. Dangerous URL schemes rejected.
 - [Security boundaries](security-boundaries.md)
 - [Creative Workspace](creative-workspace.md)
 - [AI Workspace](ai-workspace.md)
+- [Secret Base AI](ai-assistant.md)
 - [Integration Hub](integration-hub.md)
 - [Keyboard shortcuts](../guides/keyboard-shortcuts.md)

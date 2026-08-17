@@ -8,21 +8,26 @@ using SecretBase.App.Desktop;
 using SecretBase.Core;
 using SecretBase.Core.Ai;
 using SecretBase.Core.Apps;
+using SecretBase.Core.Assistant;
 using SecretBase.Core.Blocks;
 using SecretBase.Core.Calendar;
 using SecretBase.Core.Creative;
 using SecretBase.Core.Desktop;
+using SecretBase.Core.Integration;
+using SecretBase.Core.Music;
 using SecretBase.Core.Themes;
 using SecretBase.Core.Time;
 using SecretBase.Core.Widgets;
 using SecretBase.Core.Widgets.Ai;
 using SecretBase.Core.Widgets.Apps;
+using SecretBase.Core.Widgets.Assistant;
 using SecretBase.Core.Widgets.Calendar;
 using SecretBase.Core.Widgets.Clock;
 using SecretBase.Core.Widgets.Creative;
 using SecretBase.Core.Widgets.Music;
 using SecretBase.Core.Widgets.Text;
 using SecretBase.Core.Widgets.Web;
+using SecretBase.Infrastructure.Assistant;
 using SecretBase.Infrastructure.Calendar;
 using SecretBase.Infrastructure.Logging;
 using SecretBase.Infrastructure.Persistence;
@@ -30,6 +35,7 @@ using SecretBase.Platform.Abstractions;
 using SecretBase.Platform.Windows;
 using SecretBase.Widgets.Ai;
 using SecretBase.Widgets.Apps;
+using SecretBase.Widgets.Assistant;
 using SecretBase.Widgets.Calendar;
 using SecretBase.Widgets.Clock;
 using SecretBase.Widgets.Creative;
@@ -60,6 +66,12 @@ public sealed partial class DesktopPage : Page
     private ICursorLaunchService? _cursorLaunch;
     private AiCommandService? _aiCommands;
     private AppCommandService? _appCommands;
+    private CalendarCommandService? _calendarCommands;
+    private MusicCommandService? _musicCommands;
+    private IntegrationCommandService? _integrationCommands;
+    private IAssistantService? _assistant;
+    private IAssistantSettingsStore? _assistantSettings;
+    private IAiProviderFactory? _assistantProviders;
     private DesktopLayout? _layout;
     private ThemeDefinition? _theme;
     private CompatibilityInfo? _compatibility;
@@ -113,6 +125,36 @@ public sealed partial class DesktopPage : Page
                 _aiCommands);
         _appCommands = args.AppCommands
             ?? new AppCommandService(new CustomAppService(new JsonCustomAppStore()), projectService);
+        var time = _timeProvider ?? new SystemTimeProvider();
+        _calendarCommands = new CalendarCommandService(
+            CalendarServiceFactory.Create(
+                CalendarWidgetConfiguration.CreateDefault(),
+                time,
+                secretStore: _secretStore,
+                openBrowser: url => TryOpenHttpsUrl(url)),
+            time);
+        _musicCommands = new MusicCommandService(new MusicService());
+        _integrationCommands = new IntegrationCommandService(
+            calendar: _calendarCommands,
+            music: _musicCommands,
+            creative: _creativeCommands,
+            apps: _appCommands,
+            ai: _aiCommands);
+        _assistantSettings = new JsonAssistantSettingsStore();
+        _assistantProviders = new AssistantProviderFactory(_secretStore);
+        var assistantRegistry = BuiltinAssistantToolRegistry.Instance;
+        _assistant = new AssistantService(
+            assistantRegistry,
+            new AssistantToolExecutor(
+                assistantRegistry,
+                _calendarCommands,
+                _creativeCommands,
+                _aiCommands,
+                _integrationCommands,
+                _appCommands,
+                _musicCommands),
+            () => _assistantProviders.Create(_assistantSettings.LoadOrCreate()),
+            () => _assistantSettings.LoadOrCreate());
 
         _theme = _themeStore.LoadOrCreateDefault();
         _layout = _layoutStore.LoadOrCreateDefault(RoomId.DefaultRoomId);
@@ -125,7 +167,7 @@ public sealed partial class DesktopPage : Page
 
         RenderDesktopObjects();
         _logger.Info("desktop", $"Overlay desktop shown for room '{_layout.RoomId}' with {_layout.Widgets.Count} widget(s), {_layout.Blocks.Count} block(s).");
-        _logger.Info("widget", "Widget hosts ready (Clock, Text, Web, Calendar, Music, Creative, AI, Apps).");
+        _logger.Info("widget", "Widget hosts ready (Clock, Text, Web, Calendar, Music, Creative, AI Workspace, Apps, Secret Base AI).");
         _logger.Info("block", "Block host ready (use Blk button to add; drop + drag icons inside a Block).");
         _logger.Info("theme", "Theme editor ready (Aa button) — colors apply to all widgets and Blocks.");
         _logger.Info("layout", "Arrange ready (Grid button) — even placement for widgets and blocks.");
@@ -557,6 +599,30 @@ public sealed partial class DesktopPage : Page
             return view;
         }
 
+        if (instance.Type == WidgetTypes.Assistant)
+        {
+            var config = AssistantWidgetConfiguration.FromDictionary(instance.Configuration);
+            instance.Configuration = config.ToDictionary();
+            if (_assistant is null || _assistantSettings is null || _secretStore is null || _assistantProviders is null)
+            {
+                return null;
+            }
+
+            var view = new AssistantWidgetView();
+            view.Initialize(
+                _assistant,
+                _assistantSettings,
+                _secretStore,
+                _assistantProviders,
+                TryApplyAssistantLaunch);
+            if (_theme is not null)
+            {
+                view.ApplyTheme(_theme);
+            }
+
+            return view;
+        }
+
         return null;
     }
 
@@ -666,6 +732,29 @@ public sealed partial class DesktopPage : Page
         }
 
         return TryLaunchCreativePath(result.LaunchTarget, result.App?.Name);
+    }
+
+    private string? TryApplyAssistantLaunch(AssistantTurnResult result)
+    {
+        if (result.ShouldOpenCursorAtFolder && !string.IsNullOrWhiteSpace(result.CursorFolderPath))
+        {
+            var cursorError = TryLaunchCursor(result.CursorFolderPath, false);
+            return cursorError is null ? null : AssistantUserMessages.CursorOpenFailed;
+        }
+
+        if (!result.ShouldLaunch || string.IsNullOrWhiteSpace(result.LaunchTarget))
+        {
+            return null;
+        }
+
+        if (result.LaunchIsExternalLink)
+        {
+            return TryOpenHttpsUrl(result.LaunchTarget)
+                ? null
+                : "Could not open link in the system browser.";
+        }
+
+        return TryLaunchCreativePath(result.LaunchTarget, null);
     }
 
     private async Task<(bool ok, bool cancelled, string? path, string? error)> PickCreativeFileAsync()
@@ -1007,6 +1096,8 @@ public sealed partial class DesktopPage : Page
                 _layout.RoomId, 200 + cascade, 80 + cascade),
             WidgetTypes.Apps => DefaultWidgetFactory.CreateApps(
                 _layout.RoomId, 280 + cascade, 80 + cascade),
+            WidgetTypes.Assistant => DefaultWidgetFactory.CreateAssistant(
+                _layout.RoomId, 320 + cascade, 60 + cascade),
             _ => null
         };
 

@@ -12,8 +12,7 @@ Widgets are the building blocks of the Secret Base Desktop. Clock was the first
 | **Core** | `WidgetInstance`, `WidgetTypes`, configs, Calendar + Music models/providers (pure), `ThemeDefinition`, `ITimeProvider` | XAML, WinUI/WebView2, network I/O |
 | **Infrastructure** | JSON persistence, Google ICS + Google API OAuth read providers, agenda cache | Widget visuals, Overlay HWND |
 | **Platform.Abstractions** | `ISecureSecretStore`, overlay/launch contracts | Implementations |
-| **Widgets** | Views (`Clock`, `Text`, `Web`, `Calendar`, `Music`, `Creative`, `Ai`, `Apps`), theme helpers | Persistence paths, Desktop chrome, Overlay |
-
+| **Widgets** | Views (`Clock`, `Text`, `Web`, `Calendar`, `Music`, `Creative`, `Ai`, `Apps`, `Assistant`), theme helpers | Persistence paths, Desktop chrome, Overlay |
 | **App** | Host, `WidgetFrame`, type→view wiring, FABs | Domain math beyond hosting |
 
 ## Shared
@@ -41,6 +40,13 @@ Widgets are the building blocks of the Secret Base Desktop. Clock was the first
 - `CreativeCommand` → `CreativeCommandService` → workspace store → `ITargetLaunchService`
 - See [creative-workspace.md](creative-workspace.md)
 
+## AI Workspace vs Secret Base AI
+
+- `WidgetTypes.Ai` — launcher hub (Cursor desktop + official websites). See [ai-workspace.md](ai-workspace.md).
+- `WidgetTypes.Assistant` — in-app chat that selects registered tools only. See [ai-assistant.md](ai-assistant.md).
+
+Do not merge these widgets. Humans and the assistant share the same Command services.
+
 ## Persistence
 
 - First-run seeds Clock + Text only (more via **Add Widget** catalog / shortcuts)
@@ -57,7 +63,8 @@ Widgets are the building blocks of the Secret Base Desktop. Clock was the first
 | Web | WebView2 | Untrusted; no host bridge. Classroom catalog uses this. |
 | Music | Commands + optional browser | Native UI; Demo catalog; no Host Bridge; APIs deferred |
 | Creative | Open registered paths only | Favorites/Recent/Dashboard; no Explorer; CreativeCommand boundary |
-| AI | Cursor + official AI websites | Project → Cursor; no in-app LLM; AiCommand boundary |
+| AI Workspace | Cursor + official AI websites | Project → Cursor; no in-app LLM; AiCommand boundary |
+| Secret Base AI | OpenAI HTTP + registered tools | Tools → existing Commands; keys in Credential Manager; no Host Bridge |
 | Apps | Launch registered targets only | AppCommand; no Shell/args/admin; missing files reported by host |
 
 Overlay hit-test / DWM are independent of widget types (PR #8).

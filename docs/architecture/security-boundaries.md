@@ -5,10 +5,10 @@
 | Zone | Code | Trust | May access |
 |------|------|-------|------------|
 | Trusted Host | App, Core, Infrastructure, Platform | Trusted | Internal services only; Platform still avoids destructive OS APIs |
-| Built-in Widget | `SecretBase.Widgets` (Clock, Text, Web chrome, Calendar, Music, Creative, AI, Apps) | Semi-trusted | Own settings/UI; Platform APIs only through approved host services |
+| Built-in Widget | `SecretBase.Widgets` (Clock, Text, Web chrome, Calendar, Music, Creative, AI Workspace, Secret Base AI, Apps) | Semi-trusted | Own settings/UI; Platform APIs only through approved host services |
 | Web Content | Documents inside WebView2 (`WidgetTypes.Web`, Music browse mode) | **Untrusted** | Network rendering only; **no** host object injection to Secret Base APIs |
 | Plugin (future) | Marketplace packages | Untrusted | Sandboxed Plugin API only — never Core internals |
-| AI (future) | LLM providers / tools | Restricted | Observation → Safe → Confirm → Restricted ladder |
+| AI (assistant) | LLM providers / registered tools | Restricted | Tool Registry only → existing Commands. No Process, FS, Host Bridge |
 
 ## Web Content boundary (Web Widget)
 
@@ -62,20 +62,23 @@ Common `CalendarEvent` only in Core. No provider DTOs in Core.
 
 1. Do not implement file delete/move, process kill, registry shell edits, or admin elevation.
 2. Do not inject JS bridges from WebView into host APIs.
-3. Do not give AI (when added) unrestricted OS control.
+3. Do not give AI unrestricted OS control. Secret Base AI may run **registered tools only**.
 4. Logging must avoid secrets and unnecessary personal data.
 5. Web Widget URL gate allows only `http` / `https` (see [web-widget.md](web-widget.md)).
 6. Custom Apps: registration never grants Shell, elevation, or command-line arguments.
 
-## User confirmation (future)
+## User confirmation (Secret Base AI)
 
 Confirmation required before:
 
-- Destructive file operations
-- Bulk automation
-- Privilege escalation
-- Sending local content to cloud providers
-- Installing plugins
+- Opening a Creative Project / Cursor folder
+- Opening Classroom / Calendar integrations
+- Launching a My Apps target
+- Playing a music track
+
+Not required for read-only calendar / project / app lists.
+
+API keys stay in Credential Manager (`ISecureSecretStore`). Never log secret values.
 
 ## Safe Mode / Reset (designed, not fully implemented)
 

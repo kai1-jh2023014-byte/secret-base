@@ -7,4 +7,12 @@ public readonly record struct CalendarQuery(DateOnly FromInclusive, DateOnly ToI
 
     public static CalendarQuery ForToday(DateTimeOffset localNow) =>
         ForDay(DateOnly.FromDateTime(localNow.DateTime));
+
+    /// <summary>Today through today+days (inclusive), clamped 1–14.</summary>
+    public static CalendarQuery ForUpcoming(DateTimeOffset localNow, int days)
+    {
+        var span = Math.Clamp(days, 1, 14);
+        var start = DateOnly.FromDateTime(localNow.DateTime);
+        return new CalendarQuery(start, start.AddDays(span));
+    }
 }

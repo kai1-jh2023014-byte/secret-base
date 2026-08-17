@@ -1,6 +1,6 @@
 # Music Commands
 
-Allowed music operations for Secret Base UI and **future AI**.
+Allowed music operations for Secret Base UI and Secret Base AI.
 
 ## Why Commands exist
 
@@ -14,9 +14,9 @@ AI (and any automation) must not:
 Instead:
 
 ```
-Natural language (future)
+Natural language
         ↓
-Secret Base AI (future)  — maps intent → MusicCommand only
+Secret Base AI  — maps intent → MusicCommand only
         ↓
 MusicCommand
         ↓

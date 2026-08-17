@@ -9,6 +9,7 @@ using SecretBase.Core.Security;
 using SecretBase.Core.Time;
 using SecretBase.Core.Widgets;
 using SecretBase.Core.Widgets.Apps;
+using SecretBase.Core.Widgets.Assistant;
 
 namespace SecretBase.Core.Tests;
 
@@ -190,6 +191,23 @@ public class CalendarCommandServiceTests
         var open = await commands.ExecuteAsync(CalendarCommand.Open());
         Assert.True(open.ShouldLaunch);
         Assert.Equal("https://calendar.google.com/", open.LaunchTarget);
+
+        var tomorrow = new CalendarEvent
+        {
+            Title = "Studio",
+            Provider = CalendarProviderIds.Local,
+            Start = new DateTimeOffset(day.AddDays(1).ToDateTime(new TimeOnly(10, 0)), offset),
+            End = new DateTimeOffset(day.AddDays(1).ToDateTime(new TimeOnly(11, 0)), offset)
+        };
+        local.ReplaceAll(
+        [
+            today.Events[0],
+            tomorrow
+        ]);
+        var upcoming = await commands.ExecuteAsync(CalendarCommand.GetUpcoming(2));
+        Assert.True(upcoming.Succeeded);
+        Assert.Equal(2, upcoming.Events.Count);
+        Assert.Contains(upcoming.Events, e => e.Title == "Studio");
     }
 }
 
@@ -272,6 +290,12 @@ public class WidgetCatalogTests
         Assert.Contains(WidgetCatalog.Entries, e => e.WidgetType == WidgetTypes.Apps);
         Assert.Equal(WidgetCatalogGroups.Information, classroom.Group);
         Assert.Contains(WidgetCatalog.Entries, e => e.Group == WidgetCatalogGroups.Apps && e.WidgetType == WidgetTypes.Apps);
+        Assert.Contains(WidgetCatalog.Entries, e =>
+            e.Group == WidgetCatalogGroups.Ai
+            && e.WidgetType == WidgetTypes.Assistant
+            && e.Label == "Secret Base AI");
+        Assert.Contains(WidgetCatalog.Entries, e =>
+            e.Group == WidgetCatalogGroups.Ai && e.WidgetType == WidgetTypes.Ai);
     }
 
     [Fact]
@@ -282,6 +306,16 @@ public class WidgetCatalogTests
         var config = AppsWidgetConfiguration.FromDictionary(widget.Configuration);
         Assert.Equal(AppsWidgetConfiguration.CurrentSchemaVersion, config.SchemaVersion);
         Assert.DoesNotContain(DesktopLayout.CreateDefault().Widgets, w => w.Type == WidgetTypes.Apps);
+    }
+
+    [Fact]
+    public void CreateAssistant_IsNotSeededIntoDefaultLayout()
+    {
+        var widget = DefaultWidgetFactory.CreateAssistant();
+        Assert.Equal(WidgetTypes.Assistant, widget.Type);
+        var config = AssistantWidgetConfiguration.FromDictionary(widget.Configuration);
+        Assert.Equal(AssistantWidgetConfiguration.CurrentSchemaVersion, config.SchemaVersion);
+        Assert.DoesNotContain(DesktopLayout.CreateDefault().Widgets, w => w.Type == WidgetTypes.Assistant);
     }
 }
 

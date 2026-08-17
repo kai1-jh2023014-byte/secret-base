@@ -35,6 +35,8 @@ public sealed class CalendarCommandService
         {
             CalendarCommandKind.GetTodayEvents or CalendarCommandKind.Refresh =>
                 await GetTodayAsync(command.Kind, cancellationToken).ConfigureAwait(false),
+            CalendarCommandKind.GetUpcoming =>
+                await GetUpcomingAsync(command, cancellationToken).ConfigureAwait(false),
             CalendarCommandKind.Open => Open(),
             _ => CalendarCommandResult.Fail(command.Kind, "Unknown calendar command.")
         };
@@ -47,6 +49,16 @@ public sealed class CalendarCommandService
         var snapshot = await _calendar.GetTodaySnapshotAsync(_time.GetLocalNow(), cancellationToken)
             .ConfigureAwait(false);
         return CalendarCommandResult.Ok(kind, snapshot.Events);
+    }
+
+    private async Task<CalendarCommandResult> GetUpcomingAsync(
+        CalendarCommand command,
+        CancellationToken cancellationToken)
+    {
+        var query = CalendarQuery.ForUpcoming(_time.GetLocalNow(), command.Days);
+        var snapshot = await _calendar.GetAgendaSnapshotAsync(query, cancellationToken)
+            .ConfigureAwait(false);
+        return CalendarCommandResult.Ok(CalendarCommandKind.GetUpcoming, snapshot.Events);
     }
 
     private CalendarCommandResult Open()

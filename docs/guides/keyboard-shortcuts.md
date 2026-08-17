@@ -31,3 +31,4 @@ Secret Base accelerators require the overlay window to have focus.
 - Widget **×** on the drag bar removes that widget from the layout (registration only; no OS file delete).
 - Add Widget **Classroom** adds a Web Widget at `https://classroom.google.com/` (there is no separate Classroom Widget type).
 - Add Widget **My Apps** opens the custom-app registry (launch via existing `ITargetLaunchService`).
+- Add Widget **Secret Base AI** is the in-app assistant (tools → existing Commands). **AI Workspace** remains the Cursor / website launcher.
