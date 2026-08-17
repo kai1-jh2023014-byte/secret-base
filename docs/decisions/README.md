@@ -171,3 +171,11 @@ See [ai-workspace.md](../architecture/ai-workspace.md).
 **Decision:** Stop stacking new product surfaces; integrate and polish for a daily-usable **v0.1**. Unify Add Widget catalog (+ / Ctrl+Shift+N), WidgetFrame remove (×), WebView2 dispose on unload, host status without debug chrome, Creative Workspace as Projects hub, README + shortcuts + v0.2 roadmap docs. No new external APIs; Overlay Platform code unchanged unless required for UX.
 
 **Why:** Features already exist — users need a coherent desk, not more widgets.
+
+## 2026-08-17 — v0.2 Integration Hub (Existing Apps & Commands)
+
+**Decision:** Add a thin Integration Catalog + `IntegrationCommandService` over existing Commands. Register custom apps in `apps.json` (atomic, schemaVersion 1) and host them in a My Apps widget. Integrate Classroom by opening the official Google Classroom URL in the **existing Web Widget** plus `ClassroomCommand` that does **not** invent a Classroom API. Group the Add Widget catalog. Do **not** reimplement Classroom UI, LLM, Overlay, or a plugin system.
+
+**Why:** v0.1 already has Calendar, Music, Creative, Cursor, and launch. v0.2 should connect them for future AI (`Command → Service → Platform`) rather than stacking more widgets.
+
+See [integration-hub.md](../architecture/integration-hub.md).

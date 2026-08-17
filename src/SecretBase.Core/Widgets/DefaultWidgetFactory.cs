@@ -1,5 +1,6 @@
 using SecretBase.Core.Desktop;
 using SecretBase.Core.Widgets.Ai;
+using SecretBase.Core.Widgets.Apps;
 using SecretBase.Core.Widgets.Calendar;
 using SecretBase.Core.Widgets.Clock;
 using SecretBase.Core.Widgets.Creative;
@@ -207,6 +208,30 @@ public static class DefaultWidgetFactory
             Type = WidgetTypes.Ai,
             Position = new WidgetPosition(x ?? 240, y ?? 100),
             Size = new WidgetSize(width ?? 300, height ?? 420),
+            RoomId = room,
+            Configuration = config.ToDictionary()
+        };
+    }
+
+    /// <summary>
+    /// Creates a My Apps widget. Not seeded into default layout — add explicitly.
+    /// </summary>
+    public static WidgetInstance CreateApps(
+        RoomId? roomId = null,
+        double? x = null,
+        double? y = null,
+        double? width = null,
+        double? height = null,
+        AppsWidgetConfiguration? configuration = null)
+    {
+        var room = roomId ?? RoomId.DefaultRoomId;
+        var config = configuration ?? AppsWidgetConfiguration.CreateDefault();
+        return new WidgetInstance
+        {
+            Id = Guid.NewGuid(),
+            Type = WidgetTypes.Apps,
+            Position = new WidgetPosition(x ?? 280, y ?? 80),
+            Size = new WidgetSize(width ?? 320, height ?? 420),
             RoomId = room,
             Configuration = config.ToDictionary()
         };

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using SecretBase.Core.Apps;
 using SecretBase.Core.Blocks;
 using SecretBase.Core.Calendar;
 using SecretBase.Core.Creative;
@@ -6,6 +7,7 @@ using SecretBase.Core.Desktop;
 using SecretBase.Core.Music;
 using SecretBase.Core.Themes;
 using SecretBase.Core.Widgets;
+using SecretBase.Core.Widgets.Apps;
 using SecretBase.Core.Widgets.Calendar;
 using SecretBase.Core.Widgets.Clock;
 using SecretBase.Core.Widgets.Music;
@@ -507,6 +509,7 @@ public class LayoutPersistenceTests
             layout.Widgets.Add(DefaultWidgetFactory.CreateMusic());
             layout.Widgets.Add(DefaultWidgetFactory.CreateCreative());
             layout.Widgets.Add(DefaultWidgetFactory.CreateAi());
+            layout.Widgets.Add(DefaultWidgetFactory.CreateApps());
             store.Save(layout);
 
             var restored = store.LoadOrCreateDefault(RoomId.DefaultRoomId);
@@ -517,6 +520,7 @@ public class LayoutPersistenceTests
             Assert.Contains(restored.Widgets, w => w.Type == WidgetTypes.Music);
             Assert.Contains(restored.Widgets, w => w.Type == WidgetTypes.Creative);
             Assert.Contains(restored.Widgets, w => w.Type == WidgetTypes.Ai);
+            Assert.Contains(restored.Widgets, w => w.Type == WidgetTypes.Apps);
             Assert.Equal(DesktopLayout.CurrentSchemaVersion, restored.SchemaVersion);
         }
         finally

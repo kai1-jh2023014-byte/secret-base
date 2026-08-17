@@ -22,4 +22,7 @@ public static class WidgetTypes
 
     /// <summary>AI Workspace — launch Cursor / official AI websites with Project context.</summary>
     public const string Ai = "ai";
+
+    /// <summary>My Apps — registered custom apps (launch only; not a plugin host).</summary>
+    public const string Apps = "apps";
 }
