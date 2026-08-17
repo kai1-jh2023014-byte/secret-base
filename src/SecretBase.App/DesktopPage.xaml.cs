@@ -7,6 +7,7 @@ using Microsoft.UI.Xaml.Navigation;
 using SecretBase.App.Desktop;
 using SecretBase.Core;
 using SecretBase.Core.Ai;
+using SecretBase.Core.Apps;
 using SecretBase.Core.Blocks;
 using SecretBase.Core.Calendar;
 using SecretBase.Core.Creative;
@@ -15,6 +16,7 @@ using SecretBase.Core.Themes;
 using SecretBase.Core.Time;
 using SecretBase.Core.Widgets;
 using SecretBase.Core.Widgets.Ai;
+using SecretBase.Core.Widgets.Apps;
 using SecretBase.Core.Widgets.Calendar;
 using SecretBase.Core.Widgets.Clock;
 using SecretBase.Core.Widgets.Creative;
@@ -27,6 +29,7 @@ using SecretBase.Infrastructure.Persistence;
 using SecretBase.Platform.Abstractions;
 using SecretBase.Platform.Windows;
 using SecretBase.Widgets.Ai;
+using SecretBase.Widgets.Apps;
 using SecretBase.Widgets.Calendar;
 using SecretBase.Widgets.Clock;
 using SecretBase.Widgets.Creative;
@@ -56,6 +59,7 @@ public sealed partial class DesktopPage : Page
     private CreativeCommandService? _creativeCommands;
     private ICursorLaunchService? _cursorLaunch;
     private AiCommandService? _aiCommands;
+    private AppCommandService? _appCommands;
     private DesktopLayout? _layout;
     private ThemeDefinition? _theme;
     private CompatibilityInfo? _compatibility;
@@ -107,6 +111,8 @@ public sealed partial class DesktopPage : Page
                 new CreativeWorkspaceService(new JsonCreativeWorkspaceStore()),
                 projectService,
                 _aiCommands);
+        _appCommands = args.AppCommands
+            ?? new AppCommandService(new CustomAppService(new JsonCustomAppStore()), projectService);
 
         _theme = _themeStore.LoadOrCreateDefault();
         _layout = _layoutStore.LoadOrCreateDefault(RoomId.DefaultRoomId);
@@ -119,11 +125,11 @@ public sealed partial class DesktopPage : Page
 
         RenderDesktopObjects();
         _logger.Info("desktop", $"Overlay desktop shown for room '{_layout.RoomId}' with {_layout.Widgets.Count} widget(s), {_layout.Blocks.Count} block(s).");
-        _logger.Info("widget", "Widget hosts ready (Clock, Text, Web, Calendar, Music, Creative, AI).");
+        _logger.Info("widget", "Widget hosts ready (Clock, Text, Web, Calendar, Music, Creative, AI, Apps).");
         _logger.Info("block", "Block host ready (use Blk button to add; drop + drag icons inside a Block).");
         _logger.Info("theme", "Theme editor ready (Aa button) — colors apply to all widgets and Blocks.");
         _logger.Info("layout", "Arrange ready (Grid button) — even placement for widgets and blocks.");
-        _logger.Info("widget", "Add Widget (+) — catalog for Clock / Text / Web / Calendar / Music / AI / Creative.");
+        _logger.Info("widget", "Add Widget (+) — grouped catalog (Information / Creative / AI / Apps). Classroom opens the existing Web Widget.");
     }
 
     private void StyleFabButtons(ThemeDefinition theme)
@@ -528,6 +534,29 @@ public sealed partial class DesktopPage : Page
             return view;
         }
 
+        if (instance.Type == WidgetTypes.Apps)
+        {
+            var config = AppsWidgetConfiguration.FromDictionary(instance.Configuration);
+            instance.Configuration = config.ToDictionary();
+
+            var apps = _appCommands
+                ?? new AppCommandService(
+                    new CustomAppService(new JsonCustomAppStore()),
+                    _creativeCommands?.Projects);
+            var view = new AppsWidgetView();
+            view.Initialize(
+                apps,
+                tryExecute: TryExecuteAppResult,
+                pickFile: PickCreativeFileAsync,
+                pickFolder: PickCreativeFolderAsync);
+            if (_theme is not null)
+            {
+                view.ApplyTheme(_theme);
+            }
+
+            return view;
+        }
+
         return null;
     }
 
@@ -610,6 +639,33 @@ public sealed partial class DesktopPage : Page
         }
 
         return "Nothing to open.";
+    }
+
+    private string? TryExecuteAppResult(AppCommandResult result)
+    {
+        if (!result.Succeeded)
+        {
+            return result.ErrorMessage ?? "App command failed.";
+        }
+
+        if (result.ShouldOpenCursorAtFolder && !string.IsNullOrWhiteSpace(result.CursorFolderPath))
+        {
+            return TryLaunchCursor(result.CursorFolderPath, false);
+        }
+
+        if (!result.ShouldLaunch || string.IsNullOrWhiteSpace(result.LaunchTarget))
+        {
+            return null;
+        }
+
+        if (result.LaunchIsExternalLink)
+        {
+            return TryOpenHttpsUrl(result.LaunchTarget)
+                ? null
+                : "Could not open app URL in the system browser.";
+        }
+
+        return TryLaunchCreativePath(result.LaunchTarget, result.App?.Name);
     }
 
     private async Task<(bool ok, bool cancelled, string? path, string? error)> PickCreativeFileAsync()
@@ -799,33 +855,40 @@ public sealed partial class DesktopPage : Page
 
         AllowFullWindowInput();
 
-        var choices = new (string Label, string Type)[]
-        {
-            ("Clock", WidgetTypes.Clock),
-            ("Text", WidgetTypes.Text),
-            ("Web", WidgetTypes.Web),
-            ("Calendar", WidgetTypes.Calendar),
-            ("Music", WidgetTypes.Music),
-            ("AI", WidgetTypes.Ai),
-            ("Creative", WidgetTypes.Creative),
-        };
-
         var list = new ListView
         {
             SelectionMode = ListViewSelectionMode.Single,
-            Height = 280
+            Height = 320
         };
-        foreach (var (label, type) in choices)
+        var firstSelectable = -1;
+        foreach (var group in WidgetCatalog.Entries.GroupBy(entry => entry.Group))
         {
-            list.Items.Add(new ListViewItem { Content = label, Tag = type });
+            list.Items.Add(new ListViewItem
+            {
+                Content = group.Key,
+                IsEnabled = false,
+                Tag = null
+            });
+            foreach (var catalogEntry in group)
+            {
+                if (firstSelectable < 0)
+                {
+                    firstSelectable = list.Items.Count;
+                }
+
+                list.Items.Add(new ListViewItem { Content = "  " + catalogEntry.Label, Tag = catalogEntry.Id });
+            }
         }
 
-        list.SelectedIndex = 0;
+        if (firstSelectable >= 0)
+        {
+            list.SelectedIndex = firstSelectable;
+        }
 
         var panel = new StackPanel { Spacing = 8 };
         panel.Children.Add(new TextBlock
         {
-            Text = "Choose a widget type to add to the desktop.",
+            Text = "Choose a widget. Classroom opens the existing Web Widget at Google Classroom.",
             FontSize = 12,
             Opacity = 0.8,
             TextWrapping = TextWrapping.WrapWholeWords
@@ -857,10 +920,63 @@ public sealed partial class DesktopPage : Page
             return;
         }
 
-        if (list.SelectedItem is ListViewItem item && item.Tag is string selectedType)
+        if (list.SelectedItem is ListViewItem item && item.Tag is string catalogId)
         {
-            await AddWidgetByTypeAsync(selectedType);
+            await AddWidgetFromCatalogAsync(catalogId);
         }
+    }
+
+    private Task AddWidgetFromCatalogAsync(string catalogId)
+    {
+        var entry = WidgetCatalog.FindById(catalogId);
+        if (entry is null)
+        {
+            ShowHostStatus($"Unknown catalog item: {catalogId}");
+            return Task.CompletedTask;
+        }
+
+        if (entry.Kind == WidgetCatalogKind.WebPreset)
+        {
+            if (!WidgetCatalog.TryResolveWebPresetUrl(entry, out var url, out var error))
+            {
+                ShowHostStatus(error);
+                return Task.CompletedTask;
+            }
+
+            return AddWebPresetAsync(url, entry.Label);
+        }
+
+        if (string.IsNullOrWhiteSpace(entry.WidgetType))
+        {
+            ShowHostStatus($"Unknown widget type for {entry.Label}.");
+            return Task.CompletedTask;
+        }
+
+        return AddWidgetByTypeAsync(entry.WidgetType);
+    }
+
+    private Task AddWebPresetAsync(string url, string label)
+    {
+        if (_layout is null)
+        {
+            return Task.CompletedTask;
+        }
+
+        var cascade = _layout.Widgets.Count(w =>
+            string.Equals(w.Type, WidgetTypes.Web, StringComparison.OrdinalIgnoreCase)) * 24;
+        var widget = DefaultWidgetFactory.CreateWeb(
+            url: url,
+            roomId: _layout.RoomId,
+            x: 96 + cascade,
+            y: 96 + cascade);
+        _layout.Widgets.Add(widget);
+        PersistLayoutNow();
+        RenderDesktopObjects();
+        ShowHostStatus($"Added {label}.");
+        SyncInteractiveInputRegions();
+        RefreshDebugStatus();
+        _logger?.Info("widget", $"Added web preset {label} ({widget.Id}).");
+        return Task.CompletedTask;
     }
 
     private Task AddWidgetByTypeAsync(string type)
@@ -889,6 +1005,8 @@ public sealed partial class DesktopPage : Page
                 _layout.RoomId, 240 + cascade, 100 + cascade),
             WidgetTypes.Creative => DefaultWidgetFactory.CreateCreative(
                 _layout.RoomId, 200 + cascade, 80 + cascade),
+            WidgetTypes.Apps => DefaultWidgetFactory.CreateApps(
+                _layout.RoomId, 280 + cascade, 80 + cascade),
             _ => null
         };
 

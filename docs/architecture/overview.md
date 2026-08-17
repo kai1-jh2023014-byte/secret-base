@@ -17,7 +17,7 @@ Highest principle:
 | `SecretBase.Platform.Windows` | Overlay HWND, Safe Exit, launch, Cursor discovery |
 | `SecretBase.Widgets` | Built-in widget views + theme painting |
 
-## Process model (v0.1)
+## Process model (v0.1 / v0.2)
 
 - Unpackaged WinUI 3 app (`WindowsPackageType=None`).
 - Closing / Safe Exit ends the process only after layout save.
@@ -31,14 +31,22 @@ Highest principle:
 - ✅ Theme + Arrange
 - ✅ Projects → Dashboard → Cursor / ChatGPT / resources / notes
 - ✅ Persistence under `%LocalAppData%\SecretBase`
-- ⏭ See [v0.2 roadmap](../guides/v0.2-roadmap.md)
+
+## v0.2 surface (this slice)
+
+- ✅ Integration Catalog + `IntegrationCommandService` (router over existing Commands)
+- ✅ CalendarCommand / ClassroomCommand / AppCommand (thin; do not rewrite Music/Creative/Ai)
+- ✅ My Apps registry (`apps.json`) + My Apps widget
+- ✅ Classroom via existing Web Widget preset (`https://classroom.google.com/`) — **no Classroom Widget reimplementation**
+- ✅ Grouped Add Widget catalog
+- ⏭ Secret Base AI / LLM still deferred — see [v0.2 roadmap](../guides/v0.2-roadmap.md)
 
 ## Security spine
 
 ```
 UI / future AI
     ↓
-Command (CreativeCommand / AiCommand / MusicCommand …)
+Command (CreativeCommand / AiCommand / MusicCommand / CalendarCommand / ClassroomCommand / AppCommand)
     ↓
 Service (validated ids / queries only)
     ↓
@@ -54,4 +62,5 @@ Web Widget: WebView2 with **no Host Bridge**. Dangerous URL schemes rejected.
 - [Security boundaries](security-boundaries.md)
 - [Creative Workspace](creative-workspace.md)
 - [AI Workspace](ai-workspace.md)
+- [Integration Hub](integration-hub.md)
 - [Keyboard shortcuts](../guides/keyboard-shortcuts.md)

@@ -16,5 +16,6 @@ public class AppDataPathsTests
         Assert.True(Directory.Exists(AppDataPaths.LayoutsDirectory));
         Assert.True(Directory.Exists(AppDataPaths.ThemesDirectory));
         Assert.True(Directory.Exists(AppDataPaths.SettingsDirectory));
+        Assert.True(Directory.Exists(AppDataPaths.AppsDirectory));
     }
 }

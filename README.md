@@ -2,15 +2,17 @@
 
 > Make your PC feel like *your* secret base — a Personal Creative Desktop Environment for Windows.
 
-**v0.1** is the first daily-usable release: a transparent desktop overlay where your Projects, AI tools, Calendar, Music, and notes live together — without replacing Explorer or the Taskbar.
+**v0.1** is the daily-usable overlay. **v0.2** adds an Integration Hub: grouped Add Widget catalog, Classroom via the existing Web Widget, My Apps registry, and a Command catalog for future AI — still without replacing Explorer or the Taskbar.
 
 ## What you can do
 
 | Area | Experience |
 |------|------------|
 | **Overlay** | Wallpaper shows through; click outside widgets → normal Desktop |
-| **Widgets** | Clock, Text, Web, Calendar, Music, AI, Creative (Projects) |
+| **Widgets** | Clock, Text, Web, Calendar, Music, AI, Creative (Projects), My Apps |
 | **Projects** | Create a Project → Dashboard → Open Folder / Cursor / ChatGPT |
+| **Apps** | Register your own exe / folder / https URL and launch it (no Shell, no admin) |
+| **Classroom** | Opens official Google Classroom in the **existing Web Widget** (no new Classroom UI) |
 | **AI** | Launch Cursor or official ChatGPT / Claude / Gemini websites |
 | **Theme** | Shared colors, fonts, corner radius, transparency |
 | **Safe Exit** | **Ctrl+Shift+Q** — save layout and leave Windows untouched |
@@ -62,6 +64,7 @@ Details: [docs/architecture/overview.md](docs/architecture/overview.md)
 
 ```
 %LocalAppData%\SecretBase\
+  apps\         # apps.json (My Apps registry)
   creative\     # workspace.json, projects.json
   layouts\
   themes\
@@ -87,9 +90,10 @@ Details: [docs/architecture/overview.md](docs/architecture/overview.md)
 - [Security boundaries](docs/architecture/security-boundaries.md)
 - [Creative Workspace / Projects](docs/architecture/creative-workspace.md)
 - [AI Workspace](docs/architecture/ai-workspace.md)
+- [Integration Hub (v0.2)](docs/architecture/integration-hub.md)
 - [v0.2 Roadmap](docs/guides/v0.2-roadmap.md)
 - [Decision log](docs/decisions/README.md)
 
-## v0.1 intentionally does **not** include
+## v0.1 / v0.2 intentionally do **not** include
 
-ChatGPT/Claude/Gemini/Cursor APIs, AI agents, MCP, Spotify/YouTube APIs, TimeTree/Notion Calendar APIs, Taskbar/Explorer/Shell hacks, auto-install, or admin elevation.
+ChatGPT/Claude/Gemini/Cursor APIs, AI agents, MCP, Spotify/YouTube APIs, TimeTree/Notion Calendar APIs, Google Classroom API (open the official site only), Taskbar/Explorer/Shell hacks, auto-install, or admin elevation.

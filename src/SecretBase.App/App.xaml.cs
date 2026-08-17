@@ -1,6 +1,7 @@
 ﻿using Microsoft.UI.Xaml;
 using SecretBase.Core;
 using SecretBase.Core.Ai;
+using SecretBase.Core.Apps;
 using SecretBase.Core.Creative;
 using SecretBase.Core.Time;
 using SecretBase.Core.Widgets.Ai;
@@ -51,6 +52,9 @@ public partial class App : Application
             new CreativeWorkspaceService(new JsonCreativeWorkspaceStore()),
             projectService,
             aiCommands);
+        var appCommands = new AppCommandService(
+            new CustomAppService(new JsonCustomAppStore()),
+            projectService);
 
         var pageArgs = new DesktopPageArgs(
             Logger: _logger,
@@ -65,7 +69,8 @@ public partial class App : Application
             PathPicker: pathPicker,
             CreativeCommands: creativeCommands,
             CursorLaunch: cursorLaunch,
-            AiCommands: aiCommands);
+            AiCommands: aiCommands,
+            AppCommands: appCommands);
 
         IDesktopOverlayService overlay = new AppWindowDesktopOverlayService();
         _window = new MainWindow(pageArgs, overlay);

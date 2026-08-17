@@ -5,7 +5,7 @@
 | Zone | Code | Trust | May access |
 |------|------|-------|------------|
 | Trusted Host | App, Core, Infrastructure, Platform | Trusted | Internal services only; Platform still avoids destructive OS APIs |
-| Built-in Widget | `SecretBase.Widgets` (Clock, Text, Web chrome, Calendar, Music, Creative) | Semi-trusted | Own settings/UI; Platform APIs only through approved host services |
+| Built-in Widget | `SecretBase.Widgets` (Clock, Text, Web chrome, Calendar, Music, Creative, AI, Apps) | Semi-trusted | Own settings/UI; Platform APIs only through approved host services |
 | Web Content | Documents inside WebView2 (`WidgetTypes.Web`, Music browse mode) | **Untrusted** | Network rendering only; **no** host object injection to Secret Base APIs |
 | Plugin (future) | Marketplace packages | Untrusted | Sandboxed Plugin API only — never Core internals |
 | AI (future) | LLM providers / tools | Restricted | Observation → Safe → Confirm → Restricted ladder |
@@ -65,6 +65,7 @@ Common `CalendarEvent` only in Core. No provider DTOs in Core.
 3. Do not give AI (when added) unrestricted OS control.
 4. Logging must avoid secrets and unnecessary personal data.
 5. Web Widget URL gate allows only `http` / `https` (see [web-widget.md](web-widget.md)).
+6. Custom Apps: registration never grants Shell, elevation, or command-line arguments.
 
 ## User confirmation (future)
 

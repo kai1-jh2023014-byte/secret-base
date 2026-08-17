@@ -12,7 +12,7 @@ Widgets are the building blocks of the Secret Base Desktop. Clock was the first
 | **Core** | `WidgetInstance`, `WidgetTypes`, configs, Calendar + Music models/providers (pure), `ThemeDefinition`, `ITimeProvider` | XAML, WinUI/WebView2, network I/O |
 | **Infrastructure** | JSON persistence, Google ICS + Google API OAuth read providers, agenda cache | Widget visuals, Overlay HWND |
 | **Platform.Abstractions** | `ISecureSecretStore`, overlay/launch contracts | Implementations |
-| **Widgets** | Views (`Clock`, `Text`, `Web`, `Calendar`, `Music`, `Creative`, `Ai`), theme helpers | Persistence paths, Desktop chrome, Overlay |
+| **Widgets** | Views (`Clock`, `Text`, `Web`, `Calendar`, `Music`, `Creative`, `Ai`, `Apps`), theme helpers | Persistence paths, Desktop chrome, Overlay |
 
 | **App** | Host, `WidgetFrame`, type→view wiring, FABs | Domain math beyond hosting |
 
@@ -44,8 +44,9 @@ Widgets are the building blocks of the Secret Base Desktop. Clock was the first
 ## Persistence
 
 - First-run seeds Clock + Text only (more via **Add Widget** catalog / shortcuts)
-- `schemaVersion` **2** (Blocks); widget types additive; Creative items in `creative/workspace.json`; Projects in `creative/projects.json`
+- `schemaVersion` **2** (Blocks); widget types additive; Creative items in `creative/workspace.json`; Projects in `creative/projects.json`; My Apps in `apps/apps.json`
 - WidgetFrame: move / resize / **remove (×)**; WebView2 disposed on unload/re-render
+- Classroom catalog item is a **Web preset**, not a new widget type
 
 ## Security
 
@@ -53,9 +54,10 @@ Widgets are the building blocks of the Secret Base Desktop. Clock was the first
 |--------|---------|-------|
 | Clock / Text | None | Local-only |
 | Calendar | Optional HTTPS ICS + OAuth read | User ICS URL and/or AppData OAuth client; tokens in Credential Manager |
-| Web | WebView2 | Untrusted; no host bridge |
+| Web | WebView2 | Untrusted; no host bridge. Classroom catalog uses this. |
 | Music | Commands + optional browser | Native UI; Demo catalog; no Host Bridge; APIs deferred |
 | Creative | Open registered paths only | Favorites/Recent/Dashboard; no Explorer; CreativeCommand boundary |
 | AI | Cursor + official AI websites | Project → Cursor; no in-app LLM; AiCommand boundary |
+| Apps | Launch registered targets only | AppCommand; no Shell/args/admin; missing files reported by host |
 
 Overlay hit-test / DWM are independent of widget types (PR #8).
