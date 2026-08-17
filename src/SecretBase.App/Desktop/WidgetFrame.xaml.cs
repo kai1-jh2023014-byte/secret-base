@@ -74,11 +74,8 @@ public sealed partial class WidgetFrame : UserControl
         RemoveButton.Opacity = opacity;
     }
 
-    private void RemoveButton_Click(object sender, RoutedEventArgs e)
-    {
-        e.Handled = true;
+    private void RemoveButton_Click(object sender, RoutedEventArgs e) =>
         _onRemoveRequested?.Invoke(_instance);
-    }
 
     private void RootGrid_PointerEntered(object sender, PointerRoutedEventArgs e)
     {
