@@ -299,9 +299,9 @@ public sealed partial class CreativeWorkspaceView : UserControl
         var favButton = new Button
         {
             Content = project.IsFavorite ? "★" : "☆",
-            MinWidth = 36,
-            ToolTipService.ToolTip = "Favorite"
+            MinWidth = 36
         };
+        ToolTipService.SetToolTip(favButton, "Favorite");
         favButton.Click += (_, _) =>
         {
             var result = _commands.Execute(CreativeCommand.ToggleCreativeProjectFavorite(project.Id));
@@ -608,9 +608,9 @@ public sealed partial class CreativeWorkspaceView : UserControl
         {
             Content = project.IsFavorite ? "★" : "☆",
             MinWidth = 36,
-            Tag = project.Id,
-            ToolTipService.ToolTip = "Toggle favorite"
+            Tag = project.Id
         };
+        ToolTipService.SetToolTip(fav, "Toggle favorite");
         fav.Click += ProjectFavorite_Click;
 
         if (_theme is not null)
@@ -673,9 +673,9 @@ public sealed partial class CreativeWorkspaceView : UserControl
         var star = new Button
         {
             Content = resource.IsQuickAction ? "★" : "☆",
-            MinWidth = 32,
-            ToolTipService.ToolTip = "Pin as Quick Action"
+            MinWidth = 32
         };
+        ToolTipService.SetToolTip(star, "Pin as Quick Action");
         star.Click += (_, _) =>
         {
             if (_commands is null)
@@ -695,9 +695,9 @@ public sealed partial class CreativeWorkspaceView : UserControl
         var remove = new Button
         {
             Content = "×",
-            MinWidth = 32,
-            ToolTipService.ToolTip = "Remove registration only"
+            MinWidth = 32
         };
+        ToolTipService.SetToolTip(remove, "Remove registration only");
         remove.Click += (_, _) =>
         {
             if (_commands?.Projects is null)
@@ -826,9 +826,9 @@ public sealed partial class CreativeWorkspaceView : UserControl
         {
             Content = item.IsFavorite ? "★" : "☆",
             MinWidth = 36,
-            Tag = item.Id,
-            ToolTipService.ToolTip = "Toggle favorite"
+            Tag = item.Id
         };
+        ToolTipService.SetToolTip(fav, "Toggle favorite");
         fav.Click += Favorite_Click;
 
         if (_theme is not null)
@@ -990,7 +990,7 @@ public sealed partial class CreativeWorkspaceView : UserControl
 
             var cursorError = _tryLaunchCursor(
                 result.ShouldOpenCursorAtFolder ? result.CursorFolderPath : null,
-                openAppOnly: result.ShouldOpenCursorApp && !result.ShouldOpenCursorAtFolder);
+                result.ShouldOpenCursorApp && !result.ShouldOpenCursorAtFolder);
             StatusLabel.Text = cursorError ?? "Opened in Cursor.";
             RefreshLists();
             return;

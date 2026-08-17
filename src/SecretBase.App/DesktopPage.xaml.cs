@@ -857,9 +857,9 @@ public sealed partial class DesktopPage : Page
             return;
         }
 
-        if (list.SelectedItem is ListViewItem item && item.Tag is string type)
+        if (list.SelectedItem is ListViewItem item && item.Tag is string selectedType)
         {
-            await AddWidgetByTypeAsync(type);
+            await AddWidgetByTypeAsync(selectedType);
         }
     }
 
