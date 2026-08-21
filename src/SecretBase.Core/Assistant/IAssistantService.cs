@@ -3,6 +3,10 @@ namespace SecretBase.Core.Assistant;
 public sealed class AssistantActivity
 {
     public required string Text { get; init; }
+
+    public string? Domain { get; init; }
+
+    public AssistantActivityStatus Status { get; init; } = AssistantActivityStatus.Running;
 }
 
 public sealed class AssistantPendingConfirmation
@@ -26,6 +30,8 @@ public sealed class AssistantTurnResult
 
     public bool NeedsConfiguration { get; init; }
 
+    public AssistantResponseKind ResponseKind { get; init; } = AssistantResponseKind.Answer;
+
     public IReadOnlyList<AssistantActivity> Activities { get; init; } = Array.Empty<AssistantActivity>();
 
     public AssistantPendingConfirmation? PendingConfirmation { get; init; }
@@ -43,6 +49,7 @@ public sealed class AssistantTurnResult
     public static AssistantTurnResult Ok(
         string? text,
         IReadOnlyList<AssistantActivity>? activities = null,
+        AssistantResponseKind kind = AssistantResponseKind.Answer,
         bool shouldLaunch = false,
         string? launchTarget = null,
         bool launchIsExternalLink = false,
@@ -52,6 +59,9 @@ public sealed class AssistantTurnResult
         {
             Succeeded = true,
             AssistantText = text,
+            ResponseKind = shouldLaunch || shouldOpenCursorAtFolder
+                ? AssistantResponseKind.Execute
+                : kind,
             Activities = activities ?? Array.Empty<AssistantActivity>(),
             ShouldLaunch = shouldLaunch,
             LaunchTarget = launchTarget,
@@ -66,6 +76,7 @@ public sealed class AssistantTurnResult
         new()
         {
             Succeeded = true,
+            ResponseKind = AssistantResponseKind.RequestConfirmation,
             PendingConfirmation = pending,
             Activities = activities ?? Array.Empty<AssistantActivity>()
         };
@@ -74,6 +85,7 @@ public sealed class AssistantTurnResult
         new()
         {
             Succeeded = false,
+            ResponseKind = AssistantResponseKind.Error,
             ErrorMessage = error,
             NeedsConfiguration = needsConfiguration
         };
@@ -82,6 +94,8 @@ public sealed class AssistantTurnResult
 public interface IAssistantService
 {
     IReadOnlyList<AiMessage> VisibleHistory { get; }
+
+    AssistantProviderStatusInfo? ProviderStatus { get; }
 
     void ClearSession();
 

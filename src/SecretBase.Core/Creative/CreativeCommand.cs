@@ -23,7 +23,10 @@ public enum CreativeCommandKind
     OpenProjectInCursor = 18,
 
     /// <summary>Open a built-in AI tool (website or Cursor app).</summary>
-    OpenAiTool = 19
+    OpenAiTool = 19,
+
+    /// <summary>Read-only project detail (notes, quick actions). Does not mark opened.</summary>
+    GetCreativeProject = 20
 }
 
 /// <summary>
@@ -104,4 +107,7 @@ public sealed class CreativeCommand
 
     public static CreativeCommand OpenAiTool(string toolId) =>
         new() { Kind = CreativeCommandKind.OpenAiTool, ItemId = toolId };
+
+    public static CreativeCommand GetCreativeProject(string projectId) =>
+        new() { Kind = CreativeCommandKind.GetCreativeProject, ProjectId = projectId };
 }

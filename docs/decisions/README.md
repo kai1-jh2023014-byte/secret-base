@@ -187,3 +187,11 @@ See [integration-hub.md](../architecture/integration-hub.md).
 **Why:** The Integration Hub already defined the Command ladder. v0.2 AI should connect that ladder, not invent a second OS-facing stack.
 
 See [ai-assistant.md](../architecture/ai-assistant.md).
+
+## 2026-08-21 — Secret Base AI v0.3 Context & Action Layer
+
+**Decision:** Add read-only `IAssistantContextService`, tool capabilities (`ReadOnly` / `RequiresConfirmation` / `HostAction`), `assistant_get_context` / `creative_get_project` / `music_get_state`, and thin `AssistantResponseKind` (Answer / Suggest / RequestConfirmation / Execute). Keep confirmation for all launch tools. Do **not** build an autonomous agent, long-term memory, or HostAction LLM tools.
+
+**Why:** Users need the assistant to understand Secret Base state (calendar, projects, apps) and suggest next steps, while execution stays Command-gated and confirm-gated.
+
+See [assistant-context.md](../architecture/assistant-context.md) and [assistant-tools.md](../architecture/assistant-tools.md).

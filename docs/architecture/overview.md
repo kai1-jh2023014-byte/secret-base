@@ -40,6 +40,7 @@ Highest principle:
 - ✅ Classroom via existing Web Widget preset (`https://classroom.google.com/`) — **no Classroom Widget reimplementation**
 - ✅ Grouped Add Widget catalog
 - ✅ Secret Base AI (`IAiProvider` + tool registry over existing Commands; OpenAI HTTP MVP)
+- ✅ Secret Base AI v0.3 Context Layer (read-only snapshot + suggest vs confirm)
 - ⏭ Gemini / Local LLM HTTP, long-term memory, autonomous agents — see [v0.2 roadmap](../guides/v0.2-roadmap.md)
 
 ## Security spine
@@ -64,5 +65,7 @@ Web Widget: WebView2 with **no Host Bridge**. Dangerous URL schemes rejected.
 - [Creative Workspace](creative-workspace.md)
 - [AI Workspace](ai-workspace.md)
 - [Secret Base AI](ai-assistant.md)
+- [Assistant Context](assistant-context.md)
+- [Assistant Tools](assistant-tools.md)
 - [Integration Hub](integration-hub.md)
 - [Keyboard shortcuts](../guides/keyboard-shortcuts.md)

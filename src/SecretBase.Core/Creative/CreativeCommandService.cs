@@ -43,6 +43,7 @@ public sealed class CreativeCommandService
             CreativeCommandKind.OpenProject => Open(command, requireType: CreativeItemType.Project),
             CreativeCommandKind.ToggleFavorite => ToggleFavorite(command),
             CreativeCommandKind.SearchProjects => SearchProjects(command),
+            CreativeCommandKind.GetCreativeProject => GetCreativeProject(command),
             CreativeCommandKind.OpenCreativeProject => OpenCreativeProject(command, openRoot: false),
             CreativeCommandKind.OpenCreativeProjectRoot => OpenCreativeProject(command, openRoot: true),
             CreativeCommandKind.OpenCreativeProjectResource => OpenCreativeProjectResource(command),
@@ -197,6 +198,28 @@ public sealed class CreativeCommandService
         return CreativeCommandResult.Ok(
             CreativeCommandKind.SearchProjects,
             projects: projects.Search(query));
+    }
+
+    private CreativeCommandResult GetCreativeProject(CreativeCommand command)
+    {
+        var gate = RequireProjects(CreativeCommandKind.GetCreativeProject, out var projects);
+        if (!gate.Succeeded)
+        {
+            return gate;
+        }
+
+        if (string.IsNullOrWhiteSpace(command.ProjectId))
+        {
+            return CreativeCommandResult.Fail(CreativeCommandKind.GetCreativeProject, "Project id is missing.");
+        }
+
+        var project = projects.FindById(command.ProjectId);
+        if (project is null)
+        {
+            return CreativeCommandResult.Fail(CreativeCommandKind.GetCreativeProject, "Project is not registered.");
+        }
+
+        return CreativeCommandResult.Ok(CreativeCommandKind.GetCreativeProject, project: project);
     }
 
     private CreativeCommandResult OpenCreativeProject(CreativeCommand command, bool openRoot)

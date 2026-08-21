@@ -27,7 +27,12 @@ public sealed class AssistantToolDefinition
 
     public ActionPrivilege RiskLevel { get; init; } = ActionPrivilege.Observation;
 
-    public bool RequiresConfirmation { get; init; }
+    /// <summary>ReadOnly auto-runs; RequiresConfirmation needs user Run; HostAction is never LLM-callable.</summary>
+    public AssistantToolCapability Capability { get; init; } = AssistantToolCapability.ReadOnly;
+
+    public bool RequiresConfirmation =>
+        Capability == AssistantToolCapability.RequiresConfirmation
+        || RiskLevel >= ActionPrivilege.UserConfirmationRequired;
 }
 
 public interface IAiToolRegistry
@@ -49,6 +54,8 @@ public sealed class AssistantToolResult
     /// <summary>Short activity line for the widget (not chain-of-thought).</summary>
     public string? Activity { get; init; }
 
+    public string? ActivityDomain { get; init; }
+
     public bool ShouldLaunch { get; init; }
 
     public string? LaunchTarget { get; init; }
@@ -62,6 +69,7 @@ public sealed class AssistantToolResult
     public static AssistantToolResult Ok(
         string contentForModel,
         string? activity = null,
+        string? activityDomain = null,
         bool shouldLaunch = false,
         string? launchTarget = null,
         bool launchIsExternalLink = false,
@@ -72,6 +80,7 @@ public sealed class AssistantToolResult
             Succeeded = true,
             ContentForModel = contentForModel,
             Activity = activity,
+            ActivityDomain = activityDomain,
             ShouldLaunch = shouldLaunch,
             LaunchTarget = launchTarget,
             LaunchIsExternalLink = launchIsExternalLink,
@@ -79,13 +88,14 @@ public sealed class AssistantToolResult
             CursorFolderPath = cursorFolderPath
         };
 
-    public static AssistantToolResult Fail(string error, string? activity = null) =>
+    public static AssistantToolResult Fail(string error, string? activity = null, string? activityDomain = null) =>
         new()
         {
             Succeeded = false,
             ErrorMessage = error,
             ContentForModel = error,
-            Activity = activity
+            Activity = activity,
+            ActivityDomain = activityDomain
         };
 }
 

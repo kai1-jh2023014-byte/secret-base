@@ -143,6 +143,16 @@ public sealed partial class DesktopPage : Page
         _assistantSettings = new JsonAssistantSettingsStore();
         _assistantProviders = new AssistantProviderFactory(_secretStore);
         var assistantRegistry = BuiltinAssistantToolRegistry.Instance;
+        var assistantContext = new AssistantContextService(
+            calendar: _calendarCommands,
+            creative: _creativeCommands,
+            apps: _appCommands,
+            music: _musicCommands,
+            settings: () => _assistantSettings.LoadOrCreate(),
+            isOpenAiKeyConfigured: () =>
+                _secretStore is not null
+                && _secretStore.TryGetSecret(AssistantSecretKeys.OpenAiApiKey, out var key)
+                && !string.IsNullOrWhiteSpace(key));
         _assistant = new AssistantService(
             assistantRegistry,
             new AssistantToolExecutor(
@@ -152,9 +162,11 @@ public sealed partial class DesktopPage : Page
                 _aiCommands,
                 _integrationCommands,
                 _appCommands,
-                _musicCommands),
+                _musicCommands,
+                assistantContext),
             () => _assistantProviders.Create(_assistantSettings.LoadOrCreate()),
-            () => _assistantSettings.LoadOrCreate());
+            () => _assistantSettings.LoadOrCreate(),
+            assistantContext);
 
         _theme = _themeStore.LoadOrCreateDefault();
         _layout = _layoutStore.LoadOrCreateDefault(RoomId.DefaultRoomId);

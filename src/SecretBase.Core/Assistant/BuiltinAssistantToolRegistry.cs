@@ -2,16 +2,25 @@ using SecretBase.Core.Security;
 
 namespace SecretBase.Core.Assistant;
 
-/// <summary>Static MVP tool list. LLM may only call these names.</summary>
+/// <summary>Static tool list. LLM may only call these names. HostAction tools are never listed.</summary>
 public sealed class BuiltinAssistantToolRegistry : IAiToolRegistry
 {
     private static readonly IReadOnlyList<AssistantToolDefinition> All =
     [
         new()
         {
+            Name = AssistantToolNames.AssistantGetContext,
+            Description =
+                "Read a Secret Base overview: today/upcoming calendar, projects, recent projects, apps, music state, integrations, provider status. Read-only.",
+            RiskLevel = ActionPrivilege.Observation,
+            Capability = AssistantToolCapability.ReadOnly
+        },
+        new()
+        {
             Name = AssistantToolNames.CalendarGetToday,
             Description = "Read today's Secret Base calendar agenda.",
-            RiskLevel = ActionPrivilege.Observation
+            RiskLevel = ActionPrivilege.Observation,
+            Capability = AssistantToolCapability.ReadOnly
         },
         new()
         {
@@ -27,18 +36,39 @@ public sealed class BuiltinAssistantToolRegistry : IAiToolRegistry
                     Required = false
                 }
             ],
-            RiskLevel = ActionPrivilege.Observation
+            RiskLevel = ActionPrivilege.Observation,
+            Capability = AssistantToolCapability.ReadOnly
         },
         new()
         {
             Name = AssistantToolNames.CreativeListProjects,
             Description = "List Creative Projects registered in Secret Base.",
-            RiskLevel = ActionPrivilege.Observation
+            RiskLevel = ActionPrivilege.Observation,
+            Capability = AssistantToolCapability.ReadOnly
+        },
+        new()
+        {
+            Name = AssistantToolNames.CreativeGetProject,
+            Description =
+                "Read one Creative Project by project_id (name, description, notes preview, quick actions). Read-only; does not open or launch.",
+            Parameters =
+            [
+                new AssistantToolParameter
+                {
+                    Name = "project_id",
+                    Type = "string",
+                    Description = "Registered Creative Project id.",
+                    Required = true
+                }
+            ],
+            RiskLevel = ActionPrivilege.Observation,
+            Capability = AssistantToolCapability.ReadOnly
         },
         new()
         {
             Name = AssistantToolNames.CreativeOpenProject,
-            Description = "Open a registered Creative Project dashboard by project_id from list_projects.",
+            Description =
+                "Open a registered Creative Project dashboard by project_id. Requires user confirmation. Suggest first if the user did not ask to open.",
             Parameters =
             [
                 new AssistantToolParameter
@@ -50,12 +80,13 @@ public sealed class BuiltinAssistantToolRegistry : IAiToolRegistry
                 }
             ],
             RiskLevel = ActionPrivilege.SafeAction,
-            RequiresConfirmation = true
+            Capability = AssistantToolCapability.RequiresConfirmation
         },
         new()
         {
             Name = AssistantToolNames.CursorOpenProject,
-            Description = "Open a registered Creative Project folder in Cursor (not a shell command).",
+            Description =
+                "Open a registered Creative Project folder in Cursor (not a shell command). Requires user confirmation. Suggest first if the user did not ask to open.",
             Parameters =
             [
                 new AssistantToolParameter
@@ -67,12 +98,13 @@ public sealed class BuiltinAssistantToolRegistry : IAiToolRegistry
                 }
             ],
             RiskLevel = ActionPrivilege.UserConfirmationRequired,
-            RequiresConfirmation = true
+            Capability = AssistantToolCapability.RequiresConfirmation
         },
         new()
         {
             Name = AssistantToolNames.IntegrationOpen,
-            Description = "Open a registered integration (classroom or calendar) in the browser / Web Widget.",
+            Description =
+                "Open a registered integration (classroom or calendar) in the browser / Web Widget. Requires confirmation.",
             Parameters =
             [
                 new AssistantToolParameter
@@ -84,18 +116,20 @@ public sealed class BuiltinAssistantToolRegistry : IAiToolRegistry
                 }
             ],
             RiskLevel = ActionPrivilege.SafeAction,
-            RequiresConfirmation = true
+            Capability = AssistantToolCapability.RequiresConfirmation
         },
         new()
         {
             Name = AssistantToolNames.AppsList,
             Description = "List My Apps registered in Secret Base.",
-            RiskLevel = ActionPrivilege.Observation
+            RiskLevel = ActionPrivilege.Observation,
+            Capability = AssistantToolCapability.ReadOnly
         },
         new()
         {
             Name = AssistantToolNames.AppsOpen,
-            Description = "Launch a registered My App by app_id from apps_list. Never runs free-form commands.",
+            Description =
+                "Launch a registered My App by app_id from apps_list. Never runs free-form commands. Requires confirmation.",
             Parameters =
             [
                 new AssistantToolParameter
@@ -107,12 +141,13 @@ public sealed class BuiltinAssistantToolRegistry : IAiToolRegistry
                 }
             ],
             RiskLevel = ActionPrivilege.SafeAction,
-            RequiresConfirmation = true
+            Capability = AssistantToolCapability.RequiresConfirmation
         },
         new()
         {
             Name = AssistantToolNames.MusicSearch,
-            Description = "Search the Secret Base music catalog. Demo catalog only unless a real provider is wired.",
+            Description =
+                "Search the Secret Base music catalog. Demo catalog only unless a real provider is wired.",
             Parameters =
             [
                 new AssistantToolParameter
@@ -123,12 +158,22 @@ public sealed class BuiltinAssistantToolRegistry : IAiToolRegistry
                     Required = true
                 }
             ],
-            RiskLevel = ActionPrivilege.Observation
+            RiskLevel = ActionPrivilege.Observation,
+            Capability = AssistantToolCapability.ReadOnly
+        },
+        new()
+        {
+            Name = AssistantToolNames.MusicGetState,
+            Description =
+                "Read current Secret Base music state (capabilities, demo catalog note, current track if any). Read-only.",
+            RiskLevel = ActionPrivilege.Observation,
+            Capability = AssistantToolCapability.ReadOnly
         },
         new()
         {
             Name = AssistantToolNames.MusicPlay,
-            Description = "Play a track_id returned by music_search when playback capability exists. Do not invent Spotify/YouTube playback.",
+            Description =
+                "Play a track_id returned by music_search when playback capability exists. Do not invent Spotify/YouTube playback. Requires confirmation.",
             Parameters =
             [
                 new AssistantToolParameter
@@ -140,7 +185,7 @@ public sealed class BuiltinAssistantToolRegistry : IAiToolRegistry
                 }
             ],
             RiskLevel = ActionPrivilege.SafeAction,
-            RequiresConfirmation = true
+            Capability = AssistantToolCapability.RequiresConfirmation
         }
     ];
 

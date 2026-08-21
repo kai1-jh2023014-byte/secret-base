@@ -19,6 +19,7 @@
         <Grid RowSpacing="8">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
@@ -30,24 +31,40 @@
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
-                <TextBlock
-                    x:Name="HeaderText"
-                    Text="Secret Base AI"
-                    FontSize="17"
-                    FontWeight="SemiBold"
-                    TextWrapping="WrapWholeWords" />
+                <StackPanel Spacing="2">
+                    <TextBlock
+                        x:Name="HeaderText"
+                        Text="Secret Base AI"
+                        FontSize="17"
+                        FontWeight="SemiBold"
+                        TextWrapping="WrapWholeWords" />
+                    <TextBlock
+                        x:Name="SubtitleText"
+                        Text="Context · Tools · Confirm"
+                        FontSize="11"
+                        Opacity="0.75"
+                        TextWrapping="WrapWholeWords" />
+                </StackPanel>
                 <Button
                     x:Name="SettingsButton"
                     Grid.Column="1"
                     Content="Settings"
                     MinWidth="72"
+                    VerticalAlignment="Top"
                     Click="SettingsButton_Click"
                     ToolTipService.ToolTip="AI provider and API key" />
             </Grid>
 
+            <TextBlock
+                x:Name="ProviderStatusText"
+                Grid.Row="1"
+                FontSize="11"
+                Opacity="0.8"
+                TextWrapping="WrapWholeWords" />
+
             <ScrollViewer
                 x:Name="TranscriptScroll"
-                Grid.Row="1"
+                Grid.Row="2"
                 VerticalScrollBarVisibility="Auto"
                 HorizontalScrollBarVisibility="Disabled">
                 <StackPanel x:Name="Transcript" Spacing="8" />
@@ -55,7 +72,7 @@
 
             <StackPanel
                 x:Name="ConfirmPanel"
-                Grid.Row="2"
+                Grid.Row="3"
                 Spacing="6"
                 Visibility="Collapsed">
                 <TextBlock
@@ -78,19 +95,19 @@
 
             <TextBlock
                 x:Name="StatusLabel"
-                Grid.Row="3"
+                Grid.Row="4"
                 FontSize="11"
                 Opacity="0.75"
                 TextWrapping="WrapWholeWords" />
 
-            <Grid Grid.Row="4" ColumnSpacing="6">
+            <Grid Grid.Row="5" ColumnSpacing="6">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <TextBox
                     x:Name="InputBox"
-                    PlaceholderText="Message…"
+                    PlaceholderText="Ask about today, projects, apps…"
                     KeyDown="InputBox_KeyDown" />
                 <Button
                     x:Name="SendButton"
