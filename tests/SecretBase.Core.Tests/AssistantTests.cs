@@ -21,18 +21,27 @@ public class AssistantToolRegistryTests
     public void BuiltinRegistry_ListsMvpTools_WithConfirmationPolicy()
     {
         var registry = BuiltinAssistantToolRegistry.Instance;
-        Assert.Equal(10, registry.Tools.Count);
+        Assert.Equal(13, registry.Tools.Count);
+        Assert.NotNull(registry.Find(AssistantToolNames.AssistantGetContext));
         Assert.NotNull(registry.Find(AssistantToolNames.CalendarGetToday));
         Assert.NotNull(registry.Find("CALENDAR_GET_UPCOMING"));
+        Assert.NotNull(registry.Find(AssistantToolNames.CreativeGetProject));
+        Assert.NotNull(registry.Find(AssistantToolNames.MusicGetState));
         Assert.Null(registry.Find("shell.run"));
         Assert.Null(registry.Find("calendar.get_today"));
 
+        Assert.Equal(AssistantToolCapability.ReadOnly, registry.Find(AssistantToolNames.AssistantGetContext)!.Capability);
+        Assert.Equal(AssistantToolCapability.ReadOnly, registry.Find(AssistantToolNames.CalendarGetToday)!.Capability);
+        Assert.Equal(AssistantToolCapability.ReadOnly, registry.Find(AssistantToolNames.CreativeGetProject)!.Capability);
+        Assert.Equal(AssistantToolCapability.ReadOnly, registry.Find(AssistantToolNames.MusicGetState)!.Capability);
         Assert.False(registry.Find(AssistantToolNames.CalendarGetToday)!.RequiresConfirmation);
         Assert.False(registry.Find(AssistantToolNames.CalendarGetUpcoming)!.RequiresConfirmation);
         Assert.False(registry.Find(AssistantToolNames.CreativeListProjects)!.RequiresConfirmation);
         Assert.False(registry.Find(AssistantToolNames.AppsList)!.RequiresConfirmation);
         Assert.False(registry.Find(AssistantToolNames.MusicSearch)!.RequiresConfirmation);
 
+        Assert.Equal(AssistantToolCapability.RequiresConfirmation, registry.Find(AssistantToolNames.CreativeOpenProject)!.Capability);
+        Assert.Equal(AssistantToolCapability.RequiresConfirmation, registry.Find(AssistantToolNames.CursorOpenProject)!.Capability);
         Assert.True(registry.Find(AssistantToolNames.CreativeOpenProject)!.RequiresConfirmation);
         Assert.True(registry.Find(AssistantToolNames.CursorOpenProject)!.RequiresConfirmation);
         Assert.True(registry.Find(AssistantToolNames.IntegrationOpen)!.RequiresConfirmation);
@@ -42,6 +51,7 @@ public class AssistantToolRegistryTests
         Assert.Equal(ActionPrivilege.Observation, registry.Find(AssistantToolNames.CalendarGetToday)!.RiskLevel);
         Assert.Equal(ActionPrivilege.UserConfirmationRequired, registry.Find(AssistantToolNames.CursorOpenProject)!.RiskLevel);
         Assert.DoesNotContain(registry.Tools, t => t.Name.Contains('.', StringComparison.Ordinal));
+        Assert.DoesNotContain(registry.Tools, t => t.Capability == AssistantToolCapability.HostAction);
     }
 }
 
@@ -91,14 +101,31 @@ public class AssistantConfirmationPolicyTests
     public void PromptsLaunchTools_AndLeavesReadsUnconfirmed()
     {
         var registry = BuiltinAssistantToolRegistry.Instance;
+        Assert.True(AssistantConfirmationPolicy.CanAutoExecute(registry.Find(AssistantToolNames.AppsList)!));
+        Assert.True(AssistantConfirmationPolicy.CanAutoExecute(registry.Find(AssistantToolNames.AssistantGetContext)!));
         Assert.False(AssistantConfirmationPolicy.RequiresConfirmation(registry.Find(AssistantToolNames.AppsList)!));
         Assert.True(AssistantConfirmationPolicy.RequiresConfirmation(registry.Find(AssistantToolNames.CursorOpenProject)!));
+        Assert.False(AssistantConfirmationPolicy.CanAutoExecute(registry.Find(AssistantToolNames.CursorOpenProject)!));
 
         var prompt = AssistantConfirmationPolicy.Prompt(
             AssistantToolNames.CursorOpenProject,
             """{"project_id":"pokemon"}""");
         Assert.Contains("pokemon", prompt, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Cursor", prompt, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void HostAction_IsNeverAutoExecutable()
+    {
+        var hostOnly = new AssistantToolDefinition
+        {
+            Name = "host_only",
+            Description = "reserved",
+            Capability = AssistantToolCapability.HostAction,
+            RiskLevel = ActionPrivilege.RestrictedAction
+        };
+        Assert.True(AssistantConfirmationPolicy.IsHostActionOnly(hostOnly));
+        Assert.False(AssistantConfirmationPolicy.CanAutoExecute(hostOnly));
     }
 }
 

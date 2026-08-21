@@ -11,7 +11,7 @@ using Windows.System;
 namespace SecretBase.Widgets.Assistant;
 
 /// <summary>
-/// Secret Base AI chat. Tools go through IAssistantService → existing Commands.
+/// Secret Base AI workspace chat. Tools go through IAssistantService → existing Commands.
 /// No Host Bridge. API keys never rendered in the transcript.
 /// </summary>
 public sealed partial class AssistantWidgetView : UserControl
@@ -43,6 +43,7 @@ public sealed partial class AssistantWidgetView : UserControl
         _providers = providers;
         _applyLaunch = applyLaunch;
         StatusLabel.Text = string.Empty;
+        RefreshProviderStatus();
         SeedFromHistory();
         RenderTranscript();
     }
@@ -57,6 +58,10 @@ public sealed partial class AssistantWidgetView : UserControl
         var font = new FontFamily(theme.FontFamily);
         HeaderText.FontFamily = font;
         HeaderText.Foreground = ThemePainter.Brush(theme.WidgetForeground);
+        SubtitleText.FontFamily = font;
+        SubtitleText.Foreground = ThemePainter.Brush(theme.ForegroundMuted);
+        ProviderStatusText.FontFamily = font;
+        ProviderStatusText.Foreground = ThemePainter.Brush(theme.ForegroundMuted);
         StatusLabel.FontFamily = font;
         StatusLabel.Foreground = ThemePainter.Brush(theme.ForegroundMuted);
         ConfirmText.FontFamily = font;
@@ -66,7 +71,33 @@ public sealed partial class AssistantWidgetView : UserControl
         StyleActionButton(SettingsButton, theme);
         StyleActionButton(ConfirmRunButton, theme, accent: true);
         StyleActionButton(ConfirmCancelButton, theme);
+        RefreshProviderStatus();
         RenderTranscript();
+    }
+
+    private void RefreshProviderStatus()
+    {
+        var status = _assistant?.ProviderStatus;
+        if (status is null && _settingsStore is not null)
+        {
+            var settings = _settingsStore.LoadOrCreate();
+            var hasKey = _secrets is not null
+                         && _secrets.TryGetSecret(AssistantSecretKeys.OpenAiApiKey, out var key)
+                         && !string.IsNullOrWhiteSpace(key);
+            ProviderStatusText.Text = hasKey
+                ? $"Provider: {settings.ProviderId} · {settings.Model} · Configured"
+                : $"Provider: {settings.ProviderId} · {settings.Model} · Not configured";
+            return;
+        }
+
+        if (status is null)
+        {
+            ProviderStatusText.Text = string.Empty;
+            return;
+        }
+
+        ProviderStatusText.Text =
+            $"Provider: {status.ProviderId} · {status.Model} · {status.StatusLabel}";
     }
 
     private static void StyleActionButton(Button button, ThemeDefinition theme, bool accent = false)
@@ -143,7 +174,7 @@ public sealed partial class AssistantWidgetView : UserControl
         {
             Text = text,
             FontSize = 11,
-            Opacity = error ? 1.0 : 0.75,
+            Opacity = error ? 1.0 : 0.8,
             TextWrapping = TextWrapping.WrapWholeWords
         };
         if (_theme is not null)
@@ -228,21 +259,34 @@ public sealed partial class AssistantWidgetView : UserControl
         InputBox.IsEnabled = false;
         StatusLabel.Text = "Thinking…";
         HideConfirm();
+        RefreshProviderStatus();
         try
         {
             var result = await turn().ConfigureAwait(true);
             foreach (var activity in result.Activities)
             {
-                if (!string.IsNullOrWhiteSpace(activity.Text))
+                if (string.IsNullOrWhiteSpace(activity.Text))
                 {
-                    _sessionLines.Add(("Activity", activity.Text));
+                    continue;
                 }
+
+                var label = activity.Status switch
+                {
+                    AssistantActivityStatus.Done when activity.Domain is not null
+                        && !activity.Text.Contains('✓', StringComparison.Ordinal) =>
+                        $"{activity.Domain} ✓",
+                    AssistantActivityStatus.Failed when activity.Domain is not null =>
+                        $"{activity.Domain} ✗ — {activity.Text}",
+                    AssistantActivityStatus.PendingConfirmation => activity.Text,
+                    _ => activity.Text
+                };
+                _sessionLines.Add(("Activity", label));
             }
 
             if (result.PendingConfirmation is not null)
             {
                 ShowConfirm(result.PendingConfirmation.Prompt);
-                StatusLabel.Text = string.Empty;
+                StatusLabel.Text = "Confirmation required.";
                 RenderTranscript();
                 return;
             }
@@ -272,7 +316,9 @@ public sealed partial class AssistantWidgetView : UserControl
             }
             else
             {
-                StatusLabel.Text = string.Empty;
+                StatusLabel.Text = result.ResponseKind == AssistantResponseKind.Suggest
+                    ? "Suggestion — say open/launch to run."
+                    : string.Empty;
             }
 
             RenderTranscript();
@@ -288,6 +334,7 @@ public sealed partial class AssistantWidgetView : UserControl
             _busy = false;
             SendButton.IsEnabled = true;
             InputBox.IsEnabled = true;
+            RefreshProviderStatus();
         }
     }
 
@@ -390,6 +437,7 @@ public sealed partial class AssistantWidgetView : UserControl
 
         PersistSettingsFromDialog(providerBox, modelBox, keyBox, keepExistingIfBlank: true);
         StatusLabel.Text = "AI settings saved.";
+        RefreshProviderStatus();
     }
 
     private void PersistSettingsFromDialog(

@@ -2,7 +2,15 @@ namespace SecretBase.Core.Assistant;
 
 public static class AssistantConfirmationPolicy
 {
-    public static bool RequiresConfirmation(AssistantToolDefinition tool) => tool.RequiresConfirmation;
+    public static bool CanAutoExecute(AssistantToolDefinition tool) =>
+        tool.Capability == AssistantToolCapability.ReadOnly && !tool.RequiresConfirmation;
+
+    public static bool RequiresConfirmation(AssistantToolDefinition tool) =>
+        tool.Capability == AssistantToolCapability.RequiresConfirmation
+        || tool.RequiresConfirmation;
+
+    public static bool IsHostActionOnly(AssistantToolDefinition tool) =>
+        tool.Capability == AssistantToolCapability.HostAction;
 
     public static string Prompt(string toolName, string argumentsJson)
     {
