@@ -9,9 +9,13 @@ public sealed class AssistantContextSnapshot
 {
     public DateTimeOffset CapturedAt { get; init; }
 
+    public AssistantContextScope Scope { get; init; } = AssistantContextScope.All;
+
     public IReadOnlyList<CalendarEvent> TodayEvents { get; init; } = Array.Empty<CalendarEvent>();
 
     public IReadOnlyList<CalendarEvent> UpcomingEvents { get; init; } = Array.Empty<CalendarEvent>();
+
+    public IReadOnlyList<AssistantFreeTimeSlot> FreeTimeSlots { get; init; } = Array.Empty<AssistantFreeTimeSlot>();
 
     public IReadOnlyList<AssistantProjectSummary> Projects { get; init; } = Array.Empty<AssistantProjectSummary>();
 
@@ -24,6 +28,16 @@ public sealed class AssistantContextSnapshot
     public IReadOnlyList<string> Integrations { get; init; } = Array.Empty<string>();
 
     public AssistantProviderStatusInfo Provider { get; init; } = new();
+}
+
+public sealed class AssistantFreeTimeSlot
+{
+    public DateTimeOffset Start { get; init; }
+
+    public DateTimeOffset End { get; init; }
+
+    public override string ToString() =>
+        $"{Start:HH:mm}–{End:HH:mm}";
 }
 
 public sealed class AssistantProjectSummary
@@ -56,6 +70,9 @@ public sealed class AssistantAppSummary
     public string? Description { get; init; }
 
     public string Type { get; init; } = "Application";
+
+    /// <summary>Whether a project folder is registered. Absolute path is never exposed to the LLM.</summary>
+    public bool HasProjectRoot { get; init; }
 }
 
 public sealed class AssistantMusicState
@@ -85,12 +102,25 @@ public sealed class AssistantProviderStatusInfo
     public bool IsConfigured { get; init; }
 
     public string StatusLabel { get; init; } = "Not configured";
+
+    public int MaxSteps { get; init; } = AssistantSettings.DefaultMaxSteps;
+
+    public bool RequireConfirmationForActions { get; init; } = true;
+
+    public bool HasApiKey { get; init; }
+
+    /// <summary>Masked key status for Settings UI. Never the raw secret.</summary>
+    public string ApiKeyDisplay => HasApiKey ? "••••••••" : "(not set)";
 }
 
 /// <summary>Read-only context over existing Commands/Services. Never launches OS.</summary>
 public interface IAssistantContextService
 {
     Task<AssistantContextSnapshot> GetSnapshotAsync(CancellationToken cancellationToken = default);
+
+    Task<AssistantContextSnapshot> GetSnapshotAsync(
+        AssistantContextScope scope,
+        CancellationToken cancellationToken = default);
 
     Task<AssistantProjectSummary?> GetProjectAsync(string projectId, CancellationToken cancellationToken = default);
 

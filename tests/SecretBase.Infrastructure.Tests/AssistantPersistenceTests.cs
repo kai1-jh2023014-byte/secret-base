@@ -19,7 +19,9 @@ public class AssistantSettingsStoreTests
             store.Save(new AssistantSettings
             {
                 ProviderId = AssistantProviderIds.OpenAi,
-                Model = "gpt-4o-mini"
+                Model = "gpt-4o-mini",
+                MaxSteps = 5,
+                RequireConfirmationForActions = true
             });
             Assert.True(File.Exists(path));
             Assert.False(File.Exists(path + ".tmp"));
@@ -27,6 +29,7 @@ public class AssistantSettingsStoreTests
             var json = File.ReadAllText(path);
             Assert.Contains("providerId", json, StringComparison.Ordinal);
             Assert.Contains("gpt-4o-mini", json, StringComparison.Ordinal);
+            Assert.Contains("maxSteps", json, StringComparison.OrdinalIgnoreCase);
             Assert.DoesNotContain("apiKey", json, StringComparison.OrdinalIgnoreCase);
             Assert.DoesNotContain("sk-", json, StringComparison.OrdinalIgnoreCase);
             Assert.DoesNotContain("secret", json, StringComparison.OrdinalIgnoreCase);
@@ -35,6 +38,8 @@ public class AssistantSettingsStoreTests
             Assert.Equal(AssistantSettings.CurrentSchemaVersion, restored.SchemaVersion);
             Assert.Equal(AssistantProviderIds.OpenAi, restored.ProviderId);
             Assert.Equal("gpt-4o-mini", restored.Model);
+            Assert.Equal(5, restored.MaxSteps);
+            Assert.True(restored.RequireConfirmationForActions);
 
             File.WriteAllText(path, "{ not-json");
             var recovered = new JsonAssistantSettingsStore(path).LoadOrCreate();

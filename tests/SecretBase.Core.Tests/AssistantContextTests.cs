@@ -70,7 +70,7 @@ public class AssistantContextServiceTests
         Assert.Contains(snapshot.Apps, a => a.Name == "DTM AI");
         Assert.True(snapshot.Music.UsesDemoCatalog);
         Assert.True(snapshot.Provider.IsConfigured);
-        Assert.Equal("Configured", snapshot.Provider.StatusLabel);
+        Assert.Equal("Connected", snapshot.Provider.StatusLabel);
         Assert.Contains(snapshot.Integrations, i => i.Contains("calendar", StringComparison.OrdinalIgnoreCase));
 
         var text = AssistantContextService.FormatForModel(snapshot);

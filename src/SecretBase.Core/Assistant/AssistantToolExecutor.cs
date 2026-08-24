@@ -79,6 +79,9 @@ public sealed class AssistantToolExecutor : IAiToolExecutor
             AssistantToolNames.MusicSearch => await MusicSearchAsync(root, cancellationToken).ConfigureAwait(false),
             AssistantToolNames.MusicGetState => MusicGetState(),
             AssistantToolNames.MusicPlay => await MusicPlayAsync(root, cancellationToken).ConfigureAwait(false),
+            AssistantToolNames.ProjectRecommend => await ProjectRecommendAsync(cancellationToken).ConfigureAwait(false),
+            AssistantToolNames.ScheduleRecommend => await ScheduleRecommendAsync(cancellationToken).ConfigureAwait(false),
+            AssistantToolNames.MusicRecommend => await MusicRecommendAsync(root, cancellationToken).ConfigureAwait(false),
             _ => AssistantToolResult.Fail(AssistantUserMessages.ToolUnavailable)
         };
     }
@@ -126,7 +129,7 @@ public sealed class AssistantToolExecutor : IAiToolExecutor
         if (!result.Succeeded)
         {
             return AssistantToolResult.Fail(
-                result.ErrorMessage ?? AssistantUserMessages.ToolUnavailable,
+                AssistantUserMessages.CalendarFailed,
                 activityDomain: AssistantActivityDomains.Calendar);
         }
 
@@ -155,7 +158,7 @@ public sealed class AssistantToolExecutor : IAiToolExecutor
         if (!result.Succeeded)
         {
             return AssistantToolResult.Fail(
-                result.ErrorMessage ?? AssistantUserMessages.ToolUnavailable,
+                AssistantUserMessages.CalendarFailed,
                 activityDomain: AssistantActivityDomains.Calendar);
         }
 
@@ -305,8 +308,9 @@ public sealed class AssistantToolExecutor : IAiToolExecutor
                 activityDomain: AssistantActivityDomains.Cursor);
         }
 
+        var projectName = id;
         return AssistantToolResult.Ok(
-            "Host may open this project in Cursor.",
+            $"Cursor open prepared for project {projectName}. Host may launch Cursor at the registered folder. Report success only after Host confirms.",
             activity: "Cursor ✓",
             activityDomain: AssistantActivityDomains.Cursor,
             shouldOpenCursorAtFolder: result.ShouldOpenCursorAtFolder,
@@ -486,16 +490,18 @@ public sealed class AssistantToolExecutor : IAiToolExecutor
 
         var caps = _music.MusicService.AggregateCapabilities();
         var playback = _music.MusicService.GetPlaybackProvider();
-        var demo = _music.MusicService.Providers
+        var searchProviders = _music.MusicService.Providers
             .Where(p => p.Capabilities.HasFlag(MusicProviderCapabilities.Search))
-            .All(p => string.Equals(p.DisplayName, "Demo catalog", StringComparison.Ordinal));
-        var body =
+            .ToList();
+        var demo = searchProviders.Count > 0
+            && searchProviders.All(p => string.Equals(p.DisplayName, "Demo catalog", StringComparison.Ordinal));
+        var fallbackBody =
             $"search={caps.HasFlag(MusicProviderCapabilities.Search)}; "
             + $"playback={caps.HasFlag(MusicProviderCapabilities.Playback)}; demoCatalog={demo}; "
             + $"playing={playback?.IsPlaying ?? false}; track={playback?.CurrentTrack?.Title ?? "(none)"}; "
             + "note=Demo catalog is not Spotify/YouTube API playback.";
         return AssistantToolResult.Ok(
-            body,
+            fallbackBody,
             activity: "Music ✓",
             activityDomain: AssistantActivityDomains.Music);
     }
@@ -536,6 +542,141 @@ public sealed class AssistantToolExecutor : IAiToolExecutor
             $"Playing {title} in the Secret Base music catalog (demo/local providers only).",
             activity: "Music ✓",
             activityDomain: AssistantActivityDomains.Music);
+    }
+
+    private async Task<AssistantToolResult> ProjectRecommendAsync(CancellationToken cancellationToken)
+    {
+        if (_context is null)
+        {
+            return AssistantToolResult.Fail(
+                AssistantUserMessages.ProjectsFailed,
+                activityDomain: AssistantActivityDomains.Suggest);
+        }
+
+        var snapshot = await _context.GetSnapshotAsync(AssistantContextScope.Creative, cancellationToken)
+            .ConfigureAwait(false);
+        if (snapshot.Projects.Count == 0)
+        {
+            return AssistantToolResult.Ok(
+                "No Creative Projects are registered. Suggest the user add one in Creative Workspace. Do not invent projects.",
+                activity: "Suggest ✓",
+                activityDomain: AssistantActivityDomains.Suggest);
+        }
+
+        var favorite = snapshot.Projects.FirstOrDefault(p => p.IsFavorite);
+        var recent = snapshot.RecentProjects.FirstOrDefault();
+        var pick = favorite ?? recent ?? snapshot.Projects[0];
+        var reason = favorite is not null
+            ? "marked favorite"
+            : recent is not null
+                ? "opened recently"
+                : "first registered project";
+        var body =
+            $"Candidate project: {pick.Id} ({pick.Name}) — {reason}. "
+            + "Phrase as a suggestion from registered projects, not a life decision. "
+            + "Do not open Cursor unless the user clearly asks.";
+        return AssistantToolResult.Ok(
+            body,
+            activity: "Suggest ✓",
+            activityDomain: AssistantActivityDomains.Suggest);
+    }
+
+    private async Task<AssistantToolResult> ScheduleRecommendAsync(CancellationToken cancellationToken)
+    {
+        if (_context is null)
+        {
+            return AssistantToolResult.Fail(
+                AssistantUserMessages.ToolUnavailable,
+                activityDomain: AssistantActivityDomains.Suggest);
+        }
+
+        var snapshot = await _context
+            .GetSnapshotAsync(AssistantContextScope.Calendar | AssistantContextScope.Creative, cancellationToken)
+            .ConfigureAwait(false);
+
+        var lines = new List<string>
+        {
+            "Schedule recommendation (candidates only — do not assert what the user must do):"
+        };
+
+        if (snapshot.TodayEvents.Count == 0)
+        {
+            lines.Add("- Today: no registered calendar events.");
+        }
+        else
+        {
+            foreach (var e in snapshot.TodayEvents.Take(5))
+            {
+                var when = e.IsAllDay ? "all-day" : e.Start.ToString("HH:mm");
+                lines.Add($"- Event: {when} {e.Title}");
+            }
+        }
+
+        if (snapshot.FreeTimeSlots.Count > 0)
+        {
+            lines.Add("- Free windows: " + string.Join(", ", snapshot.FreeTimeSlots.Take(4).Select(s => s.ToString())));
+        }
+
+        if (snapshot.Projects.Count == 0)
+        {
+            lines.Add("- Projects: none registered.");
+        }
+        else
+        {
+            var pick = snapshot.RecentProjects.FirstOrDefault()
+                       ?? snapshot.Projects.FirstOrDefault(p => p.IsFavorite)
+                       ?? snapshot.Projects[0];
+            lines.Add($"- Project candidate before/after events: {pick.Name} ({pick.Id}).");
+        }
+
+        lines.Add("Tell the user these are candidates from Calendar + Projects, not certainty about their life.");
+        return AssistantToolResult.Ok(
+            string.Join('\n', lines),
+            activity: "Suggest ✓",
+            activityDomain: AssistantActivityDomains.Suggest);
+    }
+
+    private async Task<AssistantToolResult> MusicRecommendAsync(JsonElement root, CancellationToken cancellationToken)
+    {
+        if (_music is null)
+        {
+            return AssistantToolResult.Fail(
+                AssistantUserMessages.ToolUnavailable,
+                activityDomain: AssistantActivityDomains.Suggest);
+        }
+
+        AssistantToolArgumentValidator.TryGetString(root, "query", required: false, out var query, out _);
+        var q = string.IsNullOrWhiteSpace(query) ? "focus" : query!;
+        var caps = _music.MusicService.AggregateCapabilities();
+        if (!caps.HasFlag(MusicProviderCapabilities.Search))
+        {
+            return AssistantToolResult.Ok(
+                "Music search is not available. Do not invent Spotify/YouTube recommendations.",
+                activity: "Suggest ✓",
+                activityDomain: AssistantActivityDomains.Suggest);
+        }
+
+        var result = await _music.ExecuteAsync(MusicCommand.SearchTrack(q), cancellationToken)
+            .ConfigureAwait(false);
+        if (!result.Succeeded || result.Tracks.Count == 0)
+        {
+            return AssistantToolResult.Ok(
+                "No music candidates found in the Secret Base catalog. Demo catalog only — not Spotify/YouTube API.",
+                activity: "Suggest ✓",
+                activityDomain: AssistantActivityDomains.Suggest);
+        }
+
+        var track = result.Tracks[0];
+        var demo = _music.MusicService.Providers
+            .Where(p => p.Capabilities.HasFlag(MusicProviderCapabilities.Search))
+            .All(p => string.Equals(p.DisplayName, "Demo catalog", StringComparison.Ordinal));
+        var note = demo
+            ? "Suggestion uses the Secret Base demo catalog only. Do not claim Spotify/YouTube playback."
+            : "Suggestion uses Secret Base music providers only.";
+        return AssistantToolResult.Ok(
+            $"Music candidate: {track.Id} — {track.Title} ({track.Artist}). {note} Do not call music_play unless the user asked to play.",
+            activity: "Suggest ✓",
+            activityDomain: AssistantActivityDomains.Suggest);
     }
 
     private static string FormatEvents(IReadOnlyList<CalendarEvent> events, string window)

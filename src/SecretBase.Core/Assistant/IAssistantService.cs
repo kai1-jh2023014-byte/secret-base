@@ -9,15 +9,20 @@ public sealed class AssistantActivity
     public AssistantActivityStatus Status { get; init; } = AssistantActivityStatus.Running;
 }
 
+/// <summary>One or more actions waiting for Cancel / Run. Never HostAction without confirmation.</summary>
 public sealed class AssistantPendingConfirmation
 {
-    public required string ToolCallId { get; init; }
-
-    public required string ToolName { get; init; }
-
-    public required string ArgumentsJson { get; init; }
-
     public required string Prompt { get; init; }
+
+    public IReadOnlyList<AssistantPendingAction> Actions { get; init; } = Array.Empty<AssistantPendingAction>();
+
+    public bool HasRiskyAction { get; init; }
+
+    public string ToolCallId => Actions.Count > 0 ? Actions[0].ToolCallId : string.Empty;
+
+    public string ToolName => Actions.Count > 0 ? Actions[0].ToolName : string.Empty;
+
+    public string ArgumentsJson => Actions.Count > 0 ? Actions[0].ArgumentsJson : "{}";
 }
 
 public sealed class AssistantTurnResult
@@ -32,9 +37,15 @@ public sealed class AssistantTurnResult
 
     public AssistantResponseKind ResponseKind { get; init; } = AssistantResponseKind.Answer;
 
+    public AssistantIntentKind Intent { get; init; } = AssistantIntentKind.Question;
+
+    public AssistantPlan? Plan { get; init; }
+
     public IReadOnlyList<AssistantActivity> Activities { get; init; } = Array.Empty<AssistantActivity>();
 
     public AssistantPendingConfirmation? PendingConfirmation { get; init; }
+
+    public IReadOnlyList<AssistantActionResult> ActionResults { get; init; } = Array.Empty<AssistantActionResult>();
 
     public bool ShouldLaunch { get; init; }
 
@@ -50,6 +61,9 @@ public sealed class AssistantTurnResult
         string? text,
         IReadOnlyList<AssistantActivity>? activities = null,
         AssistantResponseKind kind = AssistantResponseKind.Answer,
+        AssistantIntentKind intent = AssistantIntentKind.Question,
+        AssistantPlan? plan = null,
+        IReadOnlyList<AssistantActionResult>? actionResults = null,
         bool shouldLaunch = false,
         string? launchTarget = null,
         bool launchIsExternalLink = false,
@@ -62,7 +76,10 @@ public sealed class AssistantTurnResult
             ResponseKind = shouldLaunch || shouldOpenCursorAtFolder
                 ? AssistantResponseKind.Execute
                 : kind,
+            Intent = intent,
+            Plan = plan,
             Activities = activities ?? Array.Empty<AssistantActivity>(),
+            ActionResults = actionResults ?? Array.Empty<AssistantActionResult>(),
             ShouldLaunch = shouldLaunch,
             LaunchTarget = launchTarget,
             LaunchIsExternalLink = launchIsExternalLink,
@@ -72,22 +89,32 @@ public sealed class AssistantTurnResult
 
     public static AssistantTurnResult Confirm(
         AssistantPendingConfirmation pending,
-        IReadOnlyList<AssistantActivity>? activities = null) =>
+        IReadOnlyList<AssistantActivity>? activities = null,
+        AssistantPlan? plan = null,
+        AssistantIntentKind intent = AssistantIntentKind.ActionRequest) =>
         new()
         {
             Succeeded = true,
             ResponseKind = AssistantResponseKind.RequestConfirmation,
+            Intent = intent,
+            Plan = plan,
             PendingConfirmation = pending,
             Activities = activities ?? Array.Empty<AssistantActivity>()
         };
 
-    public static AssistantTurnResult Fail(string error, bool needsConfiguration = false) =>
+    public static AssistantTurnResult Fail(
+        string error,
+        bool needsConfiguration = false,
+        AssistantIntentKind intent = AssistantIntentKind.Question,
+        AssistantPlan? plan = null) =>
         new()
         {
             Succeeded = false,
             ResponseKind = AssistantResponseKind.Error,
             ErrorMessage = error,
-            NeedsConfiguration = needsConfiguration
+            NeedsConfiguration = needsConfiguration,
+            Intent = intent,
+            Plan = plan
         };
 }
 

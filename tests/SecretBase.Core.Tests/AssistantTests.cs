@@ -21,12 +21,15 @@ public class AssistantToolRegistryTests
     public void BuiltinRegistry_ListsMvpTools_WithConfirmationPolicy()
     {
         var registry = BuiltinAssistantToolRegistry.Instance;
-        Assert.Equal(13, registry.Tools.Count);
+        Assert.Equal(16, registry.Tools.Count);
         Assert.NotNull(registry.Find(AssistantToolNames.AssistantGetContext));
         Assert.NotNull(registry.Find(AssistantToolNames.CalendarGetToday));
         Assert.NotNull(registry.Find("CALENDAR_GET_UPCOMING"));
         Assert.NotNull(registry.Find(AssistantToolNames.CreativeGetProject));
         Assert.NotNull(registry.Find(AssistantToolNames.MusicGetState));
+        Assert.NotNull(registry.Find(AssistantToolNames.ProjectRecommend));
+        Assert.NotNull(registry.Find(AssistantToolNames.ScheduleRecommend));
+        Assert.NotNull(registry.Find(AssistantToolNames.MusicRecommend));
         Assert.Null(registry.Find("shell.run"));
         Assert.Null(registry.Find("calendar.get_today"));
 
@@ -34,11 +37,15 @@ public class AssistantToolRegistryTests
         Assert.Equal(AssistantToolCapability.ReadOnly, registry.Find(AssistantToolNames.CalendarGetToday)!.Capability);
         Assert.Equal(AssistantToolCapability.ReadOnly, registry.Find(AssistantToolNames.CreativeGetProject)!.Capability);
         Assert.Equal(AssistantToolCapability.ReadOnly, registry.Find(AssistantToolNames.MusicGetState)!.Capability);
+        Assert.Equal(AssistantToolCapability.Suggest, registry.Find(AssistantToolNames.ProjectRecommend)!.Capability);
+        Assert.Equal(AssistantToolCapability.Suggest, registry.Find(AssistantToolNames.ScheduleRecommend)!.Capability);
+        Assert.Equal(AssistantToolCapability.Suggest, registry.Find(AssistantToolNames.MusicRecommend)!.Capability);
         Assert.False(registry.Find(AssistantToolNames.CalendarGetToday)!.RequiresConfirmation);
         Assert.False(registry.Find(AssistantToolNames.CalendarGetUpcoming)!.RequiresConfirmation);
         Assert.False(registry.Find(AssistantToolNames.CreativeListProjects)!.RequiresConfirmation);
         Assert.False(registry.Find(AssistantToolNames.AppsList)!.RequiresConfirmation);
         Assert.False(registry.Find(AssistantToolNames.MusicSearch)!.RequiresConfirmation);
+        Assert.False(registry.Find(AssistantToolNames.ProjectRecommend)!.RequiresConfirmation);
 
         Assert.Equal(AssistantToolCapability.RequiresConfirmation, registry.Find(AssistantToolNames.CreativeOpenProject)!.Capability);
         Assert.Equal(AssistantToolCapability.RequiresConfirmation, registry.Find(AssistantToolNames.CursorOpenProject)!.Capability);
@@ -103,6 +110,7 @@ public class AssistantConfirmationPolicyTests
         var registry = BuiltinAssistantToolRegistry.Instance;
         Assert.True(AssistantConfirmationPolicy.CanAutoExecute(registry.Find(AssistantToolNames.AppsList)!));
         Assert.True(AssistantConfirmationPolicy.CanAutoExecute(registry.Find(AssistantToolNames.AssistantGetContext)!));
+        Assert.True(AssistantConfirmationPolicy.CanAutoExecute(registry.Find(AssistantToolNames.ScheduleRecommend)!));
         Assert.False(AssistantConfirmationPolicy.RequiresConfirmation(registry.Find(AssistantToolNames.AppsList)!));
         Assert.True(AssistantConfirmationPolicy.RequiresConfirmation(registry.Find(AssistantToolNames.CursorOpenProject)!));
         Assert.False(AssistantConfirmationPolicy.CanAutoExecute(registry.Find(AssistantToolNames.CursorOpenProject)!));
@@ -204,10 +212,10 @@ public class AssistantProviderStubTests
         var missingReply = await missing.ChatAsync([], [], "gpt-4o-mini");
         Assert.Equal(AiProviderStatus.NotConfigured, missingReply.Status);
 
-        var local = new UnavailableAiProvider(AssistantProviderIds.Local, "Local", "Local AI is not available in this MVP. Select OpenAI.");
+        var local = new UnavailableAiProvider(AssistantProviderIds.Local, "Local", "AI provider is unavailable. Local/Ollama is not implemented yet — select OpenAI.");
         var localReply = await local.ChatAsync([], [], "llama");
         Assert.Equal(AiProviderStatus.Unavailable, localReply.Status);
-        Assert.Contains("not available", localReply.ErrorMessage, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("unavailable", localReply.ErrorMessage, StringComparison.OrdinalIgnoreCase);
     }
 }
 

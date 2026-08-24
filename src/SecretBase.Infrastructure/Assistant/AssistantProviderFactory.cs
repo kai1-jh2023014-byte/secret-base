@@ -27,7 +27,7 @@ public sealed class AssistantProviderFactory : IAiProviderFactory
             return new UnavailableAiProvider(
                 AssistantProviderIds.Gemini,
                 "Gemini",
-                "Gemini is not available in this MVP. Select OpenAI.");
+                "AI provider is unavailable. Gemini is not implemented yet — select OpenAI.");
         }
 
         if (string.Equals(id, AssistantProviderIds.Local, StringComparison.Ordinal))
@@ -35,7 +35,7 @@ public sealed class AssistantProviderFactory : IAiProviderFactory
             return new UnavailableAiProvider(
                 AssistantProviderIds.Local,
                 "Local",
-                "Local AI is not available in this MVP. Select OpenAI.");
+                "AI provider is unavailable. Local/Ollama is not implemented yet — select OpenAI.");
         }
 
         return new OpenAiAssistantProvider(_http, () =>

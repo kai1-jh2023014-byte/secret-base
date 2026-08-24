@@ -195,3 +195,11 @@ See [ai-assistant.md](../architecture/ai-assistant.md).
 **Why:** Users need the assistant to understand Secret Base state (calendar, projects, apps) and suggest next steps, while execution stays Command-gated and confirm-gated.
 
 See [assistant-context.md](../architecture/assistant-context.md) and [assistant-tools.md](../architecture/assistant-tools.md).
+
+## 2026-08-24 — Secret Base AI v0.4 Personal AI Workspace (AI MVP complete)
+
+**Decision:** Complete the AI feature line with Intent classification, thin `AssistantPlanner`, Suggest tools, scoped context + free time, multi-action Confirmation, action results, max steps (default 5), session memory, and Settings polish. Keep Gemini/Local as unavailable stubs. Do **not** add autonomous agents, Computer Use, shell, Host Bridge, long-term memory, or MCP.
+
+**Why:** Deliver a reproducible Context → Plan → Confirmation → Action → Result loop over existing Commands so Secret Base AI is a Personal AI Workspace, not a ChatGPT clone — then pause AI feature expansion.
+
+See [ai-assistant.md](../architecture/ai-assistant.md), [assistant-planning.md](../architecture/assistant-planning.md), and [assistant-security.md](../architecture/assistant-security.md).

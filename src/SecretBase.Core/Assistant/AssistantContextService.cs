@@ -38,11 +38,22 @@ public sealed class AssistantContextService : IAssistantContextService
         _isOpenAiKeyConfigured = isOpenAiKeyConfigured ?? (() => false);
     }
 
-    public async Task<AssistantContextSnapshot> GetSnapshotAsync(CancellationToken cancellationToken = default)
+    public Task<AssistantContextSnapshot> GetSnapshotAsync(CancellationToken cancellationToken = default) =>
+        GetSnapshotAsync(AssistantContextScope.All, cancellationToken);
+
+    public async Task<AssistantContextSnapshot> GetSnapshotAsync(
+        AssistantContextScope scope,
+        CancellationToken cancellationToken = default)
     {
+        if (scope == AssistantContextScope.None)
+        {
+            scope = AssistantContextScope.Provider;
+        }
+
         var today = Array.Empty<CalendarEvent>();
         var upcoming = Array.Empty<CalendarEvent>();
-        if (_calendar is not null)
+        var free = Array.Empty<AssistantFreeTimeSlot>();
+        if (scope.HasFlag(AssistantContextScope.Calendar) && _calendar is not null)
         {
             var todayResult = await _calendar.ExecuteAsync(CalendarCommand.GetTodayEvents(), cancellationToken)
                 .ConfigureAwait(false);
@@ -57,10 +68,12 @@ public sealed class AssistantContextService : IAssistantContextService
             {
                 upcoming = upcomingResult.Events.ToArray();
             }
+
+            free = ComputeFreeTime(today, DateTimeOffset.Now).ToArray();
         }
 
         var projects = Array.Empty<AssistantProjectSummary>();
-        if (_creative is not null)
+        if (scope.HasFlag(AssistantContextScope.Creative) && _creative is not null)
         {
             var listed = _creative.Execute(CreativeCommand.SearchProjects(null));
             if (listed.Succeeded)
@@ -69,14 +82,16 @@ public sealed class AssistantContextService : IAssistantContextService
             }
         }
 
-        var recent = projects
-            .Where(p => p.LastOpened is not null)
-            .OrderByDescending(p => p.LastOpened)
-            .Take(MaxRecentProjects)
-            .ToArray();
+        var recent = scope.HasFlag(AssistantContextScope.Creative)
+            ? projects
+                .Where(p => p.LastOpened is not null)
+                .OrderByDescending(p => p.LastOpened)
+                .Take(MaxRecentProjects)
+                .ToArray()
+            : Array.Empty<AssistantProjectSummary>();
 
         var apps = Array.Empty<AssistantAppSummary>();
-        if (_apps is not null)
+        if (scope.HasFlag(AssistantContextScope.Apps) && _apps is not null)
         {
             var listed = _apps.Execute(AppCommand.ListApps());
             if (listed.Succeeded)
@@ -85,29 +100,42 @@ public sealed class AssistantContextService : IAssistantContextService
                 {
                     Id = a.Id,
                     Name = a.Name,
-                    Description = a.Description,
-                    Type = a.Type.ToString()
+                    Description = Truncate(a.Description, MaxNotesPreview),
+                    Type = a.Type.ToString(),
+                    HasProjectRoot = !string.IsNullOrWhiteSpace(a.ProjectRoot)
                 }).ToArray();
             }
         }
 
-        var integrations = IntegrationCatalog.Commands
-            .Select(c => c.Domain)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .OrderBy(d => d, StringComparer.OrdinalIgnoreCase)
-            .ToArray();
+        var integrations = scope.HasFlag(AssistantContextScope.Integrations)
+            ? IntegrationCatalog.Commands
+                .Select(c => c.Domain)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(d => d, StringComparer.OrdinalIgnoreCase)
+                .ToArray()
+            : Array.Empty<string>();
+
+        var music = scope.HasFlag(AssistantContextScope.Music)
+            ? GetMusicState()
+            : new AssistantMusicState { Note = "(music scope omitted)" };
+
+        var provider = scope.HasFlag(AssistantContextScope.Provider)
+            ? GetProviderStatus()
+            : new AssistantProviderStatusInfo { StatusLabel = "(provider scope omitted)" };
 
         return new AssistantContextSnapshot
         {
             CapturedAt = DateTimeOffset.Now,
+            Scope = scope,
             TodayEvents = today,
             UpcomingEvents = upcoming,
+            FreeTimeSlots = free,
             Projects = projects,
             RecentProjects = recent,
             Apps = apps,
-            Music = GetMusicState(),
+            Music = music,
             Integrations = integrations,
-            Provider = GetProviderStatus()
+            Provider = provider
         };
     }
 
@@ -143,9 +171,11 @@ public sealed class AssistantContextService : IAssistantContextService
 
         var caps = _music.MusicService.AggregateCapabilities();
         var providers = _music.MusicService.Providers.ToList();
-        var demoOnlySearch = providers
+        var searchProviders = providers
             .Where(p => p.Capabilities.HasFlag(MusicProviderCapabilities.Search))
-            .All(p => string.Equals(p.DisplayName, "Demo catalog", StringComparison.Ordinal));
+            .ToList();
+        var demoOnlySearch = searchProviders.Count > 0
+            && searchProviders.All(p => string.Equals(p.DisplayName, "Demo catalog", StringComparison.Ordinal));
         var playback = _music.MusicService.GetPlaybackProvider();
         return new AssistantMusicState
         {
@@ -163,23 +193,71 @@ public sealed class AssistantContextService : IAssistantContextService
 
     public AssistantProviderStatusInfo GetProviderStatus()
     {
-        var settings = _settings();
+        var settings = AssistantSettingsMigrator.MigrateToCurrent(_settings());
+        var hasKey = _isOpenAiKeyConfigured();
         var configured = string.Equals(settings.ProviderId, AssistantProviderIds.OpenAi, StringComparison.OrdinalIgnoreCase)
-                         && _isOpenAiKeyConfigured();
+                         && hasKey;
 
         var label = configured
-            ? "Configured"
+            ? "Connected"
             : string.Equals(settings.ProviderId, AssistantProviderIds.OpenAi, StringComparison.OrdinalIgnoreCase)
                 ? "Not configured"
-                : "Provider stub / unavailable in MVP";
+                : "AI provider is unavailable.";
 
         return new AssistantProviderStatusInfo
         {
             ProviderId = settings.ProviderId,
             Model = settings.Model,
             IsConfigured = configured,
-            StatusLabel = label
+            StatusLabel = label,
+            MaxSteps = settings.MaxSteps,
+            RequireConfirmationForActions = settings.RequireConfirmationForActions,
+            HasApiKey = hasKey
         };
+    }
+
+    public static IReadOnlyList<AssistantFreeTimeSlot> ComputeFreeTime(
+        IReadOnlyList<CalendarEvent> todayEvents,
+        DateTimeOffset now,
+        TimeSpan? workStart = null,
+        TimeSpan? workEnd = null)
+    {
+        var day = DateOnly.FromDateTime(now.DateTime);
+        var startOfDay = new DateTimeOffset(day.ToDateTime(TimeOnly.FromTimeSpan(workStart ?? new TimeSpan(9, 0, 0))), now.Offset);
+        var endOfDay = new DateTimeOffset(day.ToDateTime(TimeOnly.FromTimeSpan(workEnd ?? new TimeSpan(18, 0, 0))), now.Offset);
+        if (endOfDay <= startOfDay)
+        {
+            return Array.Empty<AssistantFreeTimeSlot>();
+        }
+
+        var busy = todayEvents
+            .Where(e => !e.IsAllDay)
+            .Select(e => (Start: e.Start < startOfDay ? startOfDay : e.Start, End: e.End > endOfDay ? endOfDay : e.End))
+            .Where(e => e.End > e.Start)
+            .OrderBy(e => e.Start)
+            .ToList();
+
+        var slots = new List<AssistantFreeTimeSlot>();
+        var cursor = startOfDay < now ? now : startOfDay;
+        foreach (var block in busy)
+        {
+            if (block.Start > cursor)
+            {
+                slots.Add(new AssistantFreeTimeSlot { Start = cursor, End = block.Start });
+            }
+
+            if (block.End > cursor)
+            {
+                cursor = block.End;
+            }
+        }
+
+        if (cursor < endOfDay)
+        {
+            slots.Add(new AssistantFreeTimeSlot { Start = cursor, End = endOfDay });
+        }
+
+        return slots.Where(s => (s.End - s.Start).TotalMinutes >= 20).Take(8).ToList();
     }
 
     private AssistantProjectSummary ToProjectSummary(CreativeProject project)
@@ -228,112 +306,155 @@ public sealed class AssistantContextService : IAssistantContextService
     }
 
     /// <summary>Formats a snapshot for the LLM. Never includes secrets or absolute paths.</summary>
-    public static string FormatForModel(AssistantContextSnapshot snapshot)
+    public static string FormatForModel(AssistantContextSnapshot snapshot, AssistantContextScope? scopeOverride = null)
     {
+        var scope = scopeOverride ?? snapshot.Scope;
         var lines = new List<string>
         {
             $"Captured: {snapshot.CapturedAt:yyyy-MM-dd HH:mm}",
-            $"Provider: {snapshot.Provider.ProviderId} / {snapshot.Provider.Model} ({snapshot.Provider.StatusLabel})",
-            "",
-            $"Today events ({snapshot.TodayEvents.Count}):"
+            $"Scope: {scope}"
         };
-        if (snapshot.TodayEvents.Count == 0)
+
+        if (scope.HasFlag(AssistantContextScope.Provider))
         {
-            lines.Add("- (none)");
+            lines.Add($"Provider: {snapshot.Provider.ProviderId} / {snapshot.Provider.Model} ({snapshot.Provider.StatusLabel})");
+            lines.Add($"MaxSteps: {snapshot.Provider.MaxSteps}");
         }
-        else
+
+        if (scope.HasFlag(AssistantContextScope.Calendar))
         {
-            foreach (var e in snapshot.TodayEvents.Take(12))
+            lines.Add("");
+            lines.Add($"Today events ({snapshot.TodayEvents.Count}):");
+            if (snapshot.TodayEvents.Count == 0)
             {
-                var when = e.IsAllDay ? e.Start.ToString("yyyy-MM-dd") : e.Start.ToString("HH:mm");
-                lines.Add($"- {when} {e.Title}");
+                lines.Add("- (none)");
             }
-        }
-
-        lines.Add("");
-        lines.Add($"Upcoming events ({snapshot.UpcomingEvents.Count}):");
-        if (snapshot.UpcomingEvents.Count == 0)
-        {
-            lines.Add("- (none)");
-        }
-        else
-        {
-            foreach (var e in snapshot.UpcomingEvents.Take(12))
+            else
             {
-                lines.Add($"- {e.Start:yyyy-MM-dd HH:mm} {e.Title}");
+                foreach (var e in snapshot.TodayEvents.Take(12))
+                {
+                    var when = e.IsAllDay ? e.Start.ToString("yyyy-MM-dd") : e.Start.ToString("HH:mm");
+                    lines.Add($"- {when} {e.Title}");
+                }
             }
-        }
 
-        lines.Add("");
-        lines.Add($"Projects ({snapshot.Projects.Count}):");
-        if (snapshot.Projects.Count == 0)
-        {
-            lines.Add("- (none registered)");
-        }
-        else
-        {
-            foreach (var p in snapshot.Projects.Take(20))
+            lines.Add("");
+            lines.Add($"Free time today ({snapshot.FreeTimeSlots.Count}):");
+            if (snapshot.FreeTimeSlots.Count == 0)
             {
-                var fav = p.IsFavorite ? " ★" : string.Empty;
-                lines.Add($"- {p.Id}: {p.Name}{fav} ({p.ProjectType})");
-                if (!string.IsNullOrWhiteSpace(p.Description))
+                lines.Add("- (none detected in work hours)");
+            }
+            else
+            {
+                foreach (var slot in snapshot.FreeTimeSlots)
                 {
-                    lines.Add($"  desc: {p.Description}");
+                    lines.Add($"- {slot}");
                 }
+            }
 
-                if (!string.IsNullOrWhiteSpace(p.NotesPreview))
+            lines.Add("");
+            lines.Add($"Upcoming events ({snapshot.UpcomingEvents.Count}):");
+            if (snapshot.UpcomingEvents.Count == 0)
+            {
+                lines.Add("- (none)");
+            }
+            else
+            {
+                foreach (var e in snapshot.UpcomingEvents.Take(12))
                 {
-                    lines.Add($"  notes: {p.NotesPreview}");
-                }
-
-                if (p.QuickActionNames.Count > 0)
-                {
-                    lines.Add($"  quick: {string.Join(", ", p.QuickActionNames)}");
+                    lines.Add($"- {e.Start:yyyy-MM-dd HH:mm} {e.Title}");
                 }
             }
         }
 
-        lines.Add("");
-        lines.Add($"Recent projects ({snapshot.RecentProjects.Count}):");
-        if (snapshot.RecentProjects.Count == 0)
+        if (scope.HasFlag(AssistantContextScope.Creative))
         {
-            lines.Add("- (none opened yet)");
-        }
-        else
-        {
-            foreach (var p in snapshot.RecentProjects)
+            lines.Add("");
+            lines.Add($"Projects ({snapshot.Projects.Count}):");
+            if (snapshot.Projects.Count == 0)
             {
-                lines.Add($"- {p.Id}: {p.Name} (last {p.LastOpened:yyyy-MM-dd})");
+                lines.Add("- (none registered)");
+            }
+            else
+            {
+                foreach (var p in snapshot.Projects.Take(20))
+                {
+                    var fav = p.IsFavorite ? " ★" : string.Empty;
+                    lines.Add($"- {p.Id}: {p.Name}{fav} ({p.ProjectType}) hasRoot={p.HasRootFolder}");
+                    if (!string.IsNullOrWhiteSpace(p.Description))
+                    {
+                        lines.Add($"  desc: {p.Description}");
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(p.NotesPreview))
+                    {
+                        lines.Add($"  notes: {p.NotesPreview}");
+                    }
+
+                    if (p.QuickActionNames.Count > 0)
+                    {
+                        lines.Add($"  quick: {string.Join(", ", p.QuickActionNames)}");
+                    }
+                }
+            }
+
+            lines.Add("");
+            lines.Add($"Recent projects ({snapshot.RecentProjects.Count}):");
+            if (snapshot.RecentProjects.Count == 0)
+            {
+                lines.Add("- (none opened yet)");
+            }
+            else
+            {
+                foreach (var p in snapshot.RecentProjects)
+                {
+                    lines.Add($"- {p.Id}: {p.Name} (last {p.LastOpened:yyyy-MM-dd})");
+                }
             }
         }
 
-        lines.Add("");
-        lines.Add($"Apps ({snapshot.Apps.Count}):");
-        if (snapshot.Apps.Count == 0)
+        if (scope.HasFlag(AssistantContextScope.Apps))
         {
-            lines.Add("- (none)");
-        }
-        else
-        {
-            foreach (var a in snapshot.Apps.Take(20))
+            lines.Add("");
+            lines.Add($"Apps ({snapshot.Apps.Count}):");
+            if (snapshot.Apps.Count == 0)
             {
-                lines.Add($"- {a.Id}: {a.Name} ({a.Type})");
+                lines.Add("- (none)");
+            }
+            else
+            {
+                foreach (var a in snapshot.Apps.Take(20))
+                {
+                    lines.Add($"- {a.Id}: {a.Name} ({a.Type}) hasProjectRoot={a.HasProjectRoot}");
+                    if (!string.IsNullOrWhiteSpace(a.Description))
+                    {
+                        lines.Add($"  desc: {a.Description}");
+                    }
+                }
             }
         }
 
-        lines.Add("");
-        lines.Add("Music:");
-        lines.Add($"- search={snapshot.Music.SearchAvailable}, playback={snapshot.Music.PlaybackAvailable}, demoCatalog={snapshot.Music.UsesDemoCatalog}");
-        if (!string.IsNullOrWhiteSpace(snapshot.Music.CurrentTrackTitle))
+        if (scope.HasFlag(AssistantContextScope.Music))
         {
-            lines.Add($"- now: {snapshot.Music.CurrentTrackTitle} ({snapshot.Music.CurrentTrackArtist}) playing={snapshot.Music.IsPlaying}");
+            lines.Add("");
+            lines.Add("Music:");
+            lines.Add($"- search={snapshot.Music.SearchAvailable}, playback={snapshot.Music.PlaybackAvailable}, demoCatalog={snapshot.Music.UsesDemoCatalog}");
+            if (!string.IsNullOrWhiteSpace(snapshot.Music.CurrentTrackTitle))
+            {
+                lines.Add($"- now: {snapshot.Music.CurrentTrackTitle} ({snapshot.Music.CurrentTrackArtist}) playing={snapshot.Music.IsPlaying}");
+            }
+
+            lines.Add($"- note: {snapshot.Music.Note}");
         }
 
-        lines.Add($"- note: {snapshot.Music.Note}");
-        lines.Add("");
-        lines.Add("Integrations: " + (snapshot.Integrations.Count == 0
-            ? "(none)"
-            : string.Join(", ", snapshot.Integrations)));
+        if (scope.HasFlag(AssistantContextScope.Integrations))
+        {
+            lines.Add("");
+            lines.Add("Integrations: " + (snapshot.Integrations.Count == 0
+                ? "(none)"
+                : string.Join(", ", snapshot.Integrations)));
+        }
+
         return string.Join('\n', lines);
     }
 

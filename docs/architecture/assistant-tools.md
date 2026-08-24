@@ -1,6 +1,6 @@
 # Assistant Tools
 
-Registered tools the LLM may call. Unknown names (including `shell.run`) are rejected.
+Registered tools the LLM may call. Unknown names (including `shell.run`) are rejected. **HostAction is never registered.**
 
 OpenAI function names use underscores (no `.`).
 
@@ -9,20 +9,21 @@ OpenAI function names use underscores (no `.`).
 | Capability | Behavior |
 |------------|----------|
 | **ReadOnly** | Auto-run. Observation only. |
-| **RequiresConfirmation** | Pause → Cancel / Run → then Command → Host if needed. |
-| **HostAction** | Reserved for Platform. **Never** LLM-callable. |
+| **Suggest** | Auto-run. Recommendation text only — never launches Host. |
+| **RequiresConfirmation** | Pause → Cancel / Run → Command → Host if needed. |
+| **HostAction** | Platform-only. **Never** LLM-callable. |
 
 ```
-ReadOnly tool
+ReadOnly / Suggest
   → execute immediately → return text to model
 
-RequiresConfirmation tool
-  → Confirmation UI
+RequiresConfirmation
+  → Confirmation UI (single or multi)
   → User Run
   → Command → Service → Host launch (if ShouldLaunch / ShouldOpenCursorAtFolder)
 ```
 
-## Tool catalog (v0.3)
+## Tool catalog (v0.4)
 
 ### ReadOnly
 
@@ -37,6 +38,14 @@ RequiresConfirmation tool
 | `music_search` | `MusicCommand.SearchTrack` (if Search capability) |
 | `music_get_state` | Context / MusicService state |
 
+### Suggest
+
+| Tool | Behavior |
+|------|----------|
+| `project_recommend` | Candidate project from favorites/recent |
+| `schedule_recommend` | Calendar + projects candidates (not life assertions) |
+| `music_recommend` | Catalog candidate; demo-catalog honesty |
+
 ### RequiresConfirmation
 
 | Tool | Routes to |
@@ -44,7 +53,7 @@ RequiresConfirmation tool
 | `creative_open_project` | `CreativeCommand.OpenCreativeProject` |
 | `cursor_open_project` | `AiCommand.OpenProjectInCursor` → Host `ICursorLaunchService` |
 | `integration_open` | `IntegrationCommandService` (`classroom` / `calendar`) |
-| `apps_open` | `AppCommand.OpenApp` → Host `ITargetLaunchService` / browser |
+| `apps_open` | `AppCommand.OpenApp` → Host |
 | `music_play` | `MusicCommand.PlayTrackById` (if Playback capability) |
 
 ## Argument validation
@@ -57,11 +66,13 @@ RequiresConfirmation tool
 
 If only the demo catalog supports search/playback, tool results say so. Spotify/YouTube API playback is never invented.
 
-## Multi-tool reads
+## Multi-tool / multi-action
 
-The chat loop allows several **ReadOnly** tools per turn (and across rounds, capped) so prioritization answers can combine Calendar + Projects. Launch tools still stop for confirmation.
+Several ReadOnly/Suggest tools may run per turn (capped by `MaxSteps`). Multiple RequiresConfirmation tools in one model response are batched into one Confirm panel.
 
 ## Related
 
 - [ai-assistant.md](ai-assistant.md)
 - [assistant-context.md](assistant-context.md)
+- [assistant-planning.md](assistant-planning.md)
+- [assistant-security.md](assistant-security.md)

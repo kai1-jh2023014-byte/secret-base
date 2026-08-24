@@ -1,64 +1,58 @@
-# Assistant Context Layer
+# Assistant Context
 
-Read-only snapshot of Secret Base state for Secret Base AI. Does **not** launch OS actions.
+Read-only snapshot over existing Commands/Services. Never launches OS and never includes secrets, tokens, or absolute paths.
 
-## Purpose
+## Service
 
-Let the model answer:
+`IAssistantContextService` / `AssistantContextService`
 
-- 「今日何する予定だっけ？」
-- 「今進めているプロジェクトは？」
-- 「最近何を開いた？」
-- 「登録してあるアプリは？」
+| Method | Notes |
+|--------|-------|
+| `GetSnapshotAsync(scope)` | Scoped aggregation |
+| `GetProjectAsync(id)` | Registered projects only |
+| `GetMusicState()` | Capabilities + demo-catalog honesty |
+| `GetProviderStatus()` | Connected / unavailable + masked key flag |
 
-by calling tools that read existing Commands / Services — not by dumping the whole PC into the prompt.
+## Structured snapshot
 
-## Flow
+`AssistantContextSnapshot`
 
-```
-AssistantService
- ↓
-assistant_get_context / calendar_* / creative_* / apps_list / music_get_state
- ↓
-IAssistantContextService  (or direct Command for single-domain reads)
- ↓
-CalendarCommand / CreativeCommand / AppCommand / MusicService / IntegrationCatalog
-```
+- `CurrentTime` via `CapturedAt`
+- `TodayEvents` / `UpcomingEvents` / `FreeTimeSlots`
+- `Projects` / `RecentProjects`
+- `Apps` (with `HasProjectRoot` bool — **no path**)
+- `Music`
+- `Integrations` (domain names)
+- `Provider` (id, model, status, maxSteps)
 
-## `IAssistantContextService`
+## Context compression
 
-| Method | Source | Notes |
-|--------|--------|-------|
-| `GetSnapshotAsync` | Calendar + Creative + Apps + Music + Integration catalog + provider label | Aggregated overview |
-| `GetProjectAsync` | `CreativeCommand.GetCreativeProject` | Notes preview, quick action **names**, no absolute paths in model text |
-| `GetMusicState` | `MusicService` capabilities / current track | Demo catalog honesty |
-| `GetProviderStatus` | settings + `isOpenAiKeyConfigured` boolean | Never returns the API key |
+`AssistantContextSelector` picks minimal scopes from user text + intent:
 
-## Snapshot contents
+| Utterance | Scope |
+|-----------|-------|
+| 今日の予定 | Calendar |
+| Pokemon Projectについて | Creative |
+| 今日何をするべき？ | Calendar + Creative |
+| 作業モード | Calendar + Creative + Music |
 
-- Today / upcoming events (titles + times)
-- Creative Projects (id, name, description, notes preview, favorites, last opened, quick action names)
-- Recent projects (by `LastOpened`)
-- My Apps (id, name, type — not launch paths in formatted model text)
-- Music capabilities + current track + demo-catalog note
-- Integration domain names
-- Provider id / model / configured label
+`FormatForModel` emits only sections in scope. Full dump of the PC is avoided.
 
-## Security
+## Free time
 
-Context is **read-only**.
+`ComputeFreeTime` derives gaps in work hours (default 09:00–18:00) from non-all-day today events. Candidates only — not a life coach.
 
-Forbidden from this layer:
+## Secret exclusion
 
-- `Process.Start` / Shell / PowerShell
-- File delete / rewrite
-- Arbitrary commands
-- WebView operations
-- Reading or emitting API keys / OAuth tokens
+Formatter and tool results must not contain:
 
-`FormatForModel` omits absolute filesystem paths and secret material.
+- API keys / Bearer tokens / passwords
+- Absolute filesystem paths
+- Unnecessary internal identifiers beyond registered project/app ids needed for tools
 
 ## Related
 
 - [ai-assistant.md](ai-assistant.md)
 - [assistant-tools.md](assistant-tools.md)
+- [assistant-planning.md](assistant-planning.md)
+- [assistant-security.md](assistant-security.md)
