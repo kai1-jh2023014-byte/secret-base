@@ -41,6 +41,7 @@ Highest principle:
 - ✅ Grouped Add Widget catalog
 - ✅ Secret Base AI (`IAiProvider` + tool registry over existing Commands; OpenAI HTTP MVP)
 - ✅ Secret Base AI v0.3 Context Layer (read-only snapshot + suggest vs confirm)
+- ✅ Secret Base AI v0.4 Personal AI Workspace (Plan / Confirm / Action / Result; AI MVP complete)
 - ⏭ Gemini / Local LLM HTTP, long-term memory, autonomous agents — see [v0.2 roadmap](../guides/v0.2-roadmap.md)
 
 ## Security spine
@@ -65,6 +66,10 @@ Web Widget: WebView2 with **no Host Bridge**. Dangerous URL schemes rejected.
 - [Creative Workspace](creative-workspace.md)
 - [AI Workspace](ai-workspace.md)
 - [Secret Base AI](ai-assistant.md)
+- [Assistant Context](assistant-context.md)
+- [Assistant Tools](assistant-tools.md)
+- [Assistant Planning](assistant-planning.md)
+- [Assistant Security](assistant-security.md)
 - [Assistant Context](assistant-context.md)
 - [Assistant Tools](assistant-tools.md)
 - [Integration Hub](integration-hub.md)

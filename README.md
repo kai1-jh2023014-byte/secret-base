@@ -2,7 +2,7 @@
 
 > Make your PC feel like *your* secret base — a Personal Creative Desktop Environment for Windows.
 
-**v0.1** is the daily-usable overlay. **v0.2** adds an Integration Hub plus **Secret Base AI**: a Command-gated assistant that can read Calendar / Projects / Apps and ask before opening Cursor or registered apps — still without replacing Explorer or the Taskbar.
+**v0.1** is the daily-usable overlay. **v0.2–v0.4** add Integration Hub and **Secret Base AI** as a Personal AI Workspace: Context → Plan → Confirmation → Action → Result over existing Commands — still without replacing Explorer or the Taskbar.
 
 ## What you can do
 
@@ -13,7 +13,7 @@
 | **Projects** | Create a Project → Dashboard → Open Folder / Cursor / ChatGPT |
 | **Apps** | Register your own exe / folder / https URL and launch it (no Shell, no admin) |
 | **Classroom** | Opens official Google Classroom in the **existing Web Widget** (no new Classroom UI) |
-| **AI** | **Secret Base AI** chat (tools → existing Commands) plus AI Workspace (Cursor / official ChatGPT / Claude / Gemini websites) |
+| **AI** | **Secret Base AI** (Personal AI Workspace: context, plan, confirm, action) plus AI Workspace (Cursor / official ChatGPT / Claude / Gemini websites) |
 | **Theme** | Shared colors, fonts, corner radius, transparency |
 | **Safe Exit** | **Ctrl+Shift+Q** — save layout and leave Windows untouched |
 
@@ -69,7 +69,7 @@ Details: [docs/architecture/overview.md](docs/architecture/overview.md)
   layouts\
   themes\
   logs\
-  settings\     # assistant.json (provider/model only; API keys in Credential Manager)
+  settings\     # assistant.json (provider/model/maxSteps; API keys in Credential Manager)
 ```
 
 ## Tech stack
@@ -93,6 +93,8 @@ Details: [docs/architecture/overview.md](docs/architecture/overview.md)
 - [Secret Base AI](docs/architecture/ai-assistant.md)
 - [Assistant Context](docs/architecture/assistant-context.md)
 - [Assistant Tools](docs/architecture/assistant-tools.md)
+- [Assistant Planning](docs/architecture/assistant-planning.md)
+- [Assistant Security](docs/architecture/assistant-security.md)
 - [Integration Hub (v0.2)](docs/architecture/integration-hub.md)
 - [v0.2 Roadmap](docs/guides/v0.2-roadmap.md)
 - [Decision log](docs/decisions/README.md)

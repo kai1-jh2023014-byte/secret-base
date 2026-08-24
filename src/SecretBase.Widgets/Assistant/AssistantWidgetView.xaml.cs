@@ -62,6 +62,8 @@ public sealed partial class AssistantWidgetView : UserControl
         SubtitleText.Foreground = ThemePainter.Brush(theme.ForegroundMuted);
         ProviderStatusText.FontFamily = font;
         ProviderStatusText.Foreground = ThemePainter.Brush(theme.ForegroundMuted);
+        OnboardingText.FontFamily = font;
+        OnboardingText.Foreground = ThemePainter.Brush(theme.WidgetForeground);
         StatusLabel.FontFamily = font;
         StatusLabel.Foreground = ThemePainter.Brush(theme.ForegroundMuted);
         ConfirmText.FontFamily = font;
@@ -69,6 +71,7 @@ public sealed partial class AssistantWidgetView : UserControl
         InputBox.FontFamily = font;
         StyleActionButton(SendButton, theme, accent: true);
         StyleActionButton(SettingsButton, theme);
+        StyleActionButton(OpenSettingsFromOnboardingButton, theme, accent: true);
         StyleActionButton(ConfirmRunButton, theme, accent: true);
         StyleActionButton(ConfirmCancelButton, theme);
         RefreshProviderStatus();
@@ -80,24 +83,28 @@ public sealed partial class AssistantWidgetView : UserControl
         var status = _assistant?.ProviderStatus;
         if (status is null && _settingsStore is not null)
         {
-            var settings = _settingsStore.LoadOrCreate();
+            var settings = AssistantSettingsMigrator.MigrateToCurrent(_settingsStore.LoadOrCreate());
             var hasKey = _secrets is not null
                          && _secrets.TryGetSecret(AssistantSecretKeys.OpenAiApiKey, out var key)
                          && !string.IsNullOrWhiteSpace(key);
             ProviderStatusText.Text = hasKey
-                ? $"Provider: {settings.ProviderId} · {settings.Model} · Configured"
-                : $"Provider: {settings.ProviderId} · {settings.Model} · Not configured";
+                ? $"● Connected · {settings.ProviderId} · {settings.Model} · max {settings.MaxSteps} steps · key { (hasKey ? "••••••••" : "(not set)") }"
+                : $"○ Not configured · {settings.ProviderId} · {settings.Model}";
+            OnboardingPanel.Visibility = hasKey ? Visibility.Collapsed : Visibility.Visible;
             return;
         }
 
         if (status is null)
         {
             ProviderStatusText.Text = string.Empty;
+            OnboardingPanel.Visibility = Visibility.Collapsed;
             return;
         }
 
+        var mark = status.IsConfigured ? "● Connected" : "○ " + status.StatusLabel;
         ProviderStatusText.Text =
-            $"Provider: {status.ProviderId} · {status.Model} · {status.StatusLabel}";
+            $"{mark} · {status.ProviderId} · {status.Model} · max {status.MaxSteps} steps · key {status.ApiKeyDisplay}";
+        OnboardingPanel.Visibility = status.IsConfigured ? Visibility.Collapsed : Visibility.Visible;
     }
 
     private static void StyleActionButton(Button button, ThemeDefinition theme, bool accent = false)
@@ -241,9 +248,9 @@ public sealed partial class AssistantWidgetView : UserControl
 
         _assistant.CancelPending();
         HideConfirm();
-        _sessionLines.Add(("Activity", "Cancelled."));
+        _sessionLines.Add(("Activity", AssistantUserMessages.ActionCancelled));
         RenderTranscript();
-        StatusLabel.Text = "Cancelled.";
+        StatusLabel.Text = AssistantUserMessages.ActionCancelled;
         _ = RunTurnAsync(() => _assistant.ContinueAfterCancelAsync());
     }
 
@@ -257,15 +264,26 @@ public sealed partial class AssistantWidgetView : UserControl
         _busy = true;
         SendButton.IsEnabled = false;
         InputBox.IsEnabled = false;
-        StatusLabel.Text = "Thinking…";
+        StatusLabel.Text = "Working…";
         HideConfirm();
         RefreshProviderStatus();
         try
         {
             var result = await turn().ConfigureAwait(true);
+
+            if (result.Plan is not null)
+            {
+                _sessionLines.Add(("Activity", result.Plan.FormatForUi()));
+            }
+
             foreach (var activity in result.Activities)
             {
                 if (string.IsNullOrWhiteSpace(activity.Text))
+                {
+                    continue;
+                }
+
+                if (string.Equals(activity.Text, "Plan prepared", StringComparison.Ordinal))
                 {
                     continue;
                 }
@@ -283,9 +301,15 @@ public sealed partial class AssistantWidgetView : UserControl
                 _sessionLines.Add(("Activity", label));
             }
 
+            foreach (var actionResult in result.ActionResults)
+            {
+                var mark = actionResult.Succeeded ? "✓" : "✗";
+                _sessionLines.Add(("Activity", $"{mark} {actionResult.Label}: {actionResult.Message}"));
+            }
+
             if (result.PendingConfirmation is not null)
             {
-                ShowConfirm(result.PendingConfirmation.Prompt);
+                ShowConfirm(result.PendingConfirmation);
                 StatusLabel.Text = "Confirmation required.";
                 RenderTranscript();
                 return;
@@ -296,6 +320,11 @@ public sealed partial class AssistantWidgetView : UserControl
                 var error = result.ErrorMessage ?? AssistantUserMessages.Unavailable;
                 _sessionLines.Add(("Error", error));
                 StatusLabel.Text = error;
+                if (result.NeedsConfiguration)
+                {
+                    OnboardingPanel.Visibility = Visibility.Visible;
+                }
+
                 RenderTranscript();
                 return;
             }
@@ -314,11 +343,20 @@ public sealed partial class AssistantWidgetView : UserControl
                 _sessionLines.Add(("Error", shown));
                 StatusLabel.Text = shown;
             }
+            else if (result.ShouldOpenCursorAtFolder)
+            {
+                _sessionLines.Add(("Activity", "✓ " + AssistantUserMessages.CursorOpenSucceeded));
+                StatusLabel.Text = AssistantUserMessages.CursorOpenSucceeded;
+            }
             else
             {
-                StatusLabel.Text = result.ResponseKind == AssistantResponseKind.Suggest
-                    ? "Suggestion — say open/launch to run."
-                    : string.Empty;
+                StatusLabel.Text = result.ResponseKind switch
+                {
+                    AssistantResponseKind.Suggest => "Suggestion — say open/launch to run.",
+                    AssistantResponseKind.Plan => "Plan ready.",
+                    AssistantResponseKind.Execute => "Done.",
+                    _ => string.Empty
+                };
             }
 
             RenderTranscript();
@@ -338,9 +376,48 @@ public sealed partial class AssistantWidgetView : UserControl
         }
     }
 
-    private void ShowConfirm(string prompt)
+    private void ShowConfirm(AssistantPendingConfirmation pending)
     {
-        ConfirmText.Text = prompt;
+        ConfirmText.Text = pending.Prompt;
+        ConfirmActionList.Children.Clear();
+        if (pending.Actions.Count > 1)
+        {
+            foreach (var action in pending.Actions)
+            {
+                var line = new TextBlock
+                {
+                    Text = "✓ " + action.Label,
+                    FontSize = 12,
+                    TextWrapping = TextWrapping.WrapWholeWords
+                };
+                if (_theme is not null)
+                {
+                    line.FontFamily = new FontFamily(_theme.FontFamily);
+                    line.Foreground = ThemePainter.Brush(_theme.WidgetForeground);
+                }
+
+                ConfirmActionList.Children.Add(line);
+            }
+        }
+
+        if (pending.HasRiskyAction)
+        {
+            var risk = new TextBlock
+            {
+                Text = "Includes Host launch (e.g. Cursor).",
+                FontSize = 11,
+                Opacity = 0.85,
+                TextWrapping = TextWrapping.WrapWholeWords
+            };
+            if (_theme is not null)
+            {
+                risk.FontFamily = new FontFamily(_theme.FontFamily);
+                risk.Foreground = ThemePainter.Brush(_theme.Accent);
+            }
+
+            ConfirmActionList.Children.Add(risk);
+        }
+
         ConfirmPanel.Visibility = Visibility.Visible;
     }
 
@@ -348,6 +425,7 @@ public sealed partial class AssistantWidgetView : UserControl
     {
         ConfirmPanel.Visibility = Visibility.Collapsed;
         ConfirmText.Text = string.Empty;
+        ConfirmActionList.Children.Clear();
     }
 
     private async void SettingsButton_Click(object sender, RoutedEventArgs e) =>
@@ -360,7 +438,7 @@ public sealed partial class AssistantWidgetView : UserControl
             return;
         }
 
-        var settings = _settingsStore.LoadOrCreate();
+        var settings = AssistantSettingsMigrator.MigrateToCurrent(_settingsStore.LoadOrCreate());
         var providerBox = new ComboBox
         {
             Header = "AI Provider",
@@ -380,12 +458,34 @@ public sealed partial class AssistantWidgetView : UserControl
             Text = settings.Model
         };
 
+        var maxStepsBox = new NumberBox
+        {
+            Header = "Max steps (plan / tools)",
+            Value = settings.MaxSteps,
+            Minimum = AssistantSettings.MinMaxSteps,
+            Maximum = AssistantSettings.MaxStepsHardCap,
+            SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline
+        };
+
+        var confirmBox = new ToggleSwitch
+        {
+            Header = "Require confirmation for actions",
+            IsOn = settings.RequireConfirmationForActions
+        };
+
         var hasKey = _secrets.TryGetSecret(AssistantSecretKeys.OpenAiApiKey, out var existing)
                      && !string.IsNullOrWhiteSpace(existing);
+        var keyStatus = new TextBlock
+        {
+            Text = hasKey ? "API Key  ••••••••  (saved in Credential Manager)" : "API Key  (not set)",
+            FontSize = 12,
+            Opacity = 0.85,
+            TextWrapping = TextWrapping.WrapWholeWords
+        };
         var keyBox = new PasswordBox
         {
-            Header = hasKey ? "API Key (saved — leave blank to keep)" : "API Key",
-            PlaceholderText = hasKey ? "********" : "sk-…"
+            Header = hasKey ? "Change API Key (leave blank to keep)" : "API Key",
+            PlaceholderText = hasKey ? "••••••••" : "sk-…"
         };
 
         var testStatus = new TextBlock
@@ -397,8 +497,8 @@ public sealed partial class AssistantWidgetView : UserControl
         var testButton = new Button { Content = "Test Connection", MinWidth = 120 };
         testButton.Click += async (_, _) =>
         {
-            PersistSettingsFromDialog(providerBox, modelBox, keyBox, keepExistingIfBlank: true);
-            var current = _settingsStore.LoadOrCreate();
+            PersistSettingsFromDialog(providerBox, modelBox, maxStepsBox, confirmBox, keyBox, keepExistingIfBlank: true);
+            var current = AssistantSettingsMigrator.MigrateToCurrent(_settingsStore.LoadOrCreate());
             var provider = _providers.Create(current);
             var ping = await provider.ChatAsync(
                 [new AiMessage { Role = AiMessageRole.User, Content = "Reply with the single word pong." }],
@@ -406,7 +506,7 @@ public sealed partial class AssistantWidgetView : UserControl
                 current.Model);
             testStatus.Text = ping.Status switch
             {
-                AiProviderStatus.Ok => "Connection OK.",
+                AiProviderStatus.Ok => "● Connected",
                 AiProviderStatus.NotConfigured =>
                     AssistantUserMessages.NotConfigured + " " + AssistantUserMessages.OpenSettings,
                 _ => ping.ErrorMessage ?? AssistantUserMessages.Unavailable
@@ -416,6 +516,9 @@ public sealed partial class AssistantWidgetView : UserControl
         var panel = new StackPanel { Spacing = 8 };
         panel.Children.Add(providerBox);
         panel.Children.Add(modelBox);
+        panel.Children.Add(maxStepsBox);
+        panel.Children.Add(confirmBox);
+        panel.Children.Add(keyStatus);
         panel.Children.Add(keyBox);
         panel.Children.Add(testButton);
         panel.Children.Add(testStatus);
@@ -435,7 +538,7 @@ public sealed partial class AssistantWidgetView : UserControl
             return;
         }
 
-        PersistSettingsFromDialog(providerBox, modelBox, keyBox, keepExistingIfBlank: true);
+        PersistSettingsFromDialog(providerBox, modelBox, maxStepsBox, confirmBox, keyBox, keepExistingIfBlank: true);
         StatusLabel.Text = "AI settings saved.";
         RefreshProviderStatus();
     }
@@ -443,6 +546,8 @@ public sealed partial class AssistantWidgetView : UserControl
     private void PersistSettingsFromDialog(
         ComboBox providerBox,
         TextBox modelBox,
+        NumberBox maxStepsBox,
+        ToggleSwitch confirmBox,
         PasswordBox keyBox,
         bool keepExistingIfBlank)
     {
@@ -451,7 +556,7 @@ public sealed partial class AssistantWidgetView : UserControl
             return;
         }
 
-        var settings = _settingsStore.LoadOrCreate();
+        var settings = AssistantSettingsMigrator.MigrateToCurrent(_settingsStore.LoadOrCreate());
         settings.ProviderId = (providerBox.SelectedItem as string) switch
         {
             "Gemini" => AssistantProviderIds.Gemini,
@@ -461,6 +566,11 @@ public sealed partial class AssistantWidgetView : UserControl
         settings.Model = string.IsNullOrWhiteSpace(modelBox.Text)
             ? AssistantSettings.DefaultOpenAiModel
             : modelBox.Text.Trim();
+        settings.MaxSteps = (int)Math.Clamp(
+            double.IsNaN(maxStepsBox.Value) ? AssistantSettings.DefaultMaxSteps : maxStepsBox.Value,
+            AssistantSettings.MinMaxSteps,
+            AssistantSettings.MaxStepsHardCap);
+        settings.RequireConfirmationForActions = confirmBox.IsOn;
         _settingsStore.Save(settings);
 
         var typed = keyBox.Password?.Trim();

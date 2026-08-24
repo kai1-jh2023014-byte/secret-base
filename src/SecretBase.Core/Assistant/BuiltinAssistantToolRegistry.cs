@@ -11,7 +11,7 @@ public sealed class BuiltinAssistantToolRegistry : IAiToolRegistry
         {
             Name = AssistantToolNames.AssistantGetContext,
             Description =
-                "Read a Secret Base overview: today/upcoming calendar, projects, recent projects, apps, music state, integrations, provider status. Read-only.",
+                "Read a scoped Secret Base overview (calendar, free time, projects, apps, music, integrations, provider). Prefer this once per turn with needed domains. Read-only.",
             RiskLevel = ActionPrivilege.Observation,
             Capability = AssistantToolCapability.ReadOnly
         },
@@ -63,6 +63,40 @@ public sealed class BuiltinAssistantToolRegistry : IAiToolRegistry
             ],
             RiskLevel = ActionPrivilege.Observation,
             Capability = AssistantToolCapability.ReadOnly
+        },
+        new()
+        {
+            Name = AssistantToolNames.ProjectRecommend,
+            Description =
+                "Suggest which registered Creative Project to work on next based on favorites/recent/notes. Suggestion only — does not open Cursor or projects.",
+            RiskLevel = ActionPrivilege.Observation,
+            Capability = AssistantToolCapability.Suggest
+        },
+        new()
+        {
+            Name = AssistantToolNames.ScheduleRecommend,
+            Description =
+                "Suggest a day priority from today's calendar + registered projects. Phrase as candidates, never as certainty about the user's life.",
+            RiskLevel = ActionPrivilege.Observation,
+            Capability = AssistantToolCapability.Suggest
+        },
+        new()
+        {
+            Name = AssistantToolNames.MusicRecommend,
+            Description =
+                "Suggest a track from the Secret Base music catalog (demo catalog honesty). Suggestion only — does not play.",
+            Parameters =
+            [
+                new AssistantToolParameter
+                {
+                    Name = "query",
+                    Type = "string",
+                    Description = "Optional mood or artist hint.",
+                    Required = false
+                }
+            ],
+            RiskLevel = ActionPrivilege.Observation,
+            Capability = AssistantToolCapability.Suggest
         },
         new()
         {

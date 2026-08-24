@@ -1,8 +1,14 @@
 # Secret Base AI (Assistant)
 
-In-app assistant that **calls existing Commands**. Not a ChatGPT clone, and not a replacement for [AI Workspace](ai-workspace.md) (the Cursor / ChatGPT / Claude / Gemini launcher).
+In-app **Personal AI Workspace** that understands Secret Base (Calendar, Creative, Apps, Music, Integrations) and runs **existing Commands** after confirmation. Not a ChatGPT clone, and not a replacement for [AI Workspace](ai-workspace.md) (Cursor / ChatGPT / Claude / Gemini launcher).
 
-v0.3 adds a **read-only Context Layer** and clearer suggest-vs-execute boundaries. Still **not** an autonomous agent.
+**v0.4** completes the AI MVP loop:
+
+```
+Context → Plan → Confirmation → Action → Result
+```
+
+Still **not** an autonomous agent. No infinite loops, Computer Use, shell, or Host Bridge.
 
 ## Architecture
 
@@ -11,9 +17,11 @@ User
  ↓
 Assistant Widget
  ↓
-AssistantService
- ↓
-Context / Tool Registry
+Assistant Service
+ ├─ Context
+ ├─ Planner
+ ├─ Tool Registry
+ └─ Conversation
  ↓
 Command
  ↓
@@ -24,7 +32,12 @@ Host (ITargetLaunchService / ICursorLaunchService / browser)
 
 The LLM never calls `Process.Start`, PowerShell, the filesystem, Host Bridge, or WebView2.
 
-See also: [assistant-context.md](assistant-context.md) · [assistant-tools.md](assistant-tools.md)
+See also:
+
+- [assistant-context.md](assistant-context.md)
+- [assistant-tools.md](assistant-tools.md)
+- [assistant-planning.md](assistant-planning.md)
+- [assistant-security.md](assistant-security.md)
 
 ## Widget
 
@@ -33,10 +46,10 @@ See also: [assistant-context.md](assistant-context.md) · [assistant-tools.md](a
 | `WidgetTypes` | `"assistant"` |
 | Label | **Secret Base AI** (Add Widget → AI group) |
 | Config | `AssistantWidgetConfiguration` (`schemaVersion` 1, no secrets) |
-| View | `AssistantWidgetView` — chat, activities (`Calendar ✓`), confirmation, provider status |
+| View | `AssistantWidgetView` — bubbles, Plan, activities, multi-action Confirm, Results, Settings, onboarding |
 | Default layout | **Not seeded** |
 
-AI Workspace (`WidgetTypes.Ai`) stays the launcher hub.
+**AI Workspace** (`WidgetTypes.Ai`) stays the external-AI launcher. **Secret Base AI** understands and operates Secret Base.
 
 ## Provider boundary
 
@@ -45,40 +58,65 @@ AI Workspace (`WidgetTypes.Ai`) stays the launcher hub.
 | Id | Status |
 |----|--------|
 | `openai` | Real HTTP Chat Completions |
-| `gemini` / `local` | Stubs → unavailable (swap later) |
+| `gemini` / `local` | Stubs → **AI provider is unavailable.** (swappable later) |
 
-API key: Credential Manager only (`ISecureSecretStore`). Never Git, layout JSON, widget config, logs, projects.json, apps.json, or conversation history.
+API key: Credential Manager only (`ISecureSecretStore`). Never Git, layout JSON, widget config, logs, projects.json, apps.json, or conversation history. Settings UI shows `••••••••`, never the raw key.
 
-## Suggest vs execute
+Settings (`assistant.json` schema **2**): provider, model, `maxSteps` (default 5, hard cap 8), `requireConfirmationForActions`.
 
-| Mode | Behavior |
-|------|----------|
-| **Answer** | Read-only tools + explanation |
-| **Suggest** | May recommend opening Cursor/project/app without calling launch tools |
-| **RequestConfirmation** | Launch tool selected → Cancel / Run |
-| **Execute** | After Run → Command → Host launch |
+## What Secret Base AI can do
 
-Launch tools are **not** auto-run. System prompt forbids calling them unless the user clearly asked to open/launch/play.
+- Read scoped context (calendar, free time, projects, apps, music capabilities, integrations, provider status)
+- Build a thin **Plan** for known workflows (today priority, start project)
+- Run **Suggest** tools (`schedule_recommend`, `project_recommend`, `music_recommend`) without launching Host
+- Propose **RequiresConfirmation** actions (Cursor, open project, apps, integrations, music play)
+- After **Run**, execute via existing Commands and report honest success/failure
+- Keep short session memory (e.g. resolve “さっきの”)
+
+## What Secret Base AI cannot do
+
+- Arbitrary shell / PowerShell / cmd
+- Arbitrary process or file delete/rewrite
+- Registry, elevation, mouse/keyboard automation, Computer Use
+- Unrestricted browser automation / Host Bridge / WebView2 control
+- Infinite agent loops (max steps enforced)
+- Long-term memory / RAG / voice / vision
+- Invent Spotify, Classroom OAuth, or unregistered projects
+- Claim demo-catalog music is Spotify/YouTube API playback
+
+## Confirmation-required operations
+
+| Tool | After Run |
+|------|-----------|
+| `creative_open_project` | Creative dashboard |
+| `cursor_open_project` | Host `ICursorLaunchService` |
+| `apps_open` | Host launch / browser |
+| `integration_open` | Browser / Web Widget |
+| `music_play` | Demo/local playback only if capability exists |
+
+Multi-action confirms list each step; risky Host launches are called out.
 
 ## Conversation history
 
-Session-only (in-memory), capped (`MaxVisibleMessages = 20`). Supports “さっきのプロジェクト” follow-ups. No long-term memory. No secrets in history.
+Session-only (in-memory), capped (`MaxVisibleMessages = 20`). Secrets rejected/stripped. No long-term memory.
 
 ## Errors (never faked as success)
 
 | Case | Copy |
 |------|------|
-| No API key | `AI is not configured.` `Open AI Settings.` |
-| Provider down | `AI service is unavailable. Please try again.` |
-| Unknown / blocked tool | `This action is currently unavailable.` |
+| No API key | `OpenAI API Key is not configured.` `Open AI Settings.` |
+| Provider stub / down | `AI provider is unavailable.` |
+| Timeout | `AI response timed out.` |
+| Calendar/tool failure | Honest domain message |
 | Cursor launch failed | `Cursor could not be opened.` |
+| Max steps | `Stopped after the maximum number of steps.` |
 
-## What AI can / cannot do
+## Example UX
 
-**Can:** read calendar, projects, apps, music state; suggest next steps; request confirmation to open Cursor / apps / integrations / play demo catalog tracks.
+1. User: 「今日何をやればいい？」 → Calendar + Projects → candidates (not life assertions)
+2. User: 「じゃあPokemonを始めよう」 → Plan → Confirm Cursor open → Run → Host launches → 「開きました」
 
-**Cannot:** arbitrary shell/PowerShell, file delete/rewrite, Host Bridge, WebView2 control, Computer Use, autonomous multi-step agents, invent Spotify/Classroom APIs, invent unregistered projects.
+## Related
 
-## Out of scope (later)
-
-Gemini/Ollama HTTP, autonomous agents, long-term memory/RAG, MCP, plugins, Computer Use, vision/voice.
+- Decision: v0.4 Personal AI Workspace (see decision log)
+- Roadmap: AI feature line complete at v0.4; further agent work is out of scope until requested

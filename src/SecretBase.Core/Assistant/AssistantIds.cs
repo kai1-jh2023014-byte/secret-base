@@ -29,6 +29,9 @@ public static class AssistantToolNames
     public const string MusicSearch = "music_search";
     public const string MusicGetState = "music_get_state";
     public const string MusicPlay = "music_play";
+    public const string ProjectRecommend = "project_recommend";
+    public const string ScheduleRecommend = "schedule_recommend";
+    public const string MusicRecommend = "music_recommend";
 }
 
 public static class AssistantActivityDomains
@@ -40,13 +43,20 @@ public static class AssistantActivityDomains
     public const string Apps = "Apps";
     public const string Music = "Music";
     public const string Integration = "Integration";
+    public const string Suggest = "Suggest";
 }
 
 public static class AssistantUserMessages
 {
-    public const string NotConfigured = "AI is not configured.";
+    public const string NotConfigured = "OpenAI API Key is not configured.";
     public const string OpenSettings = "Open AI Settings.";
-    public const string Unavailable = "AI service is unavailable. Please try again.";
+    public const string Unavailable = "AI provider is unavailable.";
+    public const string Timeout = "AI response timed out.";
     public const string ToolUnavailable = "This action is currently unavailable.";
+    public const string CalendarFailed = "Could not load Calendar.";
+    public const string ProjectsFailed = "Could not load Projects.";
     public const string CursorOpenFailed = "Cursor could not be opened.";
+    public const string CursorOpenSucceeded = "Opened the project in Cursor.";
+    public const string ActionCancelled = "Cancelled.";
+    public const string MaxStepsReached = "Stopped after the maximum number of steps.";
 }

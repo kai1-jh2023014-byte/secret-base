@@ -1,17 +1,29 @@
 namespace SecretBase.Core.Assistant;
 
-/// <summary>Provider/model prefs. API keys never live here.</summary>
+/// <summary>Provider/model prefs and autonomy caps. API keys never live here.</summary>
 public sealed class AssistantSettings
 {
-    public const int CurrentSchemaVersion = 1;
+    public const int CurrentSchemaVersion = 2;
 
     public const string DefaultOpenAiModel = "gpt-4o-mini";
+
+    public const int DefaultMaxSteps = 5;
+
+    public const int MaxStepsHardCap = 8;
+
+    public const int MinMaxSteps = 1;
 
     public int SchemaVersion { get; set; } = CurrentSchemaVersion;
 
     public string ProviderId { get; set; } = AssistantProviderIds.OpenAi;
 
     public string Model { get; set; } = DefaultOpenAiModel;
+
+    /// <summary>Max plan / tool steps per user turn (not an infinite agent loop).</summary>
+    public int MaxSteps { get; set; } = DefaultMaxSteps;
+
+    /// <summary>When true (default), RequiresConfirmation tools always pause for Cancel/Run.</summary>
+    public bool RequireConfirmationForActions { get; set; } = true;
 }
 
 public interface IAssistantSettingsStore
@@ -28,7 +40,7 @@ public static class AssistantSettingsMigrator
         var doc = settings ?? new AssistantSettings();
         if (doc.SchemaVersion < 1)
         {
-            doc.SchemaVersion = AssistantSettings.CurrentSchemaVersion;
+            doc.SchemaVersion = 1;
         }
 
         if (string.IsNullOrWhiteSpace(doc.ProviderId))
@@ -41,6 +53,18 @@ public static class AssistantSettingsMigrator
             doc.Model = AssistantSettings.DefaultOpenAiModel;
         }
 
+        if (doc.SchemaVersion < 2)
+        {
+            if (doc.MaxSteps <= 0)
+            {
+                doc.MaxSteps = AssistantSettings.DefaultMaxSteps;
+            }
+
+            doc.RequireConfirmationForActions = true;
+            doc.SchemaVersion = AssistantSettings.CurrentSchemaVersion;
+        }
+
+        doc.MaxSteps = Math.Clamp(doc.MaxSteps, AssistantSettings.MinMaxSteps, AssistantSettings.MaxStepsHardCap);
         return doc;
     }
 }
