@@ -121,7 +121,7 @@ public class AssistantCredentialAndProviderTests
     }
 
     [Fact]
-    public async Task OpenAiProvider_Maps401ToNotConfigured_And500ToUnavailable()
+    public async Task OpenAiProvider_MapsAuthNetworkRateLimitAndMalformedResponses()
     {
         var unauthorized = new RecordingHandler
         {
@@ -135,7 +135,8 @@ public class AssistantCredentialAndProviderTests
             [new AiMessage { Role = AiMessageRole.User, Content = "hi" }],
             [],
             "gpt-4o-mini");
-        Assert.Equal(AiProviderStatus.NotConfigured, missing.Status);
+        Assert.Equal(AiProviderStatus.Failed, missing.Status);
+        Assert.Equal(AssistantUserMessages.AuthenticationFailed, missing.ErrorMessage);
         Assert.DoesNotContain("sk-bad", missing.ErrorMessage ?? string.Empty, StringComparison.Ordinal);
 
         var down = new RecordingHandler
@@ -151,8 +152,36 @@ public class AssistantCredentialAndProviderTests
             [],
             "gpt-4o-mini");
         Assert.Equal(AiProviderStatus.Unavailable, fail.Status);
-        Assert.Equal(AssistantUserMessages.Unavailable, fail.ErrorMessage);
+        Assert.Equal(AssistantUserMessages.NetworkError, fail.ErrorMessage);
         Assert.DoesNotContain("upstream", fail.ErrorMessage ?? string.Empty, StringComparison.Ordinal);
+
+        var rateLimited = new RecordingHandler
+        {
+            Response = new HttpResponseMessage((HttpStatusCode)429)
+            {
+                Content = new StringContent("""{"error":{"code":"rate_limit_exceeded"}}""", Encoding.UTF8, "application/json")
+            }
+        };
+        var limited = await new OpenAiAssistantProvider(new HttpClient(rateLimited), () => "sk-bad").ChatAsync(
+            [new AiMessage { Role = AiMessageRole.User, Content = "hi" }],
+            [],
+            "gpt-4o-mini");
+        Assert.Equal(AiProviderStatus.Failed, limited.Status);
+        Assert.Equal(AssistantUserMessages.RateLimitReached, limited.ErrorMessage);
+
+        var malformedHandler = new RecordingHandler
+        {
+            Response = new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("""{"no_choices_here":true}""", Encoding.UTF8, "application/json")
+            }
+        };
+        var malformed = await new OpenAiAssistantProvider(new HttpClient(malformedHandler), () => "sk-good").ChatAsync(
+            [new AiMessage { Role = AiMessageRole.User, Content = "hi" }],
+            [],
+            "gpt-4o-mini");
+        Assert.Equal(AiProviderStatus.Failed, malformed.Status);
+        Assert.Contains("invalid response", malformed.ErrorMessage, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

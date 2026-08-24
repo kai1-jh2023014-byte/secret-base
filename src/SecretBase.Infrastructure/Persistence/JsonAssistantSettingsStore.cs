@@ -4,7 +4,7 @@ using SecretBase.Infrastructure.Storage;
 
 namespace SecretBase.Infrastructure.Persistence;
 
-/// <summary>Persists provider/model only. API keys stay in ISecureSecretStore.</summary>
+/// <summary>Persists provider/model/maxSteps/confirmation behavior only. API keys stay in ISecureSecretStore.</summary>
 public sealed class JsonAssistantSettingsStore : IAssistantSettingsStore
 {
     private readonly string _path;

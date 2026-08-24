@@ -49,9 +49,13 @@ public sealed class OpenAiAssistantProvider : IAiProvider
         {
             throw;
         }
+        catch (HttpRequestException)
+        {
+            return AiProviderResponse.Unavailable(AssistantUserMessages.NetworkError);
+        }
         catch (Exception)
         {
-            return AiProviderResponse.Unavailable();
+            return AiProviderResponse.Unavailable(AssistantUserMessages.Unavailable);
         }
 
         var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
@@ -74,7 +78,7 @@ public sealed class OpenAiAssistantProvider : IAiProvider
         }
         catch (Exception)
         {
-            return AiProviderResponse.Fail();
+            return AiProviderResponse.Fail("AI provider returned an invalid response.");
         }
     }
 
@@ -210,21 +214,31 @@ public sealed class OpenAiAssistantProvider : IAiProvider
 
     private static AiProviderResponse MapHttpError(System.Net.HttpStatusCode status, string body)
     {
-        if (status == System.Net.HttpStatusCode.Unauthorized)
+        if (status is System.Net.HttpStatusCode.Unauthorized or System.Net.HttpStatusCode.Forbidden)
         {
-            return AiProviderResponse.NotConfigured();
+            return AiProviderResponse.Fail(AssistantUserMessages.AuthenticationFailed);
+        }
+
+        if ((int)status == 429)
+        {
+            return AiProviderResponse.Fail(AssistantUserMessages.RateLimitReached);
         }
 
         if ((int)status >= 500)
         {
-            return AiProviderResponse.Unavailable();
+            return AiProviderResponse.Unavailable(AssistantUserMessages.NetworkError);
         }
 
         if (body.Contains("invalid_api_key", StringComparison.OrdinalIgnoreCase))
         {
-            return AiProviderResponse.NotConfigured();
+            return AiProviderResponse.Fail(AssistantUserMessages.AuthenticationFailed);
         }
 
-        return AiProviderResponse.Fail();
+        if (body.Contains("rate_limit", StringComparison.OrdinalIgnoreCase))
+        {
+            return AiProviderResponse.Fail(AssistantUserMessages.RateLimitReached);
+        }
+
+        return AiProviderResponse.Fail(AssistantUserMessages.Unavailable);
     }
 }

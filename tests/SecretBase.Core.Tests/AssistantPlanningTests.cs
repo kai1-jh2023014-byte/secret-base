@@ -274,6 +274,20 @@ public class AssistantPlanningWorkflowTests
     }
 
     [Fact]
+    public async Task RetryableProviderErrors_PreserveUserTextForRetry()
+    {
+        var service = new AssistantService(
+            BuiltinAssistantToolRegistry.Instance,
+            new AssistantToolExecutor(BuiltinAssistantToolRegistry.Instance),
+            () => new UnavailableAiProvider(AssistantProviderIds.OpenAi, "OpenAI", AssistantUserMessages.NetworkError));
+
+        var result = await service.SendAsync("今日の予定を教えて");
+        Assert.False(result.Succeeded);
+        Assert.True(result.CanRetry);
+        Assert.Equal("今日の予定を教えて", result.RetryUserText);
+    }
+
+    [Fact]
     public async Task SessionHistory_ExcludesSecrets_AndRespectsLimit()
     {
         var replies = Enumerable.Range(0, 25).Select(i => AiProviderResponse.Text($"ok{i}"));

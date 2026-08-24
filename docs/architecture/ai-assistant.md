@@ -36,8 +36,8 @@ See also:
 
 - [assistant-context.md](assistant-context.md)
 - [assistant-tools.md](assistant-tools.md)
-- [assistant-planning.md](assistant-planning.md)
-- [assistant-security.md](assistant-security.md)
+- [ai-planning.md](ai-planning.md)
+- [ai-security.md](ai-security.md)
 
 ## Widget
 

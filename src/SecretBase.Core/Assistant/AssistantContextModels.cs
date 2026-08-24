@@ -11,6 +11,8 @@ public sealed class AssistantContextSnapshot
 
     public AssistantContextScope Scope { get; init; } = AssistantContextScope.All;
 
+    public IReadOnlyList<AssistantContextSectionStatus> Sections { get; init; } = Array.Empty<AssistantContextSectionStatus>();
+
     public IReadOnlyList<CalendarEvent> TodayEvents { get; init; } = Array.Empty<CalendarEvent>();
 
     public IReadOnlyList<CalendarEvent> UpcomingEvents { get; init; } = Array.Empty<CalendarEvent>();
@@ -38,6 +40,15 @@ public sealed class AssistantFreeTimeSlot
 
     public override string ToString() =>
         $"{Start:HH:mm}–{End:HH:mm}";
+}
+
+public sealed class AssistantContextSectionStatus
+{
+    public required string Name { get; init; }
+
+    public bool IsAvailable { get; init; }
+
+    public string? Message { get; init; }
 }
 
 public sealed class AssistantProjectSummary
@@ -97,9 +108,13 @@ public sealed class AssistantProviderStatusInfo
 {
     public string ProviderId { get; init; } = AssistantProviderIds.OpenAi;
 
+    public string DisplayName { get; init; } = "OpenAI";
+
     public string Model { get; init; } = AssistantSettings.DefaultOpenAiModel;
 
     public bool IsConfigured { get; init; }
+
+    public bool IsAvailable { get; init; } = true;
 
     public string StatusLabel { get; init; } = "Not configured";
 

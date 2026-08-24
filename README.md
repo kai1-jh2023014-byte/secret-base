@@ -2,7 +2,7 @@
 
 > Make your PC feel like *your* secret base — a Personal Creative Desktop Environment for Windows.
 
-**v0.1** is the daily-usable overlay. **v0.2–v0.4** add Integration Hub and **Secret Base AI** as a Personal AI Workspace: Context → Plan → Confirmation → Action → Result over existing Commands — still without replacing Explorer or the Taskbar.
+**v0.1** is the daily-usable overlay. **v0.2–v0.5** add Integration Hub and **Secret Base AI** as a Personal AI Workspace: Context → Plan → Confirmation → Action → Result over existing Commands — still without replacing Explorer or the Taskbar.
 
 ## What you can do
 
@@ -72,6 +72,20 @@ Details: [docs/architecture/overview.md](docs/architecture/overview.md)
   settings\     # assistant.json (provider/model/maxSteps; API keys in Credential Manager)
 ```
 
+## Secret Base AI in one paragraph
+
+Secret Base AI is an in-app **Personal AI Workspace**. It can read your Calendar, Creative Projects, My Apps, Music state, and integration status, then suggest next steps or ask for confirmation before opening Cursor, apps, or integrations. It is **not** a PC-controlling autonomous agent: no shell, no arbitrary exe, no arbitrary file operations, and no Host Bridge.
+
+## Provider setup
+
+1. Add the **Secret Base AI** widget.
+2. Open **AI Settings**.
+3. Select **OpenAI**.
+4. Enter your model and API key.
+5. Use **Test Connection**.
+
+API keys are stored in **Credential Manager / SecureSecretStore only** — never in Git, layout JSON, widget state, or logs.
+
 ## Tech stack
 
 | Piece | Choice |
@@ -93,8 +107,8 @@ Details: [docs/architecture/overview.md](docs/architecture/overview.md)
 - [Secret Base AI](docs/architecture/ai-assistant.md)
 - [Assistant Context](docs/architecture/assistant-context.md)
 - [Assistant Tools](docs/architecture/assistant-tools.md)
-- [Assistant Planning](docs/architecture/assistant-planning.md)
-- [Assistant Security](docs/architecture/assistant-security.md)
+- [AI Planning](docs/architecture/ai-planning.md)
+- [AI Security](docs/architecture/ai-security.md)
 - [Integration Hub (v0.2)](docs/architecture/integration-hub.md)
 - [v0.2 Roadmap](docs/guides/v0.2-roadmap.md)
 - [Decision log](docs/decisions/README.md)

@@ -52,9 +52,15 @@ public static class AssistantUserMessages
     public const string OpenSettings = "Open AI Settings.";
     public const string Unavailable = "AI provider is unavailable.";
     public const string Timeout = "AI response timed out.";
+    public const string NetworkError = "Could not connect to AI provider.";
+    public const string AuthenticationFailed = "AI authentication failed.";
+    public const string RateLimitReached = "AI provider rate limit reached.";
     public const string ToolUnavailable = "This action is currently unavailable.";
     public const string CalendarFailed = "Could not load Calendar.";
     public const string ProjectsFailed = "Could not load Projects.";
+    public const string AppsFailed = "Could not load Apps.";
+    public const string MusicFailed = "Could not load Music.";
+    public const string IntegrationFailed = "Could not load Integrations.";
     public const string CursorOpenFailed = "Cursor could not be opened.";
     public const string CursorOpenSucceeded = "Opened the project in Cursor.";
     public const string ActionCancelled = "Cancelled.";

@@ -1,6 +1,6 @@
 # Assistant Planning
 
-Thin planning layer for Secret Base AI v0.4. **Not** a workflow engine or autonomous agent.
+Thin planning layer for Secret Base AI v0.5. **Not** a workflow engine or autonomous agent.
 
 ## Loop
 
@@ -44,6 +44,10 @@ Steps are clamped by `AssistantSettings.MaxSteps` (default **5**, hard cap **8**
 ## Session memory
 
 In-memory only. Last mentioned project helps resolve 「さっきの」. Cap 20 visible messages. No long-term memory.
+
+## Untrusted context data
+
+Calendar titles, project descriptions/notes, app descriptions, and music metadata are treated as **untrusted data**, not instructions. They may influence suggestions, but they must not override system/developer policy or become implicit commands.
 
 ## Related
 

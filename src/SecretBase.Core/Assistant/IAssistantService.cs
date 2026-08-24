@@ -47,6 +47,12 @@ public sealed class AssistantTurnResult
 
     public IReadOnlyList<AssistantActionResult> ActionResults { get; init; } = Array.Empty<AssistantActionResult>();
 
+    public bool CanRetry { get; init; }
+
+    public string? RetryUserText { get; init; }
+
+    public bool ShowOpenSettingsAction { get; init; }
+
     public bool ShouldLaunch { get; init; }
 
     public string? LaunchTarget { get; init; }
@@ -64,6 +70,9 @@ public sealed class AssistantTurnResult
         AssistantIntentKind intent = AssistantIntentKind.Question,
         AssistantPlan? plan = null,
         IReadOnlyList<AssistantActionResult>? actionResults = null,
+        bool canRetry = false,
+        string? retryUserText = null,
+        bool showOpenSettingsAction = false,
         bool shouldLaunch = false,
         string? launchTarget = null,
         bool launchIsExternalLink = false,
@@ -80,6 +89,9 @@ public sealed class AssistantTurnResult
             Plan = plan,
             Activities = activities ?? Array.Empty<AssistantActivity>(),
             ActionResults = actionResults ?? Array.Empty<AssistantActionResult>(),
+            CanRetry = canRetry,
+            RetryUserText = retryUserText,
+            ShowOpenSettingsAction = showOpenSettingsAction,
             ShouldLaunch = shouldLaunch,
             LaunchTarget = launchTarget,
             LaunchIsExternalLink = launchIsExternalLink,
@@ -106,7 +118,10 @@ public sealed class AssistantTurnResult
         string error,
         bool needsConfiguration = false,
         AssistantIntentKind intent = AssistantIntentKind.Question,
-        AssistantPlan? plan = null) =>
+        AssistantPlan? plan = null,
+        bool canRetry = false,
+        string? retryUserText = null,
+        bool showOpenSettingsAction = false) =>
         new()
         {
             Succeeded = false,
@@ -114,7 +129,10 @@ public sealed class AssistantTurnResult
             ErrorMessage = error,
             NeedsConfiguration = needsConfiguration,
             Intent = intent,
-            Plan = plan
+            Plan = plan,
+            CanRetry = canRetry,
+            RetryUserText = retryUserText,
+            ShowOpenSettingsAction = showOpenSettingsAction || needsConfiguration
         };
 }
 

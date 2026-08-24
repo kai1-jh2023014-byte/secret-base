@@ -4,6 +4,9 @@ A hub that connects **Creative Projects** to AI tools you already use — **not*
 
 In-app chat lives in a separate widget: [Secret Base AI](ai-assistant.md) (`WidgetTypes.Assistant`). Do not merge the two.
 
+- **AI Workspace** = external AI launch hub
+- **Secret Base AI** = Personal AI Workspace over Secret Base context/tools
+
 ## Purpose
 
 > Project → AI / creation tools, with a safe Command boundary for future natural language.
@@ -26,7 +29,7 @@ In-app chat lives in a separate widget: [Secret Base AI](ai-assistant.md) (`Widg
 | Claude | Official https → system browser |
 | Gemini | Official https → system browser |
 
-No OAuth, no APIs, no embedded WebView for chat.
+No OAuth, no APIs, no embedded WebView for chat. This widget remains launcher-only even after Secret Base AI finalization.
 
 ## Architecture
 
