@@ -383,6 +383,7 @@ public class AssistantServiceTests
         var result = await service.SendAsync("今日の予定は？");
         Assert.False(result.Succeeded);
         Assert.True(result.NeedsConfiguration);
+        Assert.True(result.ShowOpenSettingsAction);
         Assert.Contains(AssistantUserMessages.NotConfigured, result.ErrorMessage, StringComparison.Ordinal);
         Assert.Contains(AssistantUserMessages.OpenSettings, result.ErrorMessage, StringComparison.Ordinal);
     }
@@ -398,6 +399,21 @@ public class AssistantServiceTests
         var result = await service.SendAsync("hello");
         Assert.False(result.Succeeded);
         Assert.Equal(AssistantUserMessages.Unavailable, result.ErrorMessage);
+        Assert.True(result.CanRetry);
+    }
+
+    [Fact]
+    public async Task SurfacesAuthenticationFailure_WithSettingsHint()
+    {
+        var service = new AssistantService(
+            BuiltinAssistantToolRegistry.Instance,
+            new AssistantToolExecutor(BuiltinAssistantToolRegistry.Instance),
+            () => new UnavailableAiProvider(AssistantProviderIds.OpenAi, "OpenAI", AssistantUserMessages.AuthenticationFailed));
+
+        var result = await service.SendAsync("hello");
+        Assert.False(result.Succeeded);
+        Assert.Equal(AssistantUserMessages.AuthenticationFailed, result.ErrorMessage);
+        Assert.True(result.ShowOpenSettingsAction);
     }
 
     [Fact]

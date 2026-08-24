@@ -23,6 +23,7 @@ public sealed partial class AssistantWidgetView : UserControl
     private Func<AssistantTurnResult, string?>? _applyLaunch;
     private ThemeDefinition? _theme;
     private bool _busy;
+    private string? _lastRetryUserText;
     private readonly List<(string Kind, string Text)> _sessionLines = [];
 
     public AssistantWidgetView()
@@ -64,6 +65,8 @@ public sealed partial class AssistantWidgetView : UserControl
         ProviderStatusText.Foreground = ThemePainter.Brush(theme.ForegroundMuted);
         OnboardingText.FontFamily = font;
         OnboardingText.Foreground = ThemePainter.Brush(theme.WidgetForeground);
+        CapabilitiesText.FontFamily = font;
+        CapabilitiesText.Foreground = ThemePainter.Brush(theme.ForegroundMuted);
         StatusLabel.FontFamily = font;
         StatusLabel.Foreground = ThemePainter.Brush(theme.ForegroundMuted);
         ConfirmText.FontFamily = font;
@@ -74,6 +77,8 @@ public sealed partial class AssistantWidgetView : UserControl
         StyleActionButton(OpenSettingsFromOnboardingButton, theme, accent: true);
         StyleActionButton(ConfirmRunButton, theme, accent: true);
         StyleActionButton(ConfirmCancelButton, theme);
+        StyleActionButton(RetryButton, theme);
+        StyleActionButton(OpenSettingsFromErrorButton, theme);
         RefreshProviderStatus();
         RenderTranscript();
     }
@@ -88,7 +93,7 @@ public sealed partial class AssistantWidgetView : UserControl
                          && _secrets.TryGetSecret(AssistantSecretKeys.OpenAiApiKey, out var key)
                          && !string.IsNullOrWhiteSpace(key);
             ProviderStatusText.Text = hasKey
-                ? $"● Connected · {settings.ProviderId} · {settings.Model} · max {settings.MaxSteps} steps · key { (hasKey ? "••••••••" : "(not set)") }"
+                ? $"● Connected · {settings.ProviderId} · {settings.Model} · max {settings.MaxSteps} steps · key {(hasKey ? "••••••••" : "(not set)")}"
                 : $"○ Not configured · {settings.ProviderId} · {settings.Model}";
             OnboardingPanel.Visibility = hasKey ? Visibility.Collapsed : Visibility.Visible;
             return;
@@ -103,7 +108,7 @@ public sealed partial class AssistantWidgetView : UserControl
 
         var mark = status.IsConfigured ? "● Connected" : "○ " + status.StatusLabel;
         ProviderStatusText.Text =
-            $"{mark} · {status.ProviderId} · {status.Model} · max {status.MaxSteps} steps · key {status.ApiKeyDisplay}";
+            $"{mark} · {status.DisplayName} · {status.Model} · max {status.MaxSteps} steps · key {status.ApiKeyDisplay}";
         OnboardingPanel.Visibility = status.IsConfigured ? Visibility.Collapsed : Visibility.Visible;
     }
 
@@ -264,12 +269,14 @@ public sealed partial class AssistantWidgetView : UserControl
         _busy = true;
         SendButton.IsEnabled = false;
         InputBox.IsEnabled = false;
-        StatusLabel.Text = "Working…";
+        StatusLabel.Text = "Thinking…";
         HideConfirm();
+        HideErrorActions();
         RefreshProviderStatus();
         try
         {
             var result = await turn().ConfigureAwait(true);
+            _lastRetryUserText = result.RetryUserText;
 
             if (result.Plan is not null)
             {
@@ -320,6 +327,7 @@ public sealed partial class AssistantWidgetView : UserControl
                 var error = result.ErrorMessage ?? AssistantUserMessages.Unavailable;
                 _sessionLines.Add(("Error", error));
                 StatusLabel.Text = error;
+                ShowErrorActions(result);
                 if (result.NeedsConfiguration)
                 {
                     OnboardingPanel.Visibility = Visibility.Visible;
@@ -342,14 +350,23 @@ public sealed partial class AssistantWidgetView : UserControl
                     : launchError;
                 _sessionLines.Add(("Error", shown));
                 StatusLabel.Text = shown;
+                ShowErrorActions(new AssistantTurnResult
+                {
+                    Succeeded = false,
+                    ErrorMessage = shown,
+                    CanRetry = true,
+                    RetryUserText = _lastRetryUserText
+                });
             }
             else if (result.ShouldOpenCursorAtFolder)
             {
                 _sessionLines.Add(("Activity", "✓ " + AssistantUserMessages.CursorOpenSucceeded));
                 StatusLabel.Text = AssistantUserMessages.CursorOpenSucceeded;
+                HideErrorActions();
             }
             else
             {
+                HideErrorActions();
                 StatusLabel.Text = result.ResponseKind switch
                 {
                     AssistantResponseKind.Suggest => "Suggestion — say open/launch to run.",
@@ -365,6 +382,13 @@ public sealed partial class AssistantWidgetView : UserControl
         {
             StatusLabel.Text = AssistantUserMessages.Unavailable;
             _sessionLines.Add(("Error", AssistantUserMessages.Unavailable));
+            ShowErrorActions(new AssistantTurnResult
+            {
+                Succeeded = false,
+                ErrorMessage = AssistantUserMessages.Unavailable,
+                CanRetry = true,
+                RetryUserText = _lastRetryUserText
+            });
             RenderTranscript();
         }
         finally
@@ -382,6 +406,7 @@ public sealed partial class AssistantWidgetView : UserControl
         ConfirmActionList.Children.Clear();
         if (pending.Actions.Count > 1)
         {
+            ConfirmRunButton.Content = "Run all";
             foreach (var action in pending.Actions)
             {
                 var line = new TextBlock
@@ -398,6 +423,10 @@ public sealed partial class AssistantWidgetView : UserControl
 
                 ConfirmActionList.Children.Add(line);
             }
+        }
+        else
+        {
+            ConfirmRunButton.Content = "Run";
         }
 
         if (pending.HasRiskyAction)
@@ -426,6 +455,40 @@ public sealed partial class AssistantWidgetView : UserControl
         ConfirmPanel.Visibility = Visibility.Collapsed;
         ConfirmText.Text = string.Empty;
         ConfirmActionList.Children.Clear();
+        ConfirmRunButton.Content = "Run";
+    }
+
+    private void ShowErrorActions(AssistantTurnResult result)
+    {
+        RetryButton.Visibility = result.CanRetry && !string.IsNullOrWhiteSpace(result.RetryUserText)
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+        OpenSettingsFromErrorButton.Visibility = result.ShowOpenSettingsAction || result.NeedsConfiguration
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+        ErrorActionPanel.Visibility =
+            RetryButton.Visibility == Visibility.Visible || OpenSettingsFromErrorButton.Visibility == Visibility.Visible
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+    }
+
+    private void HideErrorActions()
+    {
+        ErrorActionPanel.Visibility = Visibility.Collapsed;
+        RetryButton.Visibility = Visibility.Collapsed;
+        OpenSettingsFromErrorButton.Visibility = Visibility.Collapsed;
+    }
+
+    private async void RetryButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_assistant is null || string.IsNullOrWhiteSpace(_lastRetryUserText))
+        {
+            return;
+        }
+
+        _sessionLines.Add(("You", _lastRetryUserText!));
+        RenderTranscript();
+        await RunTurnAsync(() => _assistant.SendAsync(_lastRetryUserText!)).ConfigureAwait(true);
     }
 
     private async void SettingsButton_Click(object sender, RoutedEventArgs e) =>
@@ -457,6 +520,24 @@ public sealed partial class AssistantWidgetView : UserControl
             Header = "Model",
             Text = settings.Model
         };
+
+        var providerHelp = new TextBlock
+        {
+            FontSize = 12,
+            Opacity = 0.85,
+            TextWrapping = TextWrapping.WrapWholeWords
+        };
+        void RefreshProviderHelp()
+        {
+            providerHelp.Text = (providerBox.SelectedItem as string) switch
+            {
+                "Gemini" => "Gemini is not implemented in this MVP yet. The provider will show as unavailable.",
+                "Local" => "Local/Ollama is not implemented in this MVP yet. The provider will show as unavailable.",
+                _ => "OpenAI is the currently supported provider. API Key is stored in Credential Manager only."
+            };
+        }
+        providerBox.SelectionChanged += (_, _) => RefreshProviderHelp();
+        RefreshProviderHelp();
 
         var maxStepsBox = new NumberBox
         {
@@ -515,6 +596,7 @@ public sealed partial class AssistantWidgetView : UserControl
 
         var panel = new StackPanel { Spacing = 8 };
         panel.Children.Add(providerBox);
+        panel.Children.Add(providerHelp);
         panel.Children.Add(modelBox);
         panel.Children.Add(maxStepsBox);
         panel.Children.Add(confirmBox);

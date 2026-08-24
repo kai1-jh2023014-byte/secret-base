@@ -28,6 +28,13 @@ public sealed class AssistantPlan
         var lines = new List<string> { "Plan:", Summary };
         foreach (var step in Steps)
         {
+            var kind = step.Kind switch
+            {
+                AssistantPlanStepKind.Read => "[Read]",
+                AssistantPlanStepKind.Suggest => "[Suggest]",
+                AssistantPlanStepKind.ConfirmAction => "[Action]",
+                _ => "[Step]"
+            };
             var mark = step.Status switch
             {
                 AssistantPlanStepStatus.Done => "✓",
@@ -38,7 +45,7 @@ public sealed class AssistantPlan
                 _ => "·"
             };
             var confirm = step.RequiresConfirmation ? " (confirm)" : string.Empty;
-            lines.Add($"{mark} {step.Index}. {step.Title}{confirm}");
+            lines.Add($"{mark} {step.Index}. {kind} {step.Title}{confirm}");
         }
 
         return string.Join('\n', lines);
@@ -55,6 +62,10 @@ public sealed class AssistantActionResult
     public bool Succeeded { get; init; }
 
     public required string Message { get; init; }
+
+    public string? Reason { get; init; }
+
+    public bool CanRetry { get; init; }
 }
 
 /// <summary>One action waiting for Cancel/Run.</summary>
