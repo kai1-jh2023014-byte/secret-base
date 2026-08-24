@@ -50,6 +50,14 @@ Formatter and tool results must not contain:
 - Absolute filesystem paths
 - Unnecessary internal identifiers beyond registered project/app ids needed for tools
 
+## Partial failure behavior
+
+If one context source fails, the snapshot still returns and marks that section unavailable (for example `Calendar unavailable`). The assistant may continue with Projects / Apps / Music / Provider data instead of failing the whole turn.
+
+## Prompt injection posture
+
+Calendar titles, project notes/descriptions, app descriptions, and music metadata are untrusted content. They are context for the model, not instructions for the host or tool executor.
+
 ## Related
 
 - [ai-assistant.md](ai-assistant.md)

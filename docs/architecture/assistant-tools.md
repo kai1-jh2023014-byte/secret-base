@@ -23,7 +23,7 @@ RequiresConfirmation
   → Command → Service → Host launch (if ShouldLaunch / ShouldOpenCursorAtFolder)
 ```
 
-## Tool catalog (v0.4)
+## Tool catalog (v0.5)
 
 ### ReadOnly
 
@@ -69,6 +69,8 @@ If only the demo catalog supports search/playback, tool results say so. Spotify/
 ## Multi-tool / multi-action
 
 Several ReadOnly/Suggest tools may run per turn (capped by `MaxSteps`). Multiple RequiresConfirmation tools in one model response are batched into one Confirm panel.
+
+v0.5 UI also distinguishes Plan step kinds (`[Read]`, `[Suggest]`, `[Action]`) so the user can see what is observation versus execution.
 
 ## Related
 

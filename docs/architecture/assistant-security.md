@@ -51,13 +51,14 @@ Unimplemented providers (Gemini, Local) return **AI provider is unavailable.** â
 
 Demo catalog and stub integrations must be labeled. Do not invent Spotify or Classroom OAuth.
 
-## Audit checklist (v0.4)
+## Audit checklist (v0.5)
 
 - [x] Tools only from `BuiltinAssistantToolRegistry`
 - [x] HostAction not registered
 - [x] Executor rejects HostAction
 - [x] Argument validator blocks path/scheme/command strings
 - [x] Context formatter omits absolute paths and secrets
+- [x] Context is labeled as untrusted data (calendar/project/app/music metadata)
 - [x] Max steps / history caps
 - [x] Action results reflect success/failure honestly
 
