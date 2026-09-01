@@ -1,5 +1,6 @@
 using System.Text.Json;
 using SecretBase.Core.Themes;
+using SecretBase.Infrastructure.Logging;
 using SecretBase.Infrastructure.Storage;
 
 namespace SecretBase.Infrastructure.Persistence;
@@ -14,11 +15,16 @@ public sealed class JsonThemeStore : IThemeStore
 {
     private readonly string _directory;
     private readonly JsonSerializerOptions _options;
+    private readonly IAppLogger? _logger;
 
-    public JsonThemeStore(string? themesDirectory = null, JsonSerializerOptions? options = null)
+    public JsonThemeStore(
+        string? themesDirectory = null,
+        JsonSerializerOptions? options = null,
+        IAppLogger? logger = null)
     {
         _directory = themesDirectory ?? AppDataPaths.ThemesDirectory;
         _options = options ?? SecretBaseJson.CreateOptions();
+        _logger = logger;
         Directory.CreateDirectory(_directory);
     }
 
@@ -27,15 +33,37 @@ public sealed class JsonThemeStore : IThemeStore
         var path = GetPath(themeId);
         if (!File.Exists(path))
         {
-            var created = ThemeDefinition.CreateDefault();
-            created.Id = themeId;
-            Save(created);
-            return created;
+            return CreateAndSaveDefault(themeId);
         }
 
-        var json = File.ReadAllText(path);
-        return JsonSerializer.Deserialize<ThemeDefinition>(json, _options)
-               ?? ThemeDefinition.CreateDefault();
+        try
+        {
+            var json = File.ReadAllText(path);
+            if (string.IsNullOrWhiteSpace(json))
+            {
+                _logger?.Warn("theme", "Theme file was empty. Restoring default theme.");
+                CorruptJsonFileRecovery.TryBackupCorruptFile(path, _logger, "theme");
+                return CreateAndSaveDefault(themeId);
+            }
+
+            var theme = JsonSerializer.Deserialize<ThemeDefinition>(json, _options);
+            if (theme is null)
+            {
+                _logger?.Warn("theme", "Theme file could not be parsed. Restoring default theme.");
+                CorruptJsonFileRecovery.TryBackupCorruptFile(path, _logger, "theme");
+                return CreateAndSaveDefault(themeId);
+            }
+
+            theme.Id = themeId;
+            return theme;
+        }
+        catch (JsonException ex)
+        {
+            _logger?.Warn("theme", "Theme file was invalid JSON. Restoring default theme.");
+            _logger?.Error("theme", "Theme JSON parse failed.", ex);
+            CorruptJsonFileRecovery.TryBackupCorruptFile(path, _logger, "theme");
+            return CreateAndSaveDefault(themeId);
+        }
     }
 
     public void Save(ThemeDefinition theme)
@@ -47,6 +75,15 @@ public sealed class JsonThemeStore : IThemeStore
         File.WriteAllText(temp, json);
         File.Copy(temp, path, overwrite: true);
         File.Delete(temp);
+    }
+
+    private ThemeDefinition CreateAndSaveDefault(string themeId)
+    {
+        var created = ThemeDefinition.CreateDefault();
+        created.Id = themeId;
+        _logger?.Info("theme", "Default theme restored.");
+        Save(created);
+        return created;
     }
 
     private string GetPath(string themeId) =>

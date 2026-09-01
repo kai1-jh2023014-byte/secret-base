@@ -2,6 +2,7 @@ using System.Text.Json;
 using SecretBase.Core.Blocks;
 using SecretBase.Core.Desktop;
 using SecretBase.Core.Widgets;
+using SecretBase.Infrastructure.Logging;
 using SecretBase.Infrastructure.Storage;
 
 namespace SecretBase.Infrastructure.Persistence;
@@ -16,11 +17,16 @@ public sealed class JsonLayoutStore : ILayoutStore
 {
     private readonly string _directory;
     private readonly JsonSerializerOptions _options;
+    private readonly IAppLogger? _logger;
 
-    public JsonLayoutStore(string? layoutsDirectory = null, JsonSerializerOptions? options = null)
+    public JsonLayoutStore(
+        string? layoutsDirectory = null,
+        JsonSerializerOptions? options = null,
+        IAppLogger? logger = null)
     {
         _directory = layoutsDirectory ?? AppDataPaths.LayoutsDirectory;
         _options = options ?? SecretBaseJson.CreateOptions();
+        _logger = logger;
         Directory.CreateDirectory(_directory);
     }
 
@@ -29,23 +35,37 @@ public sealed class JsonLayoutStore : ILayoutStore
         var path = GetPath(roomId);
         if (!File.Exists(path))
         {
-            var created = DesktopLayout.CreateDefault();
-            // Ensure room id matches request (future multi-room).
-            if (!Equals(created.RoomId, roomId))
-            {
-                created = CloneForRoom(created, roomId);
-            }
-
-            Save(created);
-            return created;
+            return CreateAndSaveDefault(roomId);
         }
 
-        var json = File.ReadAllText(path);
-        var layout = JsonSerializer.Deserialize<DesktopLayout>(json, _options)
-                     ?? DesktopLayout.CreateDefault();
+        try
+        {
+            var json = File.ReadAllText(path);
+            if (string.IsNullOrWhiteSpace(json))
+            {
+                _logger?.Warn("layout", "Layout file was empty. Restoring default layout.");
+                CorruptJsonFileRecovery.TryBackupCorruptFile(path, _logger, "layout");
+                return CreateAndSaveDefault(roomId);
+            }
 
-        NormalizeLayout(layout);
-        return layout;
+            var layout = JsonSerializer.Deserialize<DesktopLayout>(json, _options);
+            if (layout is null)
+            {
+                _logger?.Warn("layout", "Layout file could not be parsed. Restoring default layout.");
+                CorruptJsonFileRecovery.TryBackupCorruptFile(path, _logger, "layout");
+                return CreateAndSaveDefault(roomId);
+            }
+
+            NormalizeLayout(layout);
+            return layout;
+        }
+        catch (JsonException ex)
+        {
+            _logger?.Warn("layout", "Layout file was invalid JSON. Restoring default layout.");
+            _logger?.Error("layout", "Layout JSON parse failed.", ex);
+            CorruptJsonFileRecovery.TryBackupCorruptFile(path, _logger, "layout");
+            return CreateAndSaveDefault(roomId);
+        }
     }
 
     public void Save(DesktopLayout layout)
@@ -58,6 +78,19 @@ public sealed class JsonLayoutStore : ILayoutStore
         File.WriteAllText(temp, json);
         File.Copy(temp, path, overwrite: true);
         File.Delete(temp);
+    }
+
+    private DesktopLayout CreateAndSaveDefault(RoomId roomId)
+    {
+        var created = DesktopLayout.CreateDefault();
+        if (!Equals(created.RoomId, roomId))
+        {
+            created = CloneForRoom(created, roomId);
+        }
+
+        _logger?.Info("layout", "Default layout restored.");
+        Save(created);
+        return created;
     }
 
     private static void NormalizeLayout(DesktopLayout layout)
