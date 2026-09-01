@@ -19,6 +19,7 @@ public partial class App : Application
     private IAppLogger? _logger;
     private ICompatibilityService? _compatibility;
     private ISafeExitService? _safeExit;
+    private ISingleInstanceGuard? _singleInstance;
 
     public App()
     {
@@ -27,7 +28,58 @@ public partial class App : Application
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
-        _logger = new FileAppLogger(AppDataPaths.LogsDirectory);
+        FileAppLogger? bootstrapLogger = null;
+        try
+        {
+            bootstrapLogger = new FileAppLogger(AppDataPaths.LogsDirectory);
+            _singleInstance = new WindowsMutexSingleInstanceGuard();
+            if (!_singleInstance.TryAcquire())
+            {
+                bootstrapLogger.Info("startup", "Another Secret Base instance is already running. Exiting.");
+                _singleInstance.Dispose();
+                _singleInstance = null;
+                bootstrapLogger.Dispose();
+                Exit();
+                return;
+            }
+
+            RunStartup(bootstrapLogger);
+        }
+        catch (Exception ex)
+        {
+            try
+            {
+                bootstrapLogger ??= TryCreateBootstrapLogger();
+                bootstrapLogger?.Error("startup", "Secret Base could not start.", ex);
+            }
+            catch
+            {
+                // Logging must not prevent shutdown.
+            }
+
+            try
+            {
+                StartupFailurePresenter.ShowBlocking(ex.Message, AppDataPaths.RootDirectory);
+            }
+            catch
+            {
+                // Dialog failure must not prevent shutdown.
+            }
+
+            try
+            {
+                Exit();
+            }
+            catch
+            {
+                Environment.Exit(1);
+            }
+        }
+    }
+
+    private void RunStartup(FileAppLogger logger)
+    {
+        _logger = logger;
         _compatibility = new WindowsCompatibilityService(windowsAppSdkPackageVersion: "2.3.1");
         _safeExit = new ProcessSafeExitService(() =>
         {
@@ -60,8 +112,8 @@ public partial class App : Application
             Logger: _logger,
             SafeExit: _safeExit,
             Compatibility: info,
-            LayoutStore: new JsonLayoutStore(),
-            ThemeStore: new JsonThemeStore(),
+            LayoutStore: new JsonLayoutStore(logger: _logger),
+            ThemeStore: new JsonThemeStore(logger: _logger),
             TimeProvider: new SystemTimeProvider(),
             Launcher: new ShellTargetLaunchService(),
             Icons: new ShellFileIconService(AppDataPaths.IconsDirectory),
@@ -77,6 +129,8 @@ public partial class App : Application
         _window.Closed += (_, _) =>
         {
             _logger?.Info("lifecycle", "Main window closed. Returning to normal Windows desktop.");
+            _singleInstance?.Dispose();
+            _singleInstance = null;
             if (_logger is IDisposable disposable)
             {
                 disposable.Dispose();
@@ -84,5 +138,17 @@ public partial class App : Application
         };
         _window.Activate();
         _logger.Info("overlay", "Host activated; Blocks + widgets; SetWindowRgn input; HWND_BOTTOM Z-order.");
+    }
+
+    private static FileAppLogger? TryCreateBootstrapLogger()
+    {
+        try
+        {
+            return new FileAppLogger(AppDataPaths.LogsDirectory);
+        }
+        catch
+        {
+            return null;
+        }
     }
 }
