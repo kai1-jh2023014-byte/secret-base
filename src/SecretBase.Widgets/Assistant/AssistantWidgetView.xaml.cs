@@ -222,6 +222,12 @@ public sealed partial class AssistantWidgetView : UserControl
             return;
         }
 
+        if (_assistant.HasPendingConfirmation)
+        {
+            StatusLabel.Text = AssistantUserMessages.PendingConfirmationMustResolve;
+            return;
+        }
+
         var text = InputBox.Text?.Trim() ?? string.Empty;
         if (string.IsNullOrWhiteSpace(text))
         {
@@ -236,7 +242,7 @@ public sealed partial class AssistantWidgetView : UserControl
 
     private async void ConfirmRun_Click(object sender, RoutedEventArgs e)
     {
-        if (_assistant is null)
+        if (_assistant is null || _busy)
         {
             return;
         }
@@ -394,8 +400,11 @@ public sealed partial class AssistantWidgetView : UserControl
         finally
         {
             _busy = false;
-            SendButton.IsEnabled = true;
-            InputBox.IsEnabled = true;
+            var awaitingConfirm = _assistant?.HasPendingConfirmation ?? false;
+            SendButton.IsEnabled = !awaitingConfirm;
+            InputBox.IsEnabled = !awaitingConfirm;
+            ConfirmRunButton.IsEnabled = awaitingConfirm;
+            ConfirmCancelButton.IsEnabled = awaitingConfirm;
             RefreshProviderStatus();
         }
     }
@@ -481,7 +490,8 @@ public sealed partial class AssistantWidgetView : UserControl
 
     private async void RetryButton_Click(object sender, RoutedEventArgs e)
     {
-        if (_assistant is null || string.IsNullOrWhiteSpace(_lastRetryUserText))
+        if (_assistant is null || string.IsNullOrWhiteSpace(_lastRetryUserText)
+            || _assistant.HasPendingConfirmation)
         {
             return;
         }
@@ -548,10 +558,12 @@ public sealed partial class AssistantWidgetView : UserControl
             SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline
         };
 
-        var confirmBox = new ToggleSwitch
+        var confirmNote = new TextBlock
         {
-            Header = "Require confirmation for actions",
-            IsOn = settings.RequireConfirmationForActions
+            Text = "Launch actions always require Run confirmation in v0.5.",
+            FontSize = 12,
+            Opacity = 0.85,
+            TextWrapping = TextWrapping.WrapWholeWords
         };
 
         var hasKey = _secrets.TryGetSecret(AssistantSecretKeys.OpenAiApiKey, out var existing)
@@ -578,7 +590,7 @@ public sealed partial class AssistantWidgetView : UserControl
         var testButton = new Button { Content = "Test Connection", MinWidth = 120 };
         testButton.Click += async (_, _) =>
         {
-            PersistSettingsFromDialog(providerBox, modelBox, maxStepsBox, confirmBox, keyBox, keepExistingIfBlank: true);
+            PersistSettingsFromDialog(providerBox, modelBox, maxStepsBox, keyBox, keepExistingIfBlank: true);
             var current = AssistantSettingsMigrator.MigrateToCurrent(_settingsStore.LoadOrCreate());
             var provider = _providers.Create(current);
             var ping = await provider.ChatAsync(
@@ -599,7 +611,7 @@ public sealed partial class AssistantWidgetView : UserControl
         panel.Children.Add(providerHelp);
         panel.Children.Add(modelBox);
         panel.Children.Add(maxStepsBox);
-        panel.Children.Add(confirmBox);
+        panel.Children.Add(confirmNote);
         panel.Children.Add(keyStatus);
         panel.Children.Add(keyBox);
         panel.Children.Add(testButton);
@@ -620,7 +632,7 @@ public sealed partial class AssistantWidgetView : UserControl
             return;
         }
 
-        PersistSettingsFromDialog(providerBox, modelBox, maxStepsBox, confirmBox, keyBox, keepExistingIfBlank: true);
+        PersistSettingsFromDialog(providerBox, modelBox, maxStepsBox, keyBox, keepExistingIfBlank: true);
         StatusLabel.Text = "AI settings saved.";
         RefreshProviderStatus();
     }
@@ -629,7 +641,6 @@ public sealed partial class AssistantWidgetView : UserControl
         ComboBox providerBox,
         TextBox modelBox,
         NumberBox maxStepsBox,
-        ToggleSwitch confirmBox,
         PasswordBox keyBox,
         bool keepExistingIfBlank)
     {
@@ -652,7 +663,7 @@ public sealed partial class AssistantWidgetView : UserControl
             double.IsNaN(maxStepsBox.Value) ? AssistantSettings.DefaultMaxSteps : maxStepsBox.Value,
             AssistantSettings.MinMaxSteps,
             AssistantSettings.MaxStepsHardCap);
-        settings.RequireConfirmationForActions = confirmBox.IsOn;
+        settings.RequireConfirmationForActions = true;
         _settingsStore.Save(settings);
 
         var typed = keyBox.Password?.Trim();

@@ -35,6 +35,8 @@ Context → Plan → Confirmation → Action → Result
 
 Steps are clamped by `AssistantSettings.MaxSteps` (default **5**, hard cap **8**).
 
+**Step budget semantics (v0.5):** each executed tool consumes one step. Pending confirmation actions **reserve** steps when queued, so Run never fails with `MaxStepsReached` after reads. If a confirm action cannot fit within the remaining budget, it is rejected safely and no confirm prompt is shown.
+
 ## Autonomy ceiling
 
 **Allowed:** ReadOnly context, Suggest tools, Plan UI, propose confirm actions, execute existing Commands after Run.
