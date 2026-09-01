@@ -61,6 +61,8 @@ public sealed class AssistantService : IAssistantService
 
     public AssistantProviderStatusInfo? ProviderStatus => _context?.GetProviderStatus();
 
+    public bool HasPendingConfirmation => _pending is not null;
+
     public void ClearSession()
     {
         _history.Clear();
@@ -77,7 +79,11 @@ public sealed class AssistantService : IAssistantService
 
     public async Task<AssistantTurnResult> SendAsync(string userText, CancellationToken cancellationToken = default)
     {
-        _pending = null;
+        if (_pending is not null)
+        {
+            return AssistantTurnResult.Fail(AssistantUserMessages.PendingConfirmationMustResolve);
+        }
+
         _turnActivities.Clear();
         _actionResults.Clear();
         _lastLaunch = null;
@@ -145,17 +151,6 @@ public sealed class AssistantService : IAssistantService
 
         foreach (var action in pending.Actions)
         {
-            if (_stepsUsed >= MaxStepsForTurn())
-            {
-                _history.Add(new AiMessage
-                {
-                    Role = AiMessageRole.Tool,
-                    ToolCallId = action.ToolCallId,
-                    Content = AssistantUserMessages.MaxStepsReached
-                });
-                break;
-            }
-
             var executed = await ExecuteAndRecordAsync(
                     action.ToolCallId,
                     action.ToolName,
@@ -325,17 +320,6 @@ public sealed class AssistantService : IAssistantService
 
             foreach (var call in response.ToolCalls)
             {
-                if (_stepsUsed >= MaxStepsForTurn())
-                {
-                    _history.Add(new AiMessage
-                    {
-                        Role = AiMessageRole.Tool,
-                        ToolCallId = call.Id,
-                        Content = AssistantUserMessages.MaxStepsReached
-                    });
-                    continue;
-                }
-
                 var tool = _registry.Find(call.Name);
                 if (tool is null || AssistantConfirmationPolicy.IsHostActionOnly(tool))
                 {
@@ -348,8 +332,19 @@ public sealed class AssistantService : IAssistantService
                     continue;
                 }
 
-                if (AssistantConfirmationPolicy.RequiresConfirmation(tool) && settings.RequireConfirmationForActions)
+                if (AssistantConfirmationPolicy.RequiresConfirmation(tool))
                 {
+                    if (!HasStepBudget(pendingActions.Count, additionalSteps: 1))
+                    {
+                        _history.Add(new AiMessage
+                        {
+                            Role = AiMessageRole.Tool,
+                            ToolCallId = call.Id,
+                            Content = AssistantUserMessages.MaxStepsReached
+                        });
+                        continue;
+                    }
+
                     pendingActions.Add(new AssistantPendingAction
                     {
                         ToolCallId = call.Id,
@@ -358,6 +353,17 @@ public sealed class AssistantService : IAssistantService
                         Label = AssistantConfirmationPolicy.Label(tool.Name, call.ArgumentsJson)
                     });
                     risky |= AssistantConfirmationPolicy.IsRisky(tool);
+                    continue;
+                }
+
+                if (!HasStepBudget(pendingActions.Count, additionalSteps: 1))
+                {
+                    _history.Add(new AiMessage
+                    {
+                        Role = AiMessageRole.Tool,
+                        ToolCallId = call.Id,
+                        Content = AssistantUserMessages.MaxStepsReached
+                    });
                     continue;
                 }
 
@@ -390,6 +396,21 @@ public sealed class AssistantService : IAssistantService
 
             if (pendingActions.Count > 0)
             {
+                if (!HasStepBudget(pendingActions.Count, additionalSteps: 0))
+                {
+                    foreach (var action in pendingActions)
+                    {
+                        _history.Add(new AiMessage
+                        {
+                            Role = AiMessageRole.Tool,
+                            ToolCallId = action.ToolCallId,
+                            Content = AssistantUserMessages.MaxStepsReached
+                        });
+                    }
+
+                    continue;
+                }
+
                 var prompt = AssistantConfirmationPolicy.PromptForActions(pendingActions);
                 if (risky && pendingActions.Count > 1)
                 {
@@ -594,6 +615,13 @@ public sealed class AssistantService : IAssistantService
         list.AddRange(_history.TakeLast(MaxVisibleMessages));
         return list;
     }
+
+    /// <summary>
+    /// Step budget: executed tools plus queued confirmations must fit within MaxSteps.
+    /// Pending actions reserve capacity so Run never hits MaxStepsReached after reads.
+    /// </summary>
+    private bool HasStepBudget(int pendingQueuedCount, int additionalSteps = 1) =>
+        _stepsUsed + pendingQueuedCount + additionalSteps <= MaxStepsForTurn();
 
     private int MaxStepsForTurn() =>
         Math.Clamp(

@@ -142,6 +142,9 @@ public interface IAssistantService
 
     AssistantProviderStatusInfo? ProviderStatus { get; }
 
+    /// <summary>True while one or more Host actions await explicit Run/Cancel.</summary>
+    bool HasPendingConfirmation { get; }
+
     void ClearSession();
 
     Task<AssistantTurnResult> SendAsync(string userText, CancellationToken cancellationToken = default);

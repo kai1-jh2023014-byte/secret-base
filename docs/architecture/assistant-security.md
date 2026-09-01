@@ -41,7 +41,7 @@ Host (Platform launch APIs only)
 
 ## Confirmation
 
-RequiresConfirmation tools never auto-run when `RequireConfirmationForActions` is true (default). Host launches only after **Run**.
+Launch tools (`RequiresConfirmation`) always pause for **Run** in v0.5. There is no auto-run toggle; `RequireConfirmationForActions` is persisted as `true` for schema compatibility only.
 
 ## Provider honesty
 

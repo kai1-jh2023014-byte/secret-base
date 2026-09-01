@@ -22,7 +22,9 @@ public sealed class AssistantSettings
     /// <summary>Max plan / tool steps per user turn (not an infinite agent loop).</summary>
     public int MaxSteps { get; set; } = DefaultMaxSteps;
 
-    /// <summary>When true (default), RequiresConfirmation tools always pause for Cancel/Run.</summary>
+    /// <summary>
+    /// v0.5: always treated as true. Launch tools never auto-run; kept for JSON schema compatibility only.
+    /// </summary>
     public bool RequireConfirmationForActions { get; set; } = true;
 }
 
@@ -65,6 +67,7 @@ public static class AssistantSettingsMigrator
         }
 
         doc.MaxSteps = Math.Clamp(doc.MaxSteps, AssistantSettings.MinMaxSteps, AssistantSettings.MaxStepsHardCap);
+        doc.RequireConfirmationForActions = true;
         return doc;
     }
 }

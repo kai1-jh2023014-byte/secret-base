@@ -65,4 +65,6 @@ public static class AssistantUserMessages
     public const string CursorOpenSucceeded = "Opened the project in Cursor.";
     public const string ActionCancelled = "Cancelled.";
     public const string MaxStepsReached = "Stopped after the maximum number of steps.";
+    public const string PendingConfirmationMustResolve =
+        "Resolve the pending confirmation with Run or Cancel before sending a new message.";
 }
