@@ -93,4 +93,6 @@ public sealed record DesktopPageArgs(
     CreativeCommandService? CreativeCommands = null,
     ICursorLaunchService? CursorLaunch = null,
     AiCommandService? AiCommands = null,
-    AppCommandService? AppCommands = null);
+    AppCommandService? AppCommands = null,
+    IAutoStartService? AutoStart = null,
+    IAppLaunchSettingsStore? LaunchSettingsStore = null);

@@ -29,9 +29,14 @@ public partial class App : Application
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
         FileAppLogger? bootstrapLogger = null;
+        var isAutoStartLaunch = StartupLaunchMode.IsAutoStartLaunch;
         try
         {
             bootstrapLogger = new FileAppLogger(AppDataPaths.LogsDirectory);
+            if (isAutoStartLaunch)
+            {
+                bootstrapLogger.Info("startup", "Auto-start launch detected.");
+            }
             _singleInstance = new WindowsMutexSingleInstanceGuard();
             if (!_singleInstance.TryAcquire())
             {
@@ -59,7 +64,8 @@ public partial class App : Application
 
             try
             {
-                StartupFailurePresenter.ShowBlocking(ex.Message, AppDataPaths.RootDirectory);
+                var silent = StartupLaunchMode.IsAutoStartLaunch;
+                StartupFailurePresenter.ShowBlocking(ex.Message, AppDataPaths.RootDirectory, silentUi: silent);
             }
             catch
             {
@@ -95,6 +101,9 @@ public partial class App : Application
 
         var pathPicker = new WindowsPathPickService();
         var cursorLaunch = new WindowsCursorLaunchService();
+        var launchSettingsStore = new JsonAppLaunchSettingsStore();
+        var autoStart = new WindowsRegistryAutoStartService();
+        AutoStartCoordinator.SynchronizeAtStartup(autoStart, launchSettingsStore, _logger);
         var projectService = new CreativeProjectService(new JsonCreativeProjectStore());
         var aiCommands = new AiCommandService(
             AiWorkspaceWidgetConfiguration.CreateDefault(),
@@ -122,7 +131,9 @@ public partial class App : Application
             CreativeCommands: creativeCommands,
             CursorLaunch: cursorLaunch,
             AiCommands: aiCommands,
-            AppCommands: appCommands);
+            AppCommands: appCommands,
+            AutoStart: autoStart,
+            LaunchSettingsStore: launchSettingsStore);
 
         IDesktopOverlayService overlay = new AppWindowDesktopOverlayService();
         _window = new MainWindow(pageArgs, overlay);

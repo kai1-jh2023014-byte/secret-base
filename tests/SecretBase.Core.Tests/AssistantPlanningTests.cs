@@ -88,6 +88,7 @@ public class AssistantPlanningWorkflowTests
     {
         var day = new DateOnly(2026, 8, 24);
         var offset = TimeSpan.FromHours(9);
+        var fixedTime = new PlanningFixedTime(new DateTimeOffset(day.ToDateTime(new TimeOnly(9, 0)), offset));
         var calendar = new CalendarCommandService(
             new CalendarService(
             [
@@ -102,7 +103,7 @@ public class AssistantPlanningWorkflowTests
                     }
                 ])
             ]),
-            new PlanningFixedTime(new DateTimeOffset(day.ToDateTime(new TimeOnly(9, 0)), offset)));
+            fixedTime);
 
         var projects = new CreativeProjectService(new MemoryCreativeProjectStore());
         Assert.True(projects.TryCreate(
@@ -120,6 +121,7 @@ public class AssistantPlanningWorkflowTests
             calendar: calendar,
             creative: creative,
             music: new MusicCommandService(new MusicService()),
+            time: fixedTime,
             settings: () => new AssistantSettings { MaxSteps = 5 },
             isOpenAiKeyConfigured: () => true);
 
@@ -306,6 +308,28 @@ public class AssistantPlanningWorkflowTests
 
         Assert.True(service.VisibleHistory.Count <= AssistantService.MaxVisibleMessages);
         Assert.DoesNotContain(service.VisibleHistory, m => (m.Content ?? string.Empty).Contains("sk-", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void ComputeFreeTime_UsesOffsetCalendarDate_NotMachineLocalTimezone()
+    {
+        // 2026-08-24 09:00 +09:00 — calendar date must stay Aug 24 even when machine TZ differs.
+        var now = new DateTimeOffset(2026, 8, 24, 9, 0, 0, TimeSpan.FromHours(9));
+        var events = new[]
+        {
+            new CalendarEvent
+            {
+                Title = "東進",
+                Provider = CalendarProviderIds.Local,
+                Start = new DateTimeOffset(2026, 8, 24, 14, 0, 0, TimeSpan.FromHours(9)),
+                End = new DateTimeOffset(2026, 8, 24, 16, 0, 0, TimeSpan.FromHours(9))
+            }
+        };
+
+        var free = AssistantContextService.ComputeFreeTime(events, now);
+
+        Assert.NotEmpty(free);
+        Assert.All(free, slot => Assert.Equal(TimeSpan.FromHours(9), slot.Start.Offset));
     }
 
     [Fact]

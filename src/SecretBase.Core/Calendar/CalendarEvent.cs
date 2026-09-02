@@ -37,15 +37,15 @@ public sealed class CalendarEvent
 
     public DateTimeOffset? LastUpdated { get; set; }
 
-    public DateOnly LocalDate => DateOnly.FromDateTime(Start.DateTime);
+    public DateOnly LocalDate => ToCalendarDate(Start);
 
     public bool OccursOn(DateOnly localDate)
     {
-        // Use DateTime (offset-preserving wall clock), not LocalDateTime (system-zone conversion).
-        var startDate = DateOnly.FromDateTime(Start.DateTime);
+        // Calendar date in the event's own offset — not machine local TZ.
+        var startDate = ToCalendarDate(Start);
         var endInstant = End;
-        var endDate = DateOnly.FromDateTime(endInstant.DateTime);
-        if (IsAllDay && endInstant > Start && endInstant.DateTime.TimeOfDay == TimeSpan.Zero)
+        var endDate = ToCalendarDate(endInstant);
+        if (IsAllDay && endInstant > Start && IsMidnightInOffset(endInstant))
         {
             endDate = endDate.AddDays(-1);
         }
@@ -57,4 +57,10 @@ public sealed class CalendarEvent
 
         return localDate >= startDate && localDate <= endDate;
     }
+
+    private static DateOnly ToCalendarDate(DateTimeOffset instant) =>
+        new(instant.Year, instant.Month, instant.Day);
+
+    private static bool IsMidnightInOffset(DateTimeOffset instant) =>
+        instant.Hour == 0 && instant.Minute == 0 && instant.Second == 0 && instant.Millisecond == 0;
 }

@@ -22,6 +22,20 @@ public class CalendarEventTests
     }
 
     [Fact]
+    public void OccursOn_TimedEvent_UsesEventOffsetCalendarDate_NotMachineLocalTimezone()
+    {
+        var ev = new CalendarEvent
+        {
+            Title = "東進",
+            Start = new DateTimeOffset(2026, 8, 24, 14, 0, 0, TimeSpan.FromHours(9)),
+            End = new DateTimeOffset(2026, 8, 24, 16, 0, 0, TimeSpan.FromHours(9))
+        };
+
+        Assert.True(ev.OccursOn(new DateOnly(2026, 8, 24)));
+        Assert.False(ev.OccursOn(new DateOnly(2026, 8, 23)));
+    }
+
+    [Fact]
     public void OccursOn_AllDayExclusiveEnd_IncludesStartDayOnly()
     {
         var start = new DateTimeOffset(new DateOnly(2026, 8, 13).ToDateTime(TimeOnly.MinValue), TimeSpan.Zero);

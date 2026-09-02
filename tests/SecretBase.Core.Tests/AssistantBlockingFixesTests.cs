@@ -363,8 +363,13 @@ public class AssistantStepBudgetTests
             () => new AssistantSettings { MaxSteps = 1 });
 
         var result = await service.SendAsync("today and upcoming");
-        Assert.True(result.Succeeded);
+        Assert.False(result.Succeeded);
+        Assert.Equal(AssistantUserMessages.MaxStepsReached, result.ErrorMessage);
         Assert.Null(result.PendingConfirmation);
+        Assert.True(result.CanRetry);
+        Assert.Equal(
+            1,
+            result.Activities.Count(a => a.Status == AssistantActivityStatus.Done));
     }
 }
 

@@ -17,4 +17,4 @@ if (-not (Test-Path $sln)) {
     throw "Solution not found at: $sln"
 }
 
-dotnet test $sln -c Debug
+dotnet test $sln -c Debug -p:Platform=x64

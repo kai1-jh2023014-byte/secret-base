@@ -6,6 +6,7 @@ using SecretBase.Infrastructure.Persistence;
 
 namespace SecretBase.Infrastructure.Tests;
 
+[Collection(nameof(CorruptJsonRecoverySerialTests))]
 public class CorruptLayoutRecoveryTests
 {
     [Fact]
@@ -105,32 +106,31 @@ public class CorruptLayoutRecoveryTests
     [Fact]
     public void LoadOrCreateDefault_MalformedJsonWhenBackupFails_StillRestoresDefault()
     {
-        if (!OperatingSystem.IsWindows())
-        {
-            return;
-        }
-
         var dir = CreateTempDir();
+        var fixedUtc = new DateTime(2026, 9, 1, 12, 30, 45, DateTimeKind.Utc);
+        CorruptJsonFileRecovery.SetTestUtcNowForTests(fixedUtc);
         try
         {
             var path = Path.Combine(dir, "default.layout.json");
+            var blockedBackup = Path.Combine(dir, "default.layout.corrupt-2026-09-01T123045Z.json");
+            File.WriteAllText(blockedBackup, "existing-backup");
             File.WriteAllText(path, "{ not-valid-json");
 
-            using var lockStream = new FileStream(
-                path,
-                FileMode.Open,
-                FileAccess.Read,
-                FileShare.None);
-
-            var store = new JsonLayoutStore(dir);
+            var logger = new TestAppLogger();
+            var store = new JsonLayoutStore(dir, logger: logger);
             var layout = store.LoadOrCreateDefault(RoomId.DefaultRoomId);
 
             Assert.Equal(2, layout.Widgets.Count);
             Assert.Contains(layout.Widgets, w => w.Type == WidgetTypes.Clock);
-            Assert.True(File.Exists(Path.Combine(dir, "default.layout.json")));
+            Assert.True(File.Exists(path));
+            Assert.DoesNotContain("not-valid-json", File.ReadAllText(path), StringComparison.Ordinal);
+            Assert.Equal("existing-backup", File.ReadAllText(blockedBackup));
+            Assert.Contains(logger.Warnings, m => m.Contains("Could not back up corrupt file", StringComparison.Ordinal));
+            Assert.Contains(logger.Infos, m => m.Contains("Default layout restored", StringComparison.Ordinal));
         }
         finally
         {
+            CorruptJsonFileRecovery.ClearTestUtcNowForTests();
             Directory.Delete(dir, recursive: true);
         }
     }
@@ -143,6 +143,7 @@ public class CorruptLayoutRecoveryTests
     }
 }
 
+[Collection(nameof(CorruptJsonRecoverySerialTests))]
 public class CorruptThemeRecoveryTests
 {
     [Fact]
@@ -240,31 +241,30 @@ public class CorruptThemeRecoveryTests
     [Fact]
     public void LoadOrCreateDefault_MalformedJsonWhenBackupFails_StillRestoresDefault()
     {
-        if (!OperatingSystem.IsWindows())
-        {
-            return;
-        }
-
         var dir = CreateTempDir();
+        var fixedUtc = new DateTime(2026, 9, 1, 12, 30, 45, DateTimeKind.Utc);
+        CorruptJsonFileRecovery.SetTestUtcNowForTests(fixedUtc);
         try
         {
             var path = Path.Combine(dir, "default.theme.json");
+            var blockedBackup = Path.Combine(dir, "default.theme.corrupt-2026-09-01T123045Z.json");
+            File.WriteAllText(blockedBackup, "existing-backup");
             File.WriteAllText(path, "{ broken");
 
-            using var lockStream = new FileStream(
-                path,
-                FileMode.Open,
-                FileAccess.Read,
-                FileShare.None);
-
-            var store = new JsonThemeStore(dir);
+            var logger = new TestAppLogger();
+            var store = new JsonThemeStore(dir, logger: logger);
             var theme = store.LoadOrCreateDefault("default");
 
             Assert.Equal(ThemeDefinition.CreateDefault().Accent, theme.Accent);
-            Assert.True(File.Exists(Path.Combine(dir, "default.theme.json")));
+            Assert.True(File.Exists(path));
+            Assert.DoesNotContain("broken", File.ReadAllText(path), StringComparison.Ordinal);
+            Assert.Equal("existing-backup", File.ReadAllText(blockedBackup));
+            Assert.Contains(logger.Warnings, m => m.Contains("Could not back up corrupt file", StringComparison.Ordinal));
+            Assert.Contains(logger.Infos, m => m.Contains("Default theme restored", StringComparison.Ordinal));
         }
         finally
         {
+            CorruptJsonFileRecovery.ClearTestUtcNowForTests();
             Directory.Delete(dir, recursive: true);
         }
     }
@@ -275,6 +275,10 @@ public class CorruptThemeRecoveryTests
         Directory.CreateDirectory(dir);
         return dir;
     }
+}
+
+public sealed class CorruptJsonRecoverySerialTests
+{
 }
 
 internal sealed class TestAppLogger : IAppLogger

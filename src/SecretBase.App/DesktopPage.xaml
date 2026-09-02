@@ -169,6 +169,12 @@
                     Click="ExitButton_Click"
                     Padding="12,4"
                     ToolTipService.ToolTip="Exit Secret Base (Ctrl+Shift+Q)" />
+                <ToggleSwitch
+                    x:Name="AutoStartToggle"
+                    OffContent="Start at login: Off"
+                    OnContent="Start at login: On"
+                    Toggled="AutoStartToggle_Toggled"
+                    ToolTipService.ToolTip="Register Secret Base in Windows Startup apps (per-user)" />
             </StackPanel>
         </Border>
     </Grid>

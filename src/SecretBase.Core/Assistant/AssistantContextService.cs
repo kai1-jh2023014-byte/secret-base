@@ -348,7 +348,8 @@ public sealed class AssistantContextService : IAssistantContextService
         TimeSpan? workStart = null,
         TimeSpan? workEnd = null)
     {
-        var day = DateOnly.FromDateTime(now.DateTime);
+        // Use the calendar date in now's own offset — not the machine local timezone.
+        var day = new DateOnly(now.Year, now.Month, now.Day);
         var startOfDay = new DateTimeOffset(day.ToDateTime(TimeOnly.FromTimeSpan(workStart ?? new TimeSpan(9, 0, 0))), now.Offset);
         var endOfDay = new DateTimeOffset(day.ToDateTime(TimeOnly.FromTimeSpan(workEnd ?? new TimeSpan(18, 0, 0))), now.Offset);
         if (endOfDay <= startOfDay)
