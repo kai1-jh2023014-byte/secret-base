@@ -46,4 +46,11 @@ public sealed class LocalMusicProvider : IMusicProvider
 
     public Task PreviousAsync(CancellationToken cancellationToken = default) =>
         Task.FromException(new NotSupportedException("Local music previous is not available yet."));
+
+    public Task ConnectAsync(CancellationToken cancellationToken = default) =>
+        Task.FromException(new NotSupportedException("Local music connect is not available yet."));
+
+    public Task DisconnectAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+    public Task RefreshPlaybackStateAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
 }

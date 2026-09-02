@@ -11,21 +11,91 @@
         x:Name="RootBorder"
         Padding="20,16"
         Background="#CC243447"
-        CornerRadius="16">
-        <StackPanel VerticalAlignment="Center" Spacing="4">
-            <TextBlock
-                x:Name="TimeText"
-                Text="00:00:00"
-                FontSize="40"
-                FontWeight="SemiBold"
-                Foreground="#FFF4F0E6"
-                HorizontalAlignment="Center" />
-            <TextBlock
-                x:Name="DateText"
-                Text="2026 / 01 / 01"
-                FontSize="16"
-                Foreground="#FF9AA7B2"
-                HorizontalAlignment="Center" />
-        </StackPanel>
+        CornerRadius="16"
+        BorderThickness="1"
+        BorderBrush="#44FFFFFF">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <Button
+                x:Name="SettingsButton"
+                Grid.Row="0"
+                Content="⋯"
+                HorizontalAlignment="Right"
+                VerticalAlignment="Top"
+                MinWidth="28"
+                MinHeight="24"
+                Padding="4,0"
+                Opacity="0.65"
+                Click="SettingsButton_Click"
+                ToolTipService.ToolTip="Clock style and format" />
+
+            <Grid x:Name="DigitalPanel" Grid.Row="1" VerticalAlignment="Center">
+                <StackPanel VerticalAlignment="Center" Spacing="4">
+                    <TextBlock
+                        x:Name="TimeText"
+                        Text="00:00:00"
+                        FontSize="40"
+                        FontWeight="SemiBold"
+                        Foreground="#FFF4F0E6"
+                        HorizontalAlignment="Center"
+                        TextAlignment="Center" />
+                    <TextBlock
+                        x:Name="DateText"
+                        Text="Wednesday&#x0a;September 2"
+                        FontSize="16"
+                        Foreground="#FF9AA7B2"
+                        HorizontalAlignment="Center"
+                        TextAlignment="Center"
+                        TextWrapping="WrapWholeWords" />
+                </StackPanel>
+            </Grid>
+
+            <Canvas
+                x:Name="AnalogPanel"
+                Grid.Row="1"
+                Width="120"
+                Height="120"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center"
+                Visibility="Collapsed">
+                <Ellipse
+                    x:Name="AnalogFace"
+                    Width="120"
+                    Height="120"
+                    Stroke="#66FFFFFF"
+                    StrokeThickness="2" />
+                <Line
+                    x:Name="HourHand"
+                    X1="60"
+                    Y1="60"
+                    X2="60"
+                    Y2="34"
+                    StrokeThickness="3"
+                    Stroke="#FFF4F0E6"
+                    StrokeStartLineCap="Round"
+                    StrokeEndLineCap="Round" />
+                <Line
+                    x:Name="MinuteHand"
+                    X1="60"
+                    Y1="60"
+                    X2="60"
+                    Y2="22"
+                    StrokeThickness="2"
+                    Stroke="#FFF4F0E6"
+                    StrokeStartLineCap="Round"
+                    StrokeEndLineCap="Round" />
+                <Ellipse
+                    x:Name="AnalogCenter"
+                    Width="8"
+                    Height="8"
+                    Fill="#FFF4F0E6"
+                    Canvas.Left="56"
+                    Canvas.Top="56" />
+            </Canvas>
+        </Grid>
     </Border>
 </UserControl>

@@ -156,6 +156,12 @@ public sealed class DemoCatalogMusicProvider : IMusicProvider
         return Task.CompletedTask;
     }
 
+    public Task ConnectAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+    public Task DisconnectAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+    public Task RefreshPlaybackStateAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+
     private static MusicTrack Track(string id, string title, string artist, string album) =>
         new()
         {

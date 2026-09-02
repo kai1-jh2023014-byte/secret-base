@@ -12,6 +12,8 @@ public static class AssistantProviderIds
 public static class AssistantSecretKeys
 {
     public const string OpenAiApiKey = "Assistant/OpenAI/ApiKey";
+
+    public const string GeminiApiKey = "Assistant/Gemini/ApiKey";
 }
 
 public static class AssistantToolNames

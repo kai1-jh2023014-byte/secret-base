@@ -25,7 +25,9 @@
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
@@ -38,8 +40,34 @@
                 FontSize="18"
                 FontWeight="SemiBold" />
 
+            <StackPanel
+                x:Name="ConnectPanel"
+                Grid.Row="1"
+                Spacing="8"
+                Visibility="Collapsed">
+                <TextBlock
+                    x:Name="ConnectPromptText"
+                    Text="Connect your music service"
+                    FontSize="13"
+                    TextWrapping="WrapWholeWords" />
+                <Button
+                    x:Name="ConnectSpotifyButton"
+                    Content="Spotify"
+                    HorizontalAlignment="Stretch"
+                    Click="ConnectSpotifyButton_Click" />
+                <Button
+                    x:Name="ConnectYouTubeButton"
+                    Content="YouTube Music"
+                    HorizontalAlignment="Stretch"
+                    Click="ConnectYouTubeButton_Click" />
+                <HyperlinkButton
+                    x:Name="LaterConnectButton"
+                    Content="Later"
+                    Click="LaterConnectButton_Click" />
+            </StackPanel>
+
             <!-- Search -->
-            <Grid Grid.Row="1" ColumnSpacing="6">
+            <Grid Grid.Row="2" ColumnSpacing="6">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
@@ -62,14 +90,14 @@
 
             <!-- Results -->
             <ScrollViewer
-                Grid.Row="2"
+                Grid.Row="3"
                 VerticalScrollBarVisibility="Auto"
                 HorizontalScrollBarVisibility="Disabled">
                 <StackPanel x:Name="ResultsList" Spacing="4" />
             </ScrollViewer>
 
             <!-- Current track -->
-            <Grid x:Name="CurrentTrackPanel" Grid.Row="3" ColumnSpacing="10">
+            <Grid x:Name="CurrentTrackPanel" Grid.Row="4" ColumnSpacing="10">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" />
@@ -105,8 +133,16 @@
                 </StackPanel>
             </Grid>
 
+            <ProgressBar
+                x:Name="PlaybackProgress"
+                Grid.Row="5"
+                Maximum="100"
+                Value="0"
+                Height="4"
+                Visibility="Collapsed" />
+
             <!-- Transport -->
-            <Grid Grid.Row="4" ColumnSpacing="8" HorizontalAlignment="Center">
+            <Grid Grid.Row="6" ColumnSpacing="8" HorizontalAlignment="Center">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
@@ -135,7 +171,7 @@
                     ToolTipService.ToolTip="Next" />
             </Grid>
 
-            <StackPanel Grid.Row="5" Spacing="4">
+            <StackPanel Grid.Row="7" Spacing="4">
                 <TextBlock
                     x:Name="SourceLabel"
                     FontSize="11"

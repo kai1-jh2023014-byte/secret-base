@@ -27,6 +27,8 @@ public sealed partial class MusicWidgetView : UserControl
     private int _searchGate;
     private int _commandGate;
 
+    private bool _connectDismissed;
+
     public MusicWidgetView()
     {
         InitializeComponent();
@@ -55,10 +57,85 @@ public sealed partial class MusicWidgetView : UserControl
 
         UpdateCurrentTrackUi(_configuration.CurrentTrack, isPlaying: false);
         UpdateTransportEnabled();
+        RefreshConnectPanel();
         ResultsList.Children.Clear();
-        ResultsList.Children.Add(CreateMuted("Search the Demo catalog (Spotify/YouTube API not connected)."));
+        ResultsList.Children.Add(CreateMuted("Search tracks from your connected provider."));
         StatusLabel.Text = string.Empty;
-        SourceLabel.Text = "Source: Demo catalog";
+        SourceLabel.Text = DescribeSource();
+        _ = RefreshPlaybackStateAsync();
+    }
+
+    private string DescribeSource()
+    {
+        var spotify = _musicService.Providers.FirstOrDefault(p => p.ProviderId == "spotify");
+        if (spotify?.AuthStatus == MusicAuthStatus.Connected)
+        {
+            return "Source: Spotify";
+        }
+
+        return "Source: Demo catalog (connect Spotify for full search and playback control)";
+    }
+
+    private void RefreshConnectPanel()
+    {
+        var spotify = _musicService.Providers.FirstOrDefault(p => p.ProviderId == "spotify");
+        var needsConnect = !_connectDismissed
+                           && spotify is not null
+                           && spotify.AuthStatus is MusicAuthStatus.NotConfigured or MusicAuthStatus.Disconnected;
+        ConnectPanel.Visibility = needsConnect ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private async Task RefreshPlaybackStateAsync()
+    {
+        var result = await _commands.ExecuteAsync(MusicCommand.GetPlaybackState("spotify"));
+        if (!result.Succeeded || result.CurrentTrack is null)
+        {
+            PlaybackProgress.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        UpdateCurrentTrackUi(result.CurrentTrack, result.IsPlaying);
+        if (result.DurationMilliseconds is > 0 && result.ProgressMilliseconds is not null)
+        {
+            PlaybackProgress.Maximum = result.DurationMilliseconds.Value;
+            PlaybackProgress.Value = result.ProgressMilliseconds.Value;
+            PlaybackProgress.Visibility = Visibility.Visible;
+        }
+        else
+        {
+            PlaybackProgress.Visibility = Visibility.Collapsed;
+        }
+    }
+
+    private async void ConnectSpotifyButton_Click(object sender, RoutedEventArgs e)
+    {
+        StatusLabel.Text = "Connecting to Spotify…";
+        var result = await _commands.ExecuteAsync(MusicCommand.ConnectProvider("spotify"));
+        if (!result.Succeeded)
+        {
+            StatusLabel.Text = result.ErrorMessage ?? "Spotify connect failed.";
+            return;
+        }
+
+        _connectDismissed = true;
+        RefreshConnectPanel();
+        SourceLabel.Text = DescribeSource();
+        StatusLabel.Text = "Spotify connected.";
+        ResultsList.Children.Clear();
+        ResultsList.Children.Add(CreateMuted("Search Spotify tracks above."));
+        await RefreshPlaybackStateAsync();
+    }
+
+    private void ConnectYouTubeButton_Click(object sender, RoutedEventArgs e)
+    {
+        StatusLabel.Text =
+            "YouTube Music does not offer a full public API like Spotify. Use Spotify or the demo catalog for now.";
+    }
+
+    private void LaterConnectButton_Click(object sender, RoutedEventArgs e)
+    {
+        _connectDismissed = true;
+        RefreshConnectPanel();
     }
 
     public void ApplyTheme(ThemeDefinition theme)

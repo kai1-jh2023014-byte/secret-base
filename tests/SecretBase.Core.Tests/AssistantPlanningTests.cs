@@ -76,7 +76,7 @@ public class AssistantPlannerTests
             SchemaVersion = 1,
             MaxSteps = 99
         });
-        Assert.Equal(2, settings.SchemaVersion);
+        Assert.Equal(AssistantSettings.CurrentSchemaVersion, settings.SchemaVersion);
         Assert.Equal(AssistantSettings.MaxStepsHardCap, settings.MaxSteps);
     }
 }

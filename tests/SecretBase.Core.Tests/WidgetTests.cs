@@ -17,7 +17,7 @@ public class ClockDisplayFormatterTests
         var (time, date) = ClockDisplayFormatter.Format(provider, config);
 
         Assert.Equal("19:42:31", time);
-        Assert.Equal("2026 / 08 / 11", date);
+        Assert.Contains("August 11", date, StringComparison.Ordinal);
     }
 
     [Fact]

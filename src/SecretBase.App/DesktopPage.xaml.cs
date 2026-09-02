@@ -28,6 +28,7 @@ using SecretBase.Core.Widgets.Music;
 using SecretBase.Core.Widgets.Text;
 using SecretBase.Core.Widgets.Web;
 using SecretBase.Infrastructure.Assistant;
+using SecretBase.Infrastructure.Music;
 using SecretBase.Infrastructure.Calendar;
 using SecretBase.Infrastructure.Logging;
 using SecretBase.Infrastructure.Persistence;
@@ -136,7 +137,7 @@ public sealed partial class DesktopPage : Page
                 secretStore: _secretStore,
                 openBrowser: url => TryOpenHttpsUrl(url)),
             time);
-        _musicCommands = new MusicCommandService(new MusicService());
+        _musicCommands = new MusicCommandService(MusicServiceFactory.Create(_secretStore, TryOpenHttpsUrl));
         _integrationCommands = new IntegrationCommandService(
             calendar: _calendarCommands,
             music: _musicCommands,
@@ -157,7 +158,11 @@ public sealed partial class DesktopPage : Page
             isOpenAiKeyConfigured: () =>
                 _secretStore is not null
                 && _secretStore.TryGetSecret(AssistantSecretKeys.OpenAiApiKey, out var key)
-                && !string.IsNullOrWhiteSpace(key));
+                && !string.IsNullOrWhiteSpace(key),
+            isGeminiKeyConfigured: () =>
+                _secretStore is not null
+                && _secretStore.TryGetSecret(AssistantSecretKeys.GeminiApiKey, out var gemini)
+                && !string.IsNullOrWhiteSpace(gemini));
         _assistant = new AssistantService(
             assistantRegistry,
             new AssistantToolExecutor(
@@ -489,11 +494,17 @@ public sealed partial class DesktopPage : Page
         if (instance.Type == WidgetTypes.Clock)
         {
             var config = ClockWidgetConfiguration.FromDictionary(instance.Configuration);
-            config.Use24HourFormat = true;
             instance.Configuration = config.ToDictionary();
 
             var view = new ClockWidgetView();
-            view.Initialize(config, _timeProvider);
+            view.Initialize(
+                config,
+                _timeProvider,
+                onConfigurationChanged: updated =>
+                {
+                    instance.Configuration = updated.ToDictionary();
+                    PersistLayoutNow();
+                });
             if (_theme is not null)
             {
                 view.ApplyTheme(_theme);
@@ -585,7 +596,8 @@ public sealed partial class DesktopPage : Page
                     instance.Configuration = updated.ToDictionary();
                     PersistLayoutNow();
                 },
-                openUrl: url => TryOpenHttpsUrl(url));
+                openUrl: url => TryOpenHttpsUrl(url),
+                musicService: _musicCommands.MusicService);
             if (_theme is not null)
             {
                 view.ApplyTheme(_theme);
@@ -631,13 +643,18 @@ public sealed partial class DesktopPage : Page
             var config = AiWorkspaceWidgetConfiguration.FromDictionary(instance.Configuration);
             instance.Configuration = config.ToDictionary();
 
-            var ai = _aiCommands
-                ?? new AiCommandService(
-                    config,
-                    _creativeCommands?.Projects,
-                    () => (_cursorLaunch ?? new WindowsCursorLaunchService()).IsAvailable);
+            if (_assistant is null || _assistantSettings is null || _secretStore is null || _assistantProviders is null)
+            {
+                return null;
+            }
+
             var view = new AiWorkspaceView();
-            view.Initialize(ai, tryExecute: TryExecuteAiResult);
+            view.Initialize(
+                _assistant,
+                _assistantSettings,
+                _secretStore,
+                _assistantProviders,
+                TryApplyAssistantLaunch);
             if (_theme is not null)
             {
                 view.ApplyTheme(_theme);

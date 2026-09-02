@@ -43,6 +43,9 @@ public sealed class MusicCommandService
             MusicCommandKind.Resume => await TransportAsync(command, MusicProviderCapabilities.Resume, p => p.ResumeAsync(cancellationToken)).ConfigureAwait(false),
             MusicCommandKind.Next => await TransportAsync(command, MusicProviderCapabilities.Next, p => p.NextAsync(cancellationToken)).ConfigureAwait(false),
             MusicCommandKind.Previous => await TransportAsync(command, MusicProviderCapabilities.Previous, p => p.PreviousAsync(cancellationToken)).ConfigureAwait(false),
+            MusicCommandKind.GetPlaybackState => await GetPlaybackStateAsync(command, cancellationToken).ConfigureAwait(false),
+            MusicCommandKind.ConnectProvider => await ConnectAsync(command, cancellationToken).ConfigureAwait(false),
+            MusicCommandKind.DisconnectProvider => await DisconnectAsync(command, cancellationToken).ConfigureAwait(false),
             _ => MusicCommandResult.Fail(command.Kind, "Unknown music command.")
         };
     }
@@ -182,5 +185,92 @@ public sealed class MusicCommandService
         }
 
         return candidates.FirstOrDefault();
+    }
+
+    private async Task<MusicCommandResult> GetPlaybackStateAsync(MusicCommand command, CancellationToken ct)
+    {
+        var provider = ResolveProvider(command.ProviderId, MusicProviderCapabilities.NowPlaying)
+                       ?? _musicService.Providers.FirstOrDefault(p =>
+                           p.Capabilities.HasFlag(MusicProviderCapabilities.NowPlaying)
+                           && p.AuthStatus == MusicAuthStatus.Connected);
+
+        if (provider is null)
+        {
+            return MusicCommandResult.Fail(MusicCommandKind.GetPlaybackState, "No connected music provider.");
+        }
+
+        try
+        {
+            await provider.RefreshPlaybackStateAsync(ct).ConfigureAwait(false);
+            var track = provider.CurrentTrack;
+            return MusicCommandResult.Ok(
+                MusicCommandKind.GetPlaybackState,
+                current: track,
+                isPlaying: provider.IsPlaying,
+                progressMs: track?.ProgressMilliseconds,
+                durationMs: track?.DurationMilliseconds,
+                providerId: provider.ProviderId,
+                authStatus: provider.AuthStatus);
+        }
+        catch (Exception ex)
+        {
+            return MusicCommandResult.Fail(MusicCommandKind.GetPlaybackState, ex.Message);
+        }
+    }
+
+    private async Task<MusicCommandResult> ConnectAsync(MusicCommand command, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(command.ProviderId))
+        {
+            return MusicCommandResult.Fail(MusicCommandKind.ConnectProvider, "Provider id is required.");
+        }
+
+        var provider = _musicService.Providers.FirstOrDefault(p =>
+            string.Equals(p.ProviderId, command.ProviderId, StringComparison.Ordinal));
+        if (provider is null)
+        {
+            return MusicCommandResult.Fail(MusicCommandKind.ConnectProvider, "Music provider was not found.");
+        }
+
+        try
+        {
+            await provider.ConnectAsync(ct).ConfigureAwait(false);
+            return MusicCommandResult.Ok(
+                MusicCommandKind.ConnectProvider,
+                providerId: provider.ProviderId,
+                authStatus: provider.AuthStatus);
+        }
+        catch (Exception ex)
+        {
+            return MusicCommandResult.Fail(MusicCommandKind.ConnectProvider, ex.Message);
+        }
+    }
+
+    private async Task<MusicCommandResult> DisconnectAsync(MusicCommand command, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(command.ProviderId))
+        {
+            return MusicCommandResult.Fail(MusicCommandKind.DisconnectProvider, "Provider id is required.");
+        }
+
+        var provider = _musicService.Providers.FirstOrDefault(p =>
+            string.Equals(p.ProviderId, command.ProviderId, StringComparison.Ordinal));
+        if (provider is null)
+        {
+            return MusicCommandResult.Fail(MusicCommandKind.DisconnectProvider, "Music provider was not found.");
+        }
+
+        try
+        {
+            await provider.DisconnectAsync(ct).ConfigureAwait(false);
+            return MusicCommandResult.Ok(
+                MusicCommandKind.DisconnectProvider,
+                providerId: provider.ProviderId,
+                authStatus: provider.AuthStatus);
+        }
+        catch (Exception ex)
+        {
+            return MusicCommandResult.Fail(MusicCommandKind.DisconnectProvider, ex.Message);
+        }
     }
 }

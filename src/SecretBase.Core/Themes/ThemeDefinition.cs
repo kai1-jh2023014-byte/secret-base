@@ -26,6 +26,16 @@ public sealed class ThemeDefinition
 
     public string WidgetForeground { get; set; } = "#FFF4F0E6";
 
+    public string SurfaceSecondary { get; set; } = "#33243447";
+
+    public string Border { get; set; } = "#44FFFFFF";
+
+    public double ShadowOpacity { get; set; } = 0.18;
+
+    public double BlurAmount { get; set; } = 0;
+
+    public double Spacing { get; set; } = 8;
+
     public string FontFamily { get; set; } = "Segoe UI Variable Display";
 
     public double CornerRadius { get; set; } = 16;

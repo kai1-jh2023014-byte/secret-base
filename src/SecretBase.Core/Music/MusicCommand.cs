@@ -8,7 +8,10 @@ public enum MusicCommandKind
     Pause = 2,
     Resume = 3,
     Next = 4,
-    Previous = 5
+    Previous = 5,
+    GetPlaybackState = 6,
+    ConnectProvider = 7,
+    DisconnectProvider = 8
 }
 
 /// <summary>
@@ -46,4 +49,13 @@ public sealed class MusicCommand
     public static MusicCommand Next() => new() { Kind = MusicCommandKind.Next };
 
     public static MusicCommand Previous() => new() { Kind = MusicCommandKind.Previous };
+
+    public static MusicCommand GetPlaybackState(string? providerId = null) =>
+        new() { Kind = MusicCommandKind.GetPlaybackState, ProviderId = providerId };
+
+    public static MusicCommand ConnectProvider(string providerId) =>
+        new() { Kind = MusicCommandKind.ConnectProvider, ProviderId = providerId };
+
+    public static MusicCommand DisconnectProvider(string providerId) =>
+        new() { Kind = MusicCommandKind.DisconnectProvider, ProviderId = providerId };
 }

@@ -36,13 +36,25 @@ public sealed partial class AssistantWidgetView : UserControl
         IAssistantSettingsStore settingsStore,
         ISecureSecretStore secrets,
         IAiProviderFactory providers,
-        Func<AssistantTurnResult, string?> applyLaunch)
+        Func<AssistantTurnResult, string?> applyLaunch,
+        string? headerTitle = null,
+        string? headerSubtitle = null)
     {
         _assistant = assistant;
         _settingsStore = settingsStore;
         _secrets = secrets;
         _providers = providers;
         _applyLaunch = applyLaunch;
+        if (!string.IsNullOrWhiteSpace(headerTitle))
+        {
+            HeaderText.Text = headerTitle;
+        }
+
+        if (!string.IsNullOrWhiteSpace(headerSubtitle))
+        {
+            SubtitleText.Text = headerSubtitle;
+        }
+
         StatusLabel.Text = string.Empty;
         RefreshProviderStatus();
         SeedFromHistory();
@@ -107,9 +119,12 @@ public sealed partial class AssistantWidgetView : UserControl
         }
 
         var mark = status.IsConfigured ? "● Connected" : "○ " + status.StatusLabel;
-        ProviderStatusText.Text =
-            $"{mark} · {status.DisplayName} · {status.Model} · max {status.MaxSteps} steps · key {status.ApiKeyDisplay}";
-        OnboardingPanel.Visibility = status.IsConfigured ? Visibility.Collapsed : Visibility.Visible;
+        ProviderStatusText.Text = string.IsNullOrWhiteSpace(status.FallbackNote)
+            ? $"{mark} · {status.DisplayName} · {status.Model} · max {status.MaxSteps} steps · key {status.ApiKeyDisplay}"
+            : $"{mark} · {status.DisplayName} · {status.Model} · {status.FallbackNote}";
+        OnboardingPanel.Visibility = status.IsConfigured || !string.IsNullOrWhiteSpace(status.FallbackNote)
+            ? Visibility.Collapsed
+            : Visibility.Visible;
     }
 
     private static void StyleActionButton(Button button, ThemeDefinition theme, bool accent = false)
@@ -541,9 +556,9 @@ public sealed partial class AssistantWidgetView : UserControl
         {
             providerHelp.Text = (providerBox.SelectedItem as string) switch
             {
-                "Gemini" => "Gemini is not implemented in this MVP yet. The provider will show as unavailable.",
-                "Local" => "Local/Ollama is not implemented in this MVP yet. The provider will show as unavailable.",
-                _ => "OpenAI is the currently supported provider. API Key is stored in Credential Manager only."
+                "Gemini" => "Gemini uses your API key. When unavailable, Secret Base falls back to Local AI (Ollama).",
+                "Local" => "Local AI uses Ollama at the configured endpoint. No API key required.",
+                _ => "OpenAI uses your API key. When unavailable, Secret Base falls back to Local AI (Ollama)."
             };
         }
         providerBox.SelectionChanged += (_, _) => RefreshProviderHelp();

@@ -30,7 +30,12 @@ public static class ClockDisplayFormatter
             return string.Empty;
         }
 
-        return $"{instant:yyyy} / {instant:MM} / {instant:dd}";
+        return configuration.DisplayStyle switch
+        {
+            ClockWidgetConfiguration.StyleFocus => instant.ToString("dddd, MMMM d"),
+            ClockWidgetConfiguration.StyleMinimal => instant.ToString("MMM d"),
+            _ => $"{instant:dddd}\n{instant:MMMM d}"
+        };
     }
 
     public static (string Time, string Date) Format(ITimeProvider timeProvider, ClockWidgetConfiguration configuration)
