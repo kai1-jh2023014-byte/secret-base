@@ -6,6 +6,7 @@ using SecretBase.Infrastructure.Persistence;
 
 namespace SecretBase.Infrastructure.Tests;
 
+[Collection(nameof(CorruptJsonRecoverySerialTests))]
 public class CorruptLayoutRecoveryTests
 {
     [Fact]
@@ -107,7 +108,7 @@ public class CorruptLayoutRecoveryTests
     {
         var dir = CreateTempDir();
         var fixedUtc = new DateTime(2026, 9, 1, 12, 30, 45, DateTimeKind.Utc);
-        CorruptJsonFileRecovery.UtcNowOverrideForTests = () => fixedUtc;
+        CorruptJsonFileRecovery.SetTestUtcNowForTests(fixedUtc);
         try
         {
             var path = Path.Combine(dir, "default.layout.json");
@@ -129,7 +130,7 @@ public class CorruptLayoutRecoveryTests
         }
         finally
         {
-            CorruptJsonFileRecovery.UtcNowOverrideForTests = null;
+            CorruptJsonFileRecovery.ClearTestUtcNowForTests();
             Directory.Delete(dir, recursive: true);
         }
     }
@@ -142,6 +143,7 @@ public class CorruptLayoutRecoveryTests
     }
 }
 
+[Collection(nameof(CorruptJsonRecoverySerialTests))]
 public class CorruptThemeRecoveryTests
 {
     [Fact]
@@ -241,7 +243,7 @@ public class CorruptThemeRecoveryTests
     {
         var dir = CreateTempDir();
         var fixedUtc = new DateTime(2026, 9, 1, 12, 30, 45, DateTimeKind.Utc);
-        CorruptJsonFileRecovery.UtcNowOverrideForTests = () => fixedUtc;
+        CorruptJsonFileRecovery.SetTestUtcNowForTests(fixedUtc);
         try
         {
             var path = Path.Combine(dir, "default.theme.json");
@@ -262,7 +264,7 @@ public class CorruptThemeRecoveryTests
         }
         finally
         {
-            CorruptJsonFileRecovery.UtcNowOverrideForTests = null;
+            CorruptJsonFileRecovery.ClearTestUtcNowForTests();
             Directory.Delete(dir, recursive: true);
         }
     }
@@ -273,6 +275,10 @@ public class CorruptThemeRecoveryTests
         Directory.CreateDirectory(dir);
         return dir;
     }
+}
+
+public sealed class CorruptJsonRecoverySerialTests
+{
 }
 
 internal sealed class TestAppLogger : IAppLogger
