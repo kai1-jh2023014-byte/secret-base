@@ -309,6 +309,28 @@ public class AssistantPlanningWorkflowTests
     }
 
     [Fact]
+    public void ComputeFreeTime_UsesOffsetCalendarDate_NotMachineLocalTimezone()
+    {
+        // 2026-08-24 09:00 +09:00 — calendar date must stay Aug 24 even when machine TZ differs.
+        var now = new DateTimeOffset(2026, 8, 24, 9, 0, 0, TimeSpan.FromHours(9));
+        var events = new[]
+        {
+            new CalendarEvent
+            {
+                Title = "東進",
+                Provider = CalendarProviderIds.Local,
+                Start = new DateTimeOffset(2026, 8, 24, 14, 0, 0, TimeSpan.FromHours(9)),
+                End = new DateTimeOffset(2026, 8, 24, 16, 0, 0, TimeSpan.FromHours(9))
+            }
+        };
+
+        var free = AssistantContextService.ComputeFreeTime(events, now);
+
+        Assert.NotEmpty(free);
+        Assert.All(free, slot => Assert.Equal(TimeSpan.FromHours(9), slot.Start.Offset));
+    }
+
+    [Fact]
     public async Task FreeTime_ComputedFromBusyBlocks()
     {
         var now = new DateTimeOffset(2026, 8, 24, 10, 0, 0, TimeSpan.FromHours(9));

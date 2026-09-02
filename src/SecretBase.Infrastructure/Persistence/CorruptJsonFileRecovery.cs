@@ -7,6 +7,9 @@ namespace SecretBase.Infrastructure.Persistence;
 /// </summary>
 internal static class CorruptJsonFileRecovery
 {
+    /// <summary>Test-only UTC clock override for deterministic backup collision scenarios.</summary>
+    internal static Func<DateTime>? UtcNowOverrideForTests;
+
     public static string? TryBackupCorruptFile(string path, IAppLogger? logger, string category)
     {
         try
@@ -16,7 +19,8 @@ internal static class CorruptJsonFileRecovery
                 return null;
             }
 
-            var stamp = DateTime.UtcNow.ToString("yyyy-MM-dd'T'HHmmss'Z'");
+            var stamp = (UtcNowOverrideForTests?.Invoke() ?? DateTime.UtcNow)
+                .ToString("yyyy-MM-dd'T'HHmmss'Z'");
             var extension = Path.GetExtension(path);
             var stem = path[..^extension.Length];
             var backupPath = $"{stem}.corrupt-{stamp}{extension}";
