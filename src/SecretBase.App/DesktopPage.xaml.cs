@@ -71,6 +71,9 @@ public sealed partial class DesktopPage : Page
     private IntegrationCommandService? _integrationCommands;
     private IAssistantService? _assistant;
     private IAssistantSettingsStore? _assistantSettings;
+    private IAutoStartService? _autoStart;
+    private IAppLaunchSettingsStore? _launchSettingsStore;
+    private bool _autoStartToggleSync;
     private IAiProviderFactory? _assistantProviders;
     private DesktopLayout? _layout;
     private ThemeDefinition? _theme;
@@ -141,6 +144,8 @@ public sealed partial class DesktopPage : Page
             apps: _appCommands,
             ai: _aiCommands);
         _assistantSettings = new JsonAssistantSettingsStore();
+        _autoStart = args.AutoStart ?? new WindowsRegistryAutoStartService();
+        _launchSettingsStore = args.LaunchSettingsStore ?? new JsonAppLaunchSettingsStore();
         _assistantProviders = new AssistantProviderFactory(_secretStore);
         var assistantRegistry = BuiltinAssistantToolRegistry.Instance;
         var assistantContext = new AssistantContextService(
@@ -175,6 +180,7 @@ public sealed partial class DesktopPage : Page
         ApplyDesktopTheme(_theme);
         StyleFabButtons(_theme);
         RefreshDebugStatus();
+        InitializeAutoStartToggle();
         ShowDebugChrome(forceVisible: false);
 
         RenderDesktopObjects();
@@ -245,6 +251,58 @@ public sealed partial class DesktopPage : Page
 
         StatusText.Text =
             $"{AppInfo.Name} · {_layout.Widgets.Count}w / {_layout.Blocks.Count}b · v{_compatibility.AppVersion}";
+    }
+
+    private void InitializeAutoStartToggle()
+    {
+        if (_launchSettingsStore is null || _autoStart is null)
+        {
+            AutoStartToggle.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        if (!_autoStart.IsSupported)
+        {
+            AutoStartToggle.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        _autoStartToggleSync = true;
+        var settings = _launchSettingsStore.LoadOrCreate();
+        var status = _autoStart.GetStatus();
+        AutoStartToggle.IsOn = settings.LaunchAtWindowsLogin && status.PointsToCurrentExecutable;
+        AutoStartToggle.IsEnabled = _autoStart.TryGetStartupExecutablePath(out _, out _) || status.IsRegistered;
+        _autoStartToggleSync = false;
+    }
+
+    private void AutoStartToggle_Toggled(object sender, RoutedEventArgs e)
+    {
+        if (_autoStartToggleSync || _autoStart is null || _launchSettingsStore is null)
+        {
+            return;
+        }
+
+        var desired = AutoStartToggle.IsOn;
+        _autoStartToggleSync = true;
+        if (!AutoStartCoordinator.TrySetEnabled(
+                desired,
+                _autoStart,
+                _launchSettingsStore,
+                _logger,
+                out var error))
+        {
+            AutoStartToggle.IsOn = !desired;
+            _logger?.Warn("startup", error ?? "Auto-start could not be updated.");
+            HostStatusLabel.Text = error ?? "Auto-start could not be updated.";
+            HostStatusLabel.Visibility = Visibility.Visible;
+        }
+        else
+        {
+            HostStatusLabel.Visibility = Visibility.Collapsed;
+            _logger?.Info("startup", desired ? "User enabled Windows logon auto-start." : "User disabled Windows logon auto-start.");
+        }
+
+        _autoStartToggleSync = false;
     }
 
     private void ShowDebugChrome(bool forceVisible)

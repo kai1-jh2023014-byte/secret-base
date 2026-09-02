@@ -9,8 +9,13 @@ namespace SecretBase.App;
 /// </summary>
 internal static class StartupFailurePresenter
 {
-    public static void ShowBlocking(string? detail, string dataFolderPath)
+    public static void ShowBlocking(string? detail, string dataFolderPath, bool silentUi = false)
     {
+        if (silentUi)
+        {
+            return;
+        }
+
         try
         {
             ShowBlockingAsync(detail, dataFolderPath).ConfigureAwait(true).GetAwaiter().GetResult();
