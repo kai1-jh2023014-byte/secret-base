@@ -24,7 +24,7 @@ public static class ThemePainter
     {
         if (string.IsNullOrWhiteSpace(hex))
         {
-            return Color.FromArgb(255, 26, 35, 50);
+            return Color.FromArgb(255, 18, 22, 30);
         }
 
         var value = hex.Trim();
@@ -40,7 +40,7 @@ public static class ThemePainter
 
         if (value.Length != 8)
         {
-            return Color.FromArgb(255, 26, 35, 50);
+            return Color.FromArgb(255, 18, 22, 30);
         }
 
         var a = Convert.ToByte(value[..2], 16);
@@ -52,4 +52,28 @@ public static class ThemePainter
 
     public static double EffectiveWidgetOpacity(ThemeDefinition theme) =>
         Math.Clamp(theme.Transparency, 0.35, 1.0);
+
+    /// <summary>Blend two hex colors by <paramref name="amount"/> toward <paramref name="toHex"/>.</summary>
+    public static Color Blend(string fromHex, string toHex, double amount)
+    {
+        var from = ParseColor(fromHex);
+        var to = ParseColor(toHex);
+        amount = Math.Clamp(amount, 0, 1);
+        return Color.FromArgb(
+            (byte)Math.Round(from.A + (to.A - from.A) * amount),
+            (byte)Math.Round(from.R + (to.R - from.R) * amount),
+            (byte)Math.Round(from.G + (to.G - from.G) * amount),
+            (byte)Math.Round(from.B + (to.B - from.B) * amount));
+    }
+
+    public static SolidColorBrush BlendBrush(string fromHex, string toHex, double amount, double? opacityOverride = null)
+    {
+        var color = Blend(fromHex, toHex, amount);
+        if (opacityOverride is double opacity)
+        {
+            color.A = (byte)Math.Clamp((int)Math.Round(opacity * 255), 0, 255);
+        }
+
+        return new SolidColorBrush(color);
+    }
 }

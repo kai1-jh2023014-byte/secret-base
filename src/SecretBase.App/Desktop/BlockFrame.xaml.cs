@@ -81,20 +81,24 @@ public sealed partial class BlockFrame : UserControl
 
     private void ApplyTheme(ThemeDefinition theme)
     {
-        var radius = Math.Max(10, theme.CornerRadius);
+        var radius = Math.Max(12, theme.CornerRadius);
         DragBar.CornerRadius = new CornerRadius(radius, radius, 0, 0);
         Surface.CornerRadius = new CornerRadius(0, 0, radius, radius);
         Surface.Background = ThemePainter.Brush(theme.WidgetBackground, ThemePainter.EffectiveWidgetOpacity(theme));
+        Surface.BorderBrush = ThemePainter.Brush(theme.Border, 0.4);
+        Surface.BorderThickness = new Thickness(1, 0, 1, 1);
         NameText.Text = _block.Name;
         NameText.Foreground = ThemePainter.Brush(theme.WidgetForeground);
         NameText.FontFamily = new FontFamily(theme.FontFamily);
+        NameText.CharacterSpacing = 30;
         EmptyHint.Foreground = ThemePainter.Brush(theme.ForegroundMuted);
         EmptyHint.FontFamily = new FontFamily(theme.FontFamily);
-        DeleteButton.Foreground = ThemePainter.Brush(theme.ForegroundMuted);
-        ArrangeButton.Foreground = ThemePainter.Brush(theme.ForegroundMuted);
+        WidgetSurfaceStyle.ApplyGhostButton(DeleteButton, theme);
+        WidgetSurfaceStyle.ApplyGhostButton(ArrangeButton, theme);
+        ResizeHandle.Background = ThemePainter.Brush(theme.Border, 0.55);
 
         var grip = ThemePainter.ParseColor(theme.WidgetForeground);
-        grip.A = 0x28;
+        grip.A = 0x18;
         DragBar.Background = new SolidColorBrush(grip);
     }
 
@@ -341,9 +345,9 @@ public sealed partial class BlockFrame : UserControl
 
     private void SetChromeEmphasis(bool emphasized)
     {
-        var opacity = emphasized || _dragging || _resizing ? 0.95 : 0.35;
-        DragBar.Opacity = opacity;
-        ResizeHandle.Opacity = opacity;
+        var opacity = emphasized || _dragging || _resizing ? 0.96 : 0.28;
+        WidgetSurfaceStyle.FadeOpacity(DragBar, opacity, emphasized ? 140 : 220);
+        WidgetSurfaceStyle.FadeOpacity(ResizeHandle, opacity, emphasized ? 140 : 220);
     }
 
     private void RootGrid_PointerEntered(object sender, PointerRoutedEventArgs e)

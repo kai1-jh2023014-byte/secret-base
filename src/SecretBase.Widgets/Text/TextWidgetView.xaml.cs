@@ -38,8 +38,7 @@ public sealed partial class TextWidgetView : UserControl
 
     public void ApplyTheme(ThemeDefinition theme)
     {
-        RootBorder.Background = ThemePainter.Brush(theme.WidgetBackground, ThemePainter.EffectiveWidgetOpacity(theme));
-        RootBorder.CornerRadius = new CornerRadius(theme.CornerRadius);
+        WidgetSurfaceStyle.ApplyLayeredChrome(OuterShell, RootBorder, theme);
         DisplayText.Foreground = ThemePainter.Brush(theme.WidgetForeground);
         DisplayText.FontFamily = new Microsoft.UI.Xaml.Media.FontFamily(theme.FontFamily);
         EditBox.Foreground = ThemePainter.Brush(theme.WidgetForeground);

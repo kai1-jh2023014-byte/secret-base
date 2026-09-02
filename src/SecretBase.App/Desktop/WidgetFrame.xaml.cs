@@ -53,25 +53,32 @@ public sealed partial class WidgetFrame : UserControl
 
     private void ApplyFloatingChrome(ThemeDefinition theme)
     {
-        var radius = Math.Max(8, theme.CornerRadius);
+        var radius = Math.Max(10, theme.CornerRadius);
         DragBar.CornerRadius = new CornerRadius(radius, 0, 0, 0);
         RemoveButton.CornerRadius = new CornerRadius(0, radius, 0, 0);
         RemoveButton.FontFamily = new FontFamily(theme.FontFamily);
         RemoveButton.Foreground = ThemePainter.Brush(theme.WidgetForeground);
-        RemoveButton.Background = ThemePainter.Brush(theme.WidgetBackground, 0.35);
+        RemoveButton.Background = ThemePainter.Brush(theme.SurfaceSecondary, 0.55);
         RemoveButton.BorderThickness = new Thickness(0);
 
         var grip = ThemePainter.ParseColor(theme.WidgetForeground);
-        grip.A = 0x28;
+        grip.A = 0x18;
         DragBar.Background = new SolidColorBrush(grip);
+
+        var dot = ThemePainter.Brush(theme.WidgetForeground, 0.45);
+        GripDot1.Fill = dot;
+        GripDot2.Fill = dot;
+        GripDot3.Fill = dot;
+        ResizeHandle.Background = ThemePainter.Brush(theme.Border, 0.55);
+        ResizeHandle.CornerRadius = new CornerRadius(Math.Max(3, theme.CornerRadius * 0.2));
     }
 
     private void SetChromeEmphasis(bool emphasized)
     {
-        var opacity = emphasized || _dragging || _resizing ? 0.95 : 0.35;
-        DragBar.Opacity = opacity;
-        ResizeHandle.Opacity = opacity;
-        RemoveButton.Opacity = opacity;
+        var opacity = emphasized || _dragging || _resizing ? 0.96 : 0.28;
+        WidgetSurfaceStyle.FadeOpacity(DragBar, opacity, emphasized ? 140 : 220);
+        WidgetSurfaceStyle.FadeOpacity(ResizeHandle, opacity, emphasized ? 140 : 220);
+        WidgetSurfaceStyle.FadeOpacity(RemoveButton, opacity, emphasized ? 140 : 220);
     }
 
     private void RemoveButton_Click(object sender, RoutedEventArgs e) =>

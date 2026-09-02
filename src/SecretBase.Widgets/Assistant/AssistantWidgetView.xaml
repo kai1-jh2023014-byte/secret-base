@@ -8,12 +8,19 @@
     mc:Ignorable="d">
 
     <Border
-        x:Name="RootBorder"
-        Padding="12,10"
-        Background="#CC243447"
-        CornerRadius="16"
+        x:Name="OuterShell"
+        Background="#20151A24"
+        CornerRadius="20"
+        Padding="2"
         BorderThickness="1"
-        BorderBrush="#44FFFFFF"
+        BorderBrush="#28FFFFFF">
+    <Border
+        x:Name="RootBorder"
+        Padding="14,12"
+        Background="#D9181E28"
+        CornerRadius="18"
+        BorderThickness="1"
+        BorderBrush="#3DFFFFFF"
         MinWidth="280"
         MinHeight="360">
         <Grid RowSpacing="8">
@@ -37,8 +44,9 @@
                     <TextBlock
                         x:Name="HeaderText"
                         Text="Secret Base AI"
-                        FontSize="17"
+                        FontSize="15"
                         FontWeight="SemiBold"
+                        CharacterSpacing="40"
                         TextWrapping="WrapWholeWords" />
                     <TextBlock
                         x:Name="SubtitleText"
@@ -164,5 +172,6 @@
                     Click="SendButton_Click" />
             </Grid>
         </Grid>
+    </Border>
     </Border>
 </UserControl>

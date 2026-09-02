@@ -64,33 +64,21 @@ public sealed partial class AssistantWidgetView : UserControl
     public void ApplyTheme(ThemeDefinition theme)
     {
         _theme = theme;
-        RootBorder.Background = ThemePainter.Brush(theme.WidgetBackground, ThemePainter.EffectiveWidgetOpacity(theme));
-        RootBorder.CornerRadius = new CornerRadius(theme.CornerRadius);
-        RootBorder.BorderBrush = ThemePainter.Brush(theme.WidgetForeground, 0.25);
-
-        var font = new FontFamily(theme.FontFamily);
-        HeaderText.FontFamily = font;
-        HeaderText.Foreground = ThemePainter.Brush(theme.WidgetForeground);
-        SubtitleText.FontFamily = font;
-        SubtitleText.Foreground = ThemePainter.Brush(theme.ForegroundMuted);
-        ProviderStatusText.FontFamily = font;
-        ProviderStatusText.Foreground = ThemePainter.Brush(theme.ForegroundMuted);
-        OnboardingText.FontFamily = font;
-        OnboardingText.Foreground = ThemePainter.Brush(theme.WidgetForeground);
-        CapabilitiesText.FontFamily = font;
-        CapabilitiesText.Foreground = ThemePainter.Brush(theme.ForegroundMuted);
-        StatusLabel.FontFamily = font;
-        StatusLabel.Foreground = ThemePainter.Brush(theme.ForegroundMuted);
-        ConfirmText.FontFamily = font;
-        ConfirmText.Foreground = ThemePainter.Brush(theme.WidgetForeground);
-        InputBox.FontFamily = font;
-        StyleActionButton(SendButton, theme, accent: true);
-        StyleActionButton(SettingsButton, theme);
-        StyleActionButton(OpenSettingsFromOnboardingButton, theme, accent: true);
-        StyleActionButton(ConfirmRunButton, theme, accent: true);
-        StyleActionButton(ConfirmCancelButton, theme);
-        StyleActionButton(RetryButton, theme);
-        StyleActionButton(OpenSettingsFromErrorButton, theme);
+        WidgetSurfaceStyle.ApplyLayeredChrome(OuterShell, RootBorder, theme);
+        WidgetSurfaceStyle.ApplyHeader(HeaderText, SubtitleText, theme);
+        WidgetSurfaceStyle.ApplyMuted(ProviderStatusText, theme);
+        WidgetSurfaceStyle.ApplyBody(OnboardingText, theme);
+        WidgetSurfaceStyle.ApplyMuted(CapabilitiesText, theme);
+        WidgetSurfaceStyle.ApplyMuted(StatusLabel, theme);
+        WidgetSurfaceStyle.ApplyBody(ConfirmText, theme);
+        InputBox.FontFamily = new FontFamily(theme.FontFamily);
+        WidgetSurfaceStyle.ApplyActionButton(SendButton, theme, accent: true);
+        WidgetSurfaceStyle.ApplyGhostButton(SettingsButton, theme);
+        WidgetSurfaceStyle.ApplyActionButton(OpenSettingsFromOnboardingButton, theme, accent: true);
+        WidgetSurfaceStyle.ApplyActionButton(ConfirmRunButton, theme, accent: true);
+        WidgetSurfaceStyle.ApplyGhostButton(ConfirmCancelButton, theme);
+        WidgetSurfaceStyle.ApplyGhostButton(RetryButton, theme);
+        WidgetSurfaceStyle.ApplyGhostButton(OpenSettingsFromErrorButton, theme);
         RefreshProviderStatus();
         RenderTranscript();
     }
@@ -127,16 +115,8 @@ public sealed partial class AssistantWidgetView : UserControl
             : Visibility.Visible;
     }
 
-    private static void StyleActionButton(Button button, ThemeDefinition theme, bool accent = false)
-    {
-        button.FontFamily = new FontFamily(theme.FontFamily);
-        button.Background = accent
-            ? ThemePainter.Brush(theme.Accent, 0.85)
-            : ThemePainter.Brush(theme.WidgetBackground, ThemePainter.EffectiveWidgetOpacity(theme));
-        button.Foreground = ThemePainter.Brush(theme.WidgetForeground);
-        button.BorderBrush = ThemePainter.Brush(theme.Accent, 0.55);
-        button.BorderThickness = new Thickness(1);
-    }
+    private static void StyleActionButton(Button button, ThemeDefinition theme, bool accent = false) =>
+        WidgetSurfaceStyle.ApplyActionButton(button, theme, accent);
 
     private void SeedFromHistory()
     {

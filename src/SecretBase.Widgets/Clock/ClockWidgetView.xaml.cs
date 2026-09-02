@@ -9,13 +9,14 @@ using SecretBase.Widgets.Theming;
 
 namespace SecretBase.Widgets.Clock;
 
-/// <summary>Clock mini-app with multiple display styles and in-widget settings.</summary>
+/// <summary>Atelier Clock — editorial digital / analog / focus / minimal styles.</summary>
 public sealed partial class ClockWidgetView : UserControl, IDisposable
 {
     private readonly DispatcherTimer _timer;
     private ITimeProvider _timeProvider = new SystemTimeProvider();
     private ClockWidgetConfiguration _configuration = ClockWidgetConfiguration.CreateDefault();
     private Action<ClockWidgetConfiguration>? _onConfigurationChanged;
+    private ThemeDefinition? _theme;
     private bool _disposed;
 
     public ClockWidgetView()
@@ -40,16 +41,21 @@ public sealed partial class ClockWidgetView : UserControl, IDisposable
 
     public void ApplyTheme(ThemeDefinition theme)
     {
-        WidgetSurfaceStyle.ApplyChrome(RootBorder, theme);
+        _theme = theme;
+        WidgetSurfaceStyle.ApplyLayeredChrome(OuterShell, RootBorder, theme);
         TimeText.Foreground = ThemePainter.Brush(theme.WidgetForeground);
         DateText.Foreground = ThemePainter.Brush(theme.ForegroundMuted);
         TimeText.FontFamily = new FontFamily(theme.FontFamily);
         DateText.FontFamily = new FontFamily(theme.FontFamily);
-        AnalogFace.Stroke = ThemePainter.Brush(theme.Border, 0.9);
+        AccentHairline.Background = ThemePainter.Brush(theme.Accent, 0.9);
+        AnalogRingOuter.Stroke = ThemePainter.Brush(theme.Border, 0.35);
+        AnalogFace.Stroke = ThemePainter.Brush(theme.Border, 0.7);
         HourHand.Stroke = ThemePainter.Brush(theme.WidgetForeground);
         MinuteHand.Stroke = ThemePainter.Brush(theme.WidgetForeground);
+        SecondHand.Stroke = ThemePainter.Brush(theme.Accent, 0.95);
         AnalogCenter.Fill = ThemePainter.Brush(theme.Accent);
-        WidgetSurfaceStyle.ApplyActionButton(SettingsButton, theme);
+        WidgetSurfaceStyle.ApplyGhostButton(SettingsButton, theme);
+        RefreshDisplay();
     }
 
     private void OnLoaded(object sender, RoutedEventArgs e)
@@ -60,6 +66,7 @@ public sealed partial class ClockWidgetView : UserControl, IDisposable
         }
 
         RefreshDisplay();
+        WidgetSurfaceStyle.FadeOpacity(this, 1, 220);
         if (!_timer.IsEnabled)
         {
             _timer.Start();
@@ -74,9 +81,13 @@ public sealed partial class ClockWidgetView : UserControl, IDisposable
     {
         var now = _timeProvider.GetLocalNow();
         var scale = Math.Clamp(_configuration.SizeScale, 0.75, 1.5);
-        var isAnalog = string.Equals(_configuration.DisplayStyle, ClockWidgetConfiguration.StyleAnalog, StringComparison.Ordinal);
+        var style = _configuration.DisplayStyle ?? ClockWidgetConfiguration.StyleDigital;
+        var isAnalog = string.Equals(style, ClockWidgetConfiguration.StyleAnalog, StringComparison.Ordinal);
         DigitalPanel.Visibility = isAnalog ? Visibility.Collapsed : Visibility.Visible;
         AnalogPanel.Visibility = isAnalog ? Visibility.Visible : Visibility.Collapsed;
+        AccentHairline.Visibility = style is ClockWidgetConfiguration.StyleMinimal
+            ? Visibility.Collapsed
+            : Visibility.Visible;
 
         if (isAnalog)
         {
@@ -89,34 +100,45 @@ public sealed partial class ClockWidgetView : UserControl, IDisposable
         DateText.Text = date;
         DateText.Visibility = string.IsNullOrEmpty(date) ? Visibility.Collapsed : Visibility.Visible;
 
-        TimeText.FontSize = _configuration.DisplayStyle switch
+        TimeText.FontSize = style switch
         {
-            ClockWidgetConfiguration.StyleMinimal => 52 * scale,
-            ClockWidgetConfiguration.StyleFocus => 36 * scale,
-            _ => 40 * scale
+            ClockWidgetConfiguration.StyleMinimal => 56 * scale,
+            ClockWidgetConfiguration.StyleFocus => 38 * scale,
+            _ => 44 * scale
         };
-        DateText.FontSize = _configuration.DisplayStyle switch
+        TimeText.FontWeight = style == ClockWidgetConfiguration.StyleMinimal
+            ? Microsoft.UI.Text.FontWeights.Light
+            : Microsoft.UI.Text.FontWeights.SemiLight;
+        TimeText.CharacterSpacing = style == ClockWidgetConfiguration.StyleMinimal ? 120 : 80;
+        TimeText.HorizontalAlignment = style == ClockWidgetConfiguration.StyleMinimal
+            ? HorizontalAlignment.Center
+            : HorizontalAlignment.Left;
+        DateText.HorizontalAlignment = TimeText.HorizontalAlignment;
+        DateText.FontSize = style switch
         {
-            ClockWidgetConfiguration.StyleMinimal => 14 * scale,
-            ClockWidgetConfiguration.StyleFocus => 15 * scale,
-            _ => 16 * scale
+            ClockWidgetConfiguration.StyleMinimal => 12 * scale,
+            ClockWidgetConfiguration.StyleFocus => 14 * scale,
+            _ => 13 * scale
         };
-        DateText.Opacity = _configuration.DisplayStyle == ClockWidgetConfiguration.StyleMinimal ? 0.75 : 1.0;
+        DateText.Opacity = style == ClockWidgetConfiguration.StyleMinimal ? 0.7 : 0.92;
     }
 
     private void UpdateAnalogHands(DateTimeOffset now)
     {
         var hour = now.Hour % 12 + now.Minute / 60.0;
         var minute = now.Minute + now.Second / 60.0;
+        var second = now.Second + now.Millisecond / 1000.0;
         SetHand(HourHand, hour * 30, 26);
         SetHand(MinuteHand, minute * 6, 38);
+        SetHand(SecondHand, second * 6, 42);
+        SecondHand.Visibility = _configuration.ShowSeconds ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private static void SetHand(Line hand, double angleDegrees, double length)
     {
         var radians = angleDegrees * Math.PI / 180.0;
-        hand.X2 = 60 + Math.Sin(radians) * length;
-        hand.Y2 = 60 - Math.Cos(radians) * length;
+        hand.X2 = 66 + Math.Sin(radians) * length;
+        hand.Y2 = 66 - Math.Cos(radians) * length;
     }
 
     private async void SettingsButton_Click(object sender, RoutedEventArgs e)
@@ -147,7 +169,7 @@ public sealed partial class ClockWidgetView : UserControl, IDisposable
             Value = _configuration.SizeScale
         };
 
-        var panel = new StackPanel { Spacing = 8 };
+        var panel = new StackPanel { Spacing = 10 };
         panel.Children.Add(styleBox);
         panel.Children.Add(format24);
         panel.Children.Add(showSeconds);
@@ -181,6 +203,7 @@ public sealed partial class ClockWidgetView : UserControl, IDisposable
         _configuration.ShowDate = showDate.IsChecked == true;
         _configuration.SizeScale = sizeBox.Value;
         _onConfigurationChanged?.Invoke(_configuration);
+        WidgetSurfaceStyle.PulseScale(RootBorder);
         RefreshDisplay();
     }
 

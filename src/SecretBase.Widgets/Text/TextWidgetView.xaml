@@ -8,10 +8,19 @@
     mc:Ignorable="d">
 
     <Border
+        x:Name="OuterShell"
+        Background="#20151A24"
+        CornerRadius="20"
+        Padding="2"
+        BorderThickness="1"
+        BorderBrush="#28FFFFFF">
+    <Border
         x:Name="RootBorder"
-        Padding="16,12"
-        Background="#CC243447"
-        CornerRadius="16">
+        Padding="16,14"
+        Background="#D9181E28"
+        CornerRadius="18"
+        BorderThickness="1"
+        BorderBrush="#3DFFFFFF">
         <Grid>
             <TextBlock
                 x:Name="DisplayText"
@@ -20,8 +29,10 @@
                 IsTextSelectionEnabled="False"
                 DoubleTapped="DisplayText_DoubleTapped"
                 VerticalAlignment="Stretch"
-                FontSize="18"
-                Foreground="#FFF4F0E6" />
+                FontSize="17"
+                LineHeight="26"
+                CharacterSpacing="10"
+                Foreground="#FFF3EFE6" />
 
             <TextBox
                 x:Name="EditBox"
@@ -30,7 +41,7 @@
                 TextWrapping="Wrap"
                 VerticalAlignment="Stretch"
                 VerticalContentAlignment="Top"
-                FontSize="18"
+                FontSize="17"
                 LostFocus="EditBox_LostFocus"
                 KeyDown="EditBox_KeyDown">
                 <TextBox.KeyboardAccelerators>
@@ -41,5 +52,6 @@
                 </TextBox.KeyboardAccelerators>
             </TextBox>
         </Grid>
+    </Border>
     </Border>
 </UserControl>

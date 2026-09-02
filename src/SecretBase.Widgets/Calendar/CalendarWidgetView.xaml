@@ -12,12 +12,19 @@
       Move/resize stay on WidgetFrame DragBar.
     -->
     <Border
+        x:Name="OuterShell"
+        Background="#20151A24"
+        CornerRadius="20"
+        Padding="2"
+        BorderThickness="1"
+        BorderBrush="#28FFFFFF">
+    <Border
         x:Name="RootBorder"
         Padding="14,12"
-        Background="#CC243447"
-        CornerRadius="16"
+        Background="#D9181E28"
+        CornerRadius="18"
         BorderThickness="1"
-        BorderBrush="#44FFFFFF">
+        BorderBrush="#3DFFFFFF">
         <Grid RowSpacing="10">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
@@ -27,12 +34,22 @@
                 <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
-            <TextBlock
-                x:Name="HeaderText"
-                Grid.Row="0"
-                Text="Today"
-                FontSize="18"
-                FontWeight="SemiBold" />
+            <StackPanel Grid.Row="0" Spacing="2">
+                <TextBlock
+                    x:Name="HeaderText"
+                    Text="Today"
+                    FontSize="15"
+                    FontWeight="SemiBold"
+                    CharacterSpacing="60" />
+                <Border
+                    x:Name="HeaderAccent"
+                    Width="24"
+                    Height="2"
+                    HorizontalAlignment="Left"
+                    CornerRadius="1"
+                    Background="#FF7A9E86"
+                    Opacity="0.85" />
+            </StackPanel>
 
             <ScrollViewer
                 Grid.Row="1"
@@ -86,5 +103,6 @@
                     ToolTipService.ToolTip="Connect Google Calendar (OAuth)" />
             </Grid>
         </Grid>
+    </Border>
     </Border>
 </UserControl>

@@ -61,33 +61,18 @@ public sealed partial class CreativeWorkspaceView : UserControl
     public void ApplyTheme(ThemeDefinition theme)
     {
         _theme = theme;
-        RootBorder.Background = ThemePainter.Brush(theme.WidgetBackground, ThemePainter.EffectiveWidgetOpacity(theme));
-        RootBorder.CornerRadius = new CornerRadius(theme.CornerRadius);
-        RootBorder.BorderBrush = ThemePainter.Brush(theme.WidgetForeground, 0.25);
-
-        var font = new FontFamily(theme.FontFamily);
-        HeaderText.FontFamily = font;
-        HeaderText.Foreground = ThemePainter.Brush(theme.WidgetForeground);
-        SearchBox.FontFamily = font;
-        StatusLabel.FontFamily = font;
-        StatusLabel.Foreground = ThemePainter.Brush(theme.ForegroundMuted);
-
-        StyleActionButton(SearchButton, theme, accent: true);
-        StyleActionButton(AddButton, theme);
-        StyleActionButton(NewProjectButton, theme, accent: true);
+        WidgetSurfaceStyle.ApplyChrome(RootBorder, theme);
+        WidgetSurfaceStyle.ApplyHeader(HeaderText, null, theme);
+        SearchBox.FontFamily = new FontFamily(theme.FontFamily);
+        WidgetSurfaceStyle.ApplyMuted(StatusLabel, theme);
+        WidgetSurfaceStyle.ApplyActionButton(SearchButton, theme, accent: true);
+        WidgetSurfaceStyle.ApplyGhostButton(AddButton, theme);
+        WidgetSurfaceStyle.ApplyActionButton(NewProjectButton, theme, accent: true);
         RefreshLists();
     }
 
-    private static void StyleActionButton(Button button, ThemeDefinition theme, bool accent = false)
-    {
-        button.FontFamily = new FontFamily(theme.FontFamily);
-        button.Background = accent
-            ? ThemePainter.Brush(theme.Accent, 0.85)
-            : ThemePainter.Brush(theme.WidgetBackground, ThemePainter.EffectiveWidgetOpacity(theme));
-        button.Foreground = ThemePainter.Brush(theme.WidgetForeground);
-        button.BorderBrush = ThemePainter.Brush(theme.Accent, 0.55);
-        button.BorderThickness = new Thickness(1);
-    }
+    private static void StyleActionButton(Button button, ThemeDefinition theme, bool accent = false) =>
+        WidgetSurfaceStyle.ApplyActionButton(button, theme, accent);
 
     private void SearchBox_KeyDown(object sender, KeyRoutedEventArgs e)
     {

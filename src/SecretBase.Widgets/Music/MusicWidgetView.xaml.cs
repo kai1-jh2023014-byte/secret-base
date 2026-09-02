@@ -141,41 +141,25 @@ public sealed partial class MusicWidgetView : UserControl
     public void ApplyTheme(ThemeDefinition theme)
     {
         _theme = theme;
-        RootBorder.Background = ThemePainter.Brush(theme.WidgetBackground, ThemePainter.EffectiveWidgetOpacity(theme));
-        RootBorder.CornerRadius = new CornerRadius(theme.CornerRadius);
-        RootBorder.BorderBrush = ThemePainter.Brush(theme.WidgetForeground, 0.25);
-
-        var font = new FontFamily(theme.FontFamily);
-        HeaderText.FontFamily = font;
-        HeaderText.Foreground = ThemePainter.Brush(theme.WidgetForeground);
-        SearchBox.FontFamily = font;
-        TrackTitleText.FontFamily = font;
-        TrackTitleText.Foreground = ThemePainter.Brush(theme.WidgetForeground);
-        TrackArtistText.FontFamily = font;
-        TrackArtistText.Foreground = ThemePainter.Brush(theme.ForegroundMuted);
-        SourceLabel.FontFamily = font;
-        SourceLabel.Foreground = ThemePainter.Brush(theme.ForegroundMuted);
-        StatusLabel.FontFamily = font;
-        StatusLabel.Foreground = ThemePainter.Brush(theme.ForegroundMuted);
+        WidgetSurfaceStyle.ApplyLayeredChrome(OuterShell, RootBorder, theme);
+        WidgetSurfaceStyle.ApplyHeader(HeaderText, SourceLabel, theme);
+        WidgetSurfaceStyle.ApplyMuted(StatusLabel, theme);
+        WidgetSurfaceStyle.ApplyMuted(ConnectPromptText, theme);
+        WidgetSurfaceStyle.ApplyBody(TrackTitleText, theme);
+        WidgetSurfaceStyle.ApplyMuted(TrackArtistText, theme);
+        SearchBox.FontFamily = new FontFamily(theme.FontFamily);
         ArtGlyph.Foreground = ThemePainter.Brush(theme.Accent);
-        ArtPlaceholder.Background = ThemePainter.Brush(theme.Accent, 0.2);
+        ArtPlaceholder.Background = ThemePainter.Brush(theme.Accent, 0.18);
+        ArtPlaceholder.CornerRadius = new CornerRadius(Math.Max(10, theme.CornerRadius * 0.55));
+        WidgetSurfaceStyle.ApplyProgress(PlaybackProgress, theme);
 
-        StyleActionButton(SearchButton, theme, accent: true);
-        StyleActionButton(PreviousButton, theme);
-        StyleActionButton(PlayPauseButton, theme, accent: true);
-        StyleActionButton(NextButton, theme);
-        StyleActionButton(OpenWebSourceButton, theme);
-    }
-
-    private static void StyleActionButton(Button button, ThemeDefinition theme, bool accent = false)
-    {
-        button.FontFamily = new FontFamily(theme.FontFamily);
-        button.Background = accent
-            ? ThemePainter.Brush(theme.Accent, 0.85)
-            : ThemePainter.Brush(theme.WidgetBackground, ThemePainter.EffectiveWidgetOpacity(theme));
-        button.Foreground = ThemePainter.Brush(theme.WidgetForeground);
-        button.BorderBrush = ThemePainter.Brush(theme.Accent, 0.55);
-        button.BorderThickness = new Thickness(1);
+        WidgetSurfaceStyle.ApplyActionButton(SearchButton, theme, accent: true);
+        WidgetSurfaceStyle.ApplyGhostButton(PreviousButton, theme);
+        WidgetSurfaceStyle.ApplyActionButton(PlayPauseButton, theme, accent: true);
+        WidgetSurfaceStyle.ApplyGhostButton(NextButton, theme);
+        WidgetSurfaceStyle.ApplyGhostButton(OpenWebSourceButton, theme);
+        WidgetSurfaceStyle.ApplyActionButton(ConnectSpotifyButton, theme, accent: true);
+        WidgetSurfaceStyle.ApplyGhostButton(ConnectYouTubeButton, theme);
     }
 
     private void SearchBox_KeyDown(object sender, KeyRoutedEventArgs e)

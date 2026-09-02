@@ -57,31 +57,15 @@ public sealed partial class CalendarWidgetView : UserControl
     public void ApplyTheme(ThemeDefinition theme)
     {
         _theme = theme;
-        RootBorder.Background = ThemePainter.Brush(theme.WidgetBackground, ThemePainter.EffectiveWidgetOpacity(theme));
-        RootBorder.CornerRadius = new CornerRadius(theme.CornerRadius);
-        RootBorder.BorderBrush = ThemePainter.Brush(theme.WidgetForeground, 0.25);
-
-        var font = new FontFamily(theme.FontFamily);
-        HeaderText.FontFamily = font;
-        HeaderText.Foreground = ThemePainter.Brush(theme.WidgetForeground);
-        ProviderLabel.FontFamily = font;
-        ProviderLabel.Foreground = ThemePainter.Brush(theme.ForegroundMuted);
-        StatusLabel.FontFamily = font;
-        StatusLabel.Foreground = ThemePainter.Brush(theme.ForegroundMuted);
-
-        StyleActionButton(RefreshButton, theme);
-        StyleActionButton(OpenCalendarButton, theme);
-        StyleActionButton(ConnectButton, theme);
+        WidgetSurfaceStyle.ApplyLayeredChrome(OuterShell, RootBorder, theme);
+        WidgetSurfaceStyle.ApplyHeader(HeaderText, null, theme);
+        HeaderAccent.Background = ThemePainter.Brush(theme.Accent, 0.9);
+        WidgetSurfaceStyle.ApplyMuted(ProviderLabel, theme);
+        WidgetSurfaceStyle.ApplyMuted(StatusLabel, theme);
+        WidgetSurfaceStyle.ApplyGhostButton(RefreshButton, theme);
+        WidgetSurfaceStyle.ApplyGhostButton(OpenCalendarButton, theme);
+        WidgetSurfaceStyle.ApplyActionButton(ConnectButton, theme, accent: true);
         RestyleAgendaItems();
-    }
-
-    private static void StyleActionButton(Button button, ThemeDefinition theme)
-    {
-        button.FontFamily = new FontFamily(theme.FontFamily);
-        button.Background = ThemePainter.Brush(theme.WidgetBackground, ThemePainter.EffectiveWidgetOpacity(theme));
-        button.Foreground = ThemePainter.Brush(theme.WidgetForeground);
-        button.BorderBrush = ThemePainter.Brush(theme.Accent, 0.55);
-        button.BorderThickness = new Thickness(1);
     }
 
     private void RefreshButton_Click(object sender, RoutedEventArgs e) => _ = RefreshAgendaAsync();

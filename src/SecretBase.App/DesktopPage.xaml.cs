@@ -199,34 +199,36 @@ public sealed partial class DesktopPage : Page
 
     private void StyleFabButtons(ThemeDefinition theme)
     {
-        AddWidgetFab.Background = ThemePainter.Brush(theme.Accent, 0.92);
-        AddWidgetFab.Foreground = ThemePainter.Brush(theme.Foreground);
-        AddWidgetFab.BorderBrush = ThemePainter.Brush(theme.WidgetForeground, 0.35);
-        AddWidgetFab.BorderThickness = new Thickness(1);
-        AddWidgetFab.FontFamily = new FontFamily(theme.FontFamily);
+        void StylePrimary(Button button)
+        {
+            button.Background = ThemePainter.Brush(theme.Accent, 0.9);
+            button.Foreground = ThemePainter.Brush(theme.Foreground);
+            button.BorderBrush = ThemePainter.Brush(theme.Border, 0.35);
+            button.BorderThickness = new Thickness(1);
+            button.CornerRadius = new CornerRadius(Math.Max(12, theme.CornerRadius * 0.7));
+            button.FontFamily = new FontFamily(theme.FontFamily);
+        }
 
-        AddBlockFab.Background = ThemePainter.Brush(theme.WidgetBackground, ThemePainter.EffectiveWidgetOpacity(theme));
-        AddBlockFab.Foreground = ThemePainter.Brush(theme.WidgetForeground);
-        AddBlockFab.BorderBrush = ThemePainter.Brush(theme.Accent, 0.7);
-        AddBlockFab.BorderThickness = new Thickness(1);
-        AddBlockFab.FontFamily = new FontFamily(theme.FontFamily);
+        void StyleSecondary(Button button)
+        {
+            button.Background = ThemePainter.Brush(theme.WidgetBackground, ThemePainter.EffectiveWidgetOpacity(theme));
+            button.Foreground = ThemePainter.Brush(theme.WidgetForeground);
+            button.BorderBrush = ThemePainter.Brush(theme.Border, 0.5);
+            button.BorderThickness = new Thickness(1);
+            button.CornerRadius = new CornerRadius(Math.Max(12, theme.CornerRadius * 0.7));
+            button.FontFamily = new FontFamily(theme.FontFamily);
+        }
 
-        ThemeFab.Background = ThemePainter.Brush(theme.WidgetBackground, ThemePainter.EffectiveWidgetOpacity(theme));
-        ThemeFab.Foreground = ThemePainter.Brush(theme.WidgetForeground);
-        ThemeFab.BorderBrush = ThemePainter.Brush(theme.Accent, 0.7);
-        ThemeFab.BorderThickness = new Thickness(1);
-        ThemeFab.FontFamily = new FontFamily(theme.FontFamily);
-
-        ArrangeFab.Background = ThemePainter.Brush(theme.WidgetBackground, ThemePainter.EffectiveWidgetOpacity(theme));
-        ArrangeFab.Foreground = ThemePainter.Brush(theme.WidgetForeground);
-        ArrangeFab.BorderBrush = ThemePainter.Brush(theme.Accent, 0.7);
-        ArrangeFab.BorderThickness = new Thickness(1);
-        ArrangeFab.FontFamily = new FontFamily(theme.FontFamily);
+        StylePrimary(AddWidgetFab);
+        StyleSecondary(AddBlockFab);
+        StyleSecondary(ThemeFab);
+        StyleSecondary(ArrangeFab);
 
         if (HostStatusLabel is not null)
         {
             HostStatusLabel.Foreground = ThemePainter.Brush(theme.ForegroundMuted);
             HostStatusLabel.FontFamily = new FontFamily(theme.FontFamily);
+            HostStatusLabel.CharacterSpacing = 20;
         }
     }
 
@@ -1351,7 +1353,7 @@ public sealed partial class DesktopPage : Page
         {
             Header = "Preset",
             HorizontalAlignment = HorizontalAlignment.Stretch,
-            SelectedItem = ThemePresets.Names.Contains(draft.DisplayName) ? draft.DisplayName : "Default"
+            SelectedItem = ThemePresets.Names.Contains(draft.DisplayName) ? draft.DisplayName : "Atelier"
         };
         foreach (var name in ThemePresets.Names)
         {
@@ -1401,29 +1403,60 @@ public sealed partial class DesktopPage : Page
             SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline
         };
 
+        var previewOuter = new Border
+        {
+            Padding = new Thickness(2),
+            CornerRadius = new CornerRadius(draft.CornerRadius + 2),
+            BorderThickness = new Thickness(1),
+            Margin = new Thickness(0, 4, 0, 0)
+        };
         var preview = new Border
         {
-            Height = 72,
+            MinHeight = 88,
             CornerRadius = new CornerRadius(draft.CornerRadius),
-            Padding = new Thickness(12, 8, 12, 8),
-            Margin = new Thickness(0, 4, 0, 0)
+            Padding = new Thickness(16, 12, 16, 12),
+            BorderThickness = new Thickness(1)
+        };
+        var previewAccent = new Border
+        {
+            Width = 24,
+            Height = 2,
+            HorizontalAlignment = HorizontalAlignment.Left,
+            CornerRadius = new CornerRadius(1),
+            Margin = new Thickness(0, 0, 0, 6)
         };
         var previewTime = new TextBlock
         {
-            Text = "14:35:08",
-            FontSize = 22,
-            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
+            Text = "23:41",
+            FontSize = 28,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiLight,
+            CharacterSpacing = 80
         };
-        var previewDate = new TextBlock { Text = "2026 / 08 / 13", FontSize = 12, Opacity = 0.9 };
-        var previewStack = new StackPanel { Spacing = 2 };
+        var previewDate = new TextBlock
+        {
+            Text = "Wednesday\nSeptember 2",
+            FontSize = 12,
+            CharacterSpacing = 20,
+            LineHeight = 18
+        };
+        var previewStack = new StackPanel { Spacing = 4 };
+        previewStack.Children.Add(previewAccent);
         previewStack.Children.Add(previewTime);
         previewStack.Children.Add(previewDate);
         preview.Child = previewStack;
+        previewOuter.Child = preview;
 
         void RefreshPreview()
         {
-            preview.Background = ThemePainter.Brush(widgetBg.Text, Math.Clamp(opacityBox.Value, 0.35, 1.0));
-            preview.CornerRadius = new CornerRadius(Math.Clamp(radiusBox.Value, 0, 40));
+            var opacity = Math.Clamp(opacityBox.Value, 0.35, 1.0);
+            var radius = Math.Clamp(radiusBox.Value, 0, 40);
+            previewOuter.Background = ThemePainter.Brush(draft.SurfaceSecondary, opacity * 0.55);
+            previewOuter.BorderBrush = ThemePainter.Brush(draft.Border, 0.28);
+            previewOuter.CornerRadius = new CornerRadius(radius + 2);
+            preview.Background = ThemePainter.Brush(widgetBg.Text, opacity);
+            preview.CornerRadius = new CornerRadius(Math.Max(8, radius - 2));
+            preview.BorderBrush = ThemePainter.Brush(draft.Border, 0.55);
+            previewAccent.Background = ThemePainter.Brush(accent.Text, 0.9);
             previewTime.Foreground = ThemePainter.Brush(widgetFg.Text);
             previewDate.Foreground = ThemePainter.Brush(mutedFg.Text);
             var font = fontBox.SelectedItem as string ?? draft.FontFamily;
@@ -1464,13 +1497,13 @@ public sealed partial class DesktopPage : Page
         var panel = new StackPanel { Spacing = 8, Width = 360 };
         panel.Children.Add(new TextBlock
         {
-            Text = "Applies to Clock, date, Text boxes, and Blocks.",
+            Text = "Applies to Clock, Music, Calendar, Text, AI, and Blocks.",
             TextWrapping = TextWrapping.Wrap,
             Opacity = 0.8,
             FontSize = 12
         });
         panel.Children.Add(presetBox);
-        panel.Children.Add(preview);
+        panel.Children.Add(previewOuter);
         panel.Children.Add(widgetBg);
         panel.Children.Add(widgetFg);
         panel.Children.Add(mutedFg);
