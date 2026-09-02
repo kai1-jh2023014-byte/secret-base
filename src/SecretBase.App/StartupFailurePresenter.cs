@@ -57,12 +57,12 @@ internal static class StartupFailurePresenter
             XamlRoot = root.XamlRoot
         };
 
-        var result = await dialog.ShowAsync().ConfigureAwait(true);
+        var result = await dialog.ShowAsync().AsTask().ConfigureAwait(true);
         if (result == ContentDialogResult.Primary)
         {
             try
             {
-                await Launcher.LaunchFolderPathAsync(dataFolderPath).ConfigureAwait(true);
+                await Launcher.LaunchFolderPathAsync(dataFolderPath).AsTask().ConfigureAwait(true);
             }
             catch
             {
