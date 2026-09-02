@@ -88,6 +88,7 @@ public class AssistantPlanningWorkflowTests
     {
         var day = new DateOnly(2026, 8, 24);
         var offset = TimeSpan.FromHours(9);
+        var fixedTime = new PlanningFixedTime(new DateTimeOffset(day.ToDateTime(new TimeOnly(9, 0)), offset));
         var calendar = new CalendarCommandService(
             new CalendarService(
             [
@@ -102,7 +103,7 @@ public class AssistantPlanningWorkflowTests
                     }
                 ])
             ]),
-            new PlanningFixedTime(new DateTimeOffset(day.ToDateTime(new TimeOnly(9, 0)), offset)));
+            fixedTime);
 
         var projects = new CreativeProjectService(new MemoryCreativeProjectStore());
         Assert.True(projects.TryCreate(
@@ -120,6 +121,7 @@ public class AssistantPlanningWorkflowTests
             calendar: calendar,
             creative: creative,
             music: new MusicCommandService(new MusicService()),
+            time: fixedTime,
             settings: () => new AssistantSettings { MaxSteps = 5 },
             isOpenAiKeyConfigured: () => true);
 
