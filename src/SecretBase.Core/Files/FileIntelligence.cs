@@ -9,7 +9,8 @@ public enum FileCandidateKind
     Relevant = 2,
     Duplicate = 3,
     Temporary = 4,
-    Important = 5
+    Important = 5,
+    ProjectRelated = 6
 }
 
 /// <summary>
@@ -100,7 +101,8 @@ public static class FileIntelligence
                 var reason = kind switch
                 {
                     FileCandidateKind.Important => "Looks like a durable project document",
-                    FileCandidateKind.Relevant => "Relevant to the current project",
+                    FileCandidateKind.Relevant or FileCandidateKind.ProjectRelated =>
+                        "Related to the current project",
                     FileCandidateKind.Recent => "Opened from Secret Base recently",
                     FileCandidateKind.Duplicate => "Same name registered in more than one project",
                     FileCandidateKind.Temporary => "Looks temporary",
@@ -177,7 +179,7 @@ public static class FileIntelligence
 
         if (currentProject && recentlyOpened)
         {
-            return FileCandidateKind.Relevant;
+            return FileCandidateKind.ProjectRelated;
         }
 
         if (recentlyOpened && lastOpened is not null && now - lastOpened.Value <= RecentWindow)

@@ -13,7 +13,7 @@
 | **Projects** | Create a Project → Dashboard → Open Folder / Cursor / ChatGPT |
 | **Apps** | Register your own exe / folder / https URL and launch it (no Shell, no admin) |
 | **Classroom** | Opens official Google Classroom in the **existing Web Widget** (no new Classroom UI) |
-| **AI** | **Base AI** understands Calendar, Projects, Todo, Workspace, Memory, Activity, and Intent; prepares a workspace quietly; confirms before launch. Remote AI falls back to Local. |
+| **AI** | **Base AI** understands Calendar, Projects, Todo, Workspace, Memory, Activity, Situation, Intent, and Sessions; prepares a workspace quietly; confirms before launch. Remote AI falls back to Local. |
 | **Theme** | Shared colors, fonts, corner radius, transparency |
 | **Safe Exit** | **Ctrl+Shift+Q** — process end only; Windows / macOS shell untouched |
 
@@ -78,12 +78,12 @@ macOS:   ~/Library/Application Support/SecretBase\
   layouts\
   themes\
   logs\
-  settings\     # assistant.json, base.json (onboarding/workspace), todos.json
+  settings\     # assistant.json, base.json, todos.json, memory.json, activity.json, automation-feedback.json, sessions.json
 ```
 
 ## Base AI in one paragraph
 
-Base AI is Secret Base's quiet intelligence — not a ChatGPT clone. It observes local context (calendar, projects, todos, registered files/apps, music, focus), can **prepare a workspace** without launching anything, and asks for confirmation before opening a project or app. File cleanup is suggestion-only. `files_delete` never calls OS `File.Delete`. Missing API keys fall back to Local AI.
+Base AI is Secret Base's quiet intelligence — not a ChatGPT clone. It observes local context (calendar, projects, todos, registered files/apps, music, focus, sanitized foreground activity, memory, sessions), can **prepare a workspace** without launching anything, and asks for confirmation before opening a project or app. File cleanup is suggestion-only. `files_delete` never calls OS `File.Delete`. Missing API keys fall back to Local AI. Learning never turns confirmation into auto-launch.
 
 ## Provider setup
 

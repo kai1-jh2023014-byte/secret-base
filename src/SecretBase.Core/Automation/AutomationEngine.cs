@@ -1,4 +1,3 @@
-using SecretBase.Core.Activity;
 using SecretBase.Core.Intent;
 using SecretBase.Core.State;
 
@@ -12,7 +11,20 @@ public enum AutomationTriggerKind
     FocusEnded = 3,
     WorkspaceChanged = 4,
     UserActivity = 5,
-    SuggestionFeedback = 6
+    SuggestionFeedback = 6,
+    Application = 7,
+    SystemResume = 8,
+    ProjectState = 9,
+    FileState = 10
+}
+
+public enum InterventionMode
+{
+    Silent = 0,
+    Passive = 1,
+    Suggest = 2,
+    Confirm = 3,
+    Urgent = 4
 }
 
 public sealed class AutomationSuggestion
@@ -32,6 +44,8 @@ public sealed class AutomationSuggestion
     public AutomationSafetyLevel Safety { get; init; } = AutomationSafetyLevel.SafeAuto;
 
     public string? ProjectName { get; init; }
+
+    public IReadOnlyList<string> Evidence { get; init; } = [];
 }
 
 public sealed class AutomationFeedback
@@ -63,6 +77,8 @@ public interface IAutomationFeedbackStore
     IReadOnlyList<AutomationFeedback> Recent(int take = 40);
 
     double AcceptanceRate(DetectedIntentKind intent);
+
+    int ConsecutiveDismissals(DetectedIntentKind intent);
 }
 
 public sealed class AutomationFeedbackStore : IAutomationFeedbackStore
@@ -105,6 +121,18 @@ public sealed class AutomationFeedbackStore : IAutomationFeedbackStore
         }
     }
 
+    public int ConsecutiveDismissals(DetectedIntentKind intent)
+    {
+        lock (_gate)
+        {
+            return _items
+                .Where(item => item.Intent == intent)
+                .Reverse()
+                .TakeWhile(item => !item.Accepted)
+                .Count();
+        }
+    }
+
     public AutomationFeedbackDocument Snapshot()
     {
         lock (_gate)
@@ -126,34 +154,106 @@ public sealed class AutomationFeedbackStore : IAutomationFeedbackStore
 /// <summary>Quiet-by-default gate. Never launches OS. Focus and low urgency stay silent.</summary>
 public static class InterventionPolicy
 {
+    public static readonly TimeSpan MinRepeat = TimeSpan.FromMinutes(10);
+
     public static bool ShouldStayQuiet(
         UserState state,
         DetectedIntent intent,
-        double urgency = 0.3)
+        double urgency = 0.3) =>
+        Decide(state, intent, urgency, dismissals: 0, lastIntervention: null) is InterventionMode.Silent
+            or InterventionMode.Passive;
+
+    public static InterventionMode Decide(
+        UserState state,
+        DetectedIntent intent,
+        double urgency = 0.3,
+        int dismissals = 0,
+        DateTimeOffset? lastIntervention = null)
     {
         if (state.FocusRunning && urgency < 0.7)
         {
-            return true;
+            return InterventionMode.Silent;
         }
 
         if (intent.Kind == DetectedIntentKind.Unknown || intent.Confidence < IntentEngine.ActionThreshold)
         {
-            return true;
+            return InterventionMode.Silent;
         }
 
         var hour = state.Now.Hour;
         var quietHours = hour >= 22 || hour < 8;
         if (quietHours && urgency < 0.8 && state.CurrentCalendarTitle is null)
         {
-            return true;
+            return InterventionMode.Silent;
         }
 
-        return false;
+        if (lastIntervention is not null && state.Now - lastIntervention.Value < MinRepeat && urgency < 0.75)
+        {
+            return InterventionMode.Silent;
+        }
+
+        var mode = intent.Kind switch
+        {
+            DetectedIntentKind.ContinueProject
+                or DetectedIntentKind.ResumePreviousSession
+                or DetectedIntentKind.PrepareWorkspace
+                or DetectedIntentKind.OpenProject => InterventionMode.Confirm,
+            DetectedIntentKind.ReviewTasks or DetectedIntentKind.TakeBreak => InterventionMode.Suggest,
+            _ => InterventionMode.Silent
+        };
+        return LearningPolicy.Cap(mode, dismissals);
     }
 }
 
+public static class LearningPolicy
+{
+    /// <summary>Learning never raises Safety / Confirmation to auto-action.</summary>
+    public const bool MayEscalatePrivilege = false;
+
+    public static InterventionMode Cap(InterventionMode proposed, int consecutiveDismissals)
+    {
+        if (consecutiveDismissals >= 3
+            && proposed is InterventionMode.Suggest or InterventionMode.Confirm or InterventionMode.Urgent)
+        {
+            return InterventionMode.Passive;
+        }
+
+        return proposed;
+    }
+}
+
+public static class SuggestionRanking
+{
+    public static double Adjust(double confidence, double acceptanceRate) =>
+        Math.Clamp(confidence * (0.7 + (acceptanceRate * 0.3)), 0, 0.99);
+}
+
+public sealed class AutomationPlan
+{
+    public string Summary { get; init; } = string.Empty;
+
+    public string PrepareStep { get; init; } = "Prepare workspace (Safe Auto).";
+
+    public string ConfirmStep { get; init; } = "Open registered project after confirmation.";
+
+    public bool RequiresConfirmation { get; init; } = true;
+}
+
+public sealed class AutomationExecution
+{
+    public InterventionMode Mode { get; init; } = InterventionMode.Silent;
+
+    public AutomationSuggestion? Suggestion { get; init; }
+
+    public AutomationPlan? Plan { get; init; }
+
+    public string? Result { get; init; }
+
+    public IReadOnlyList<string> Evidence { get; init; } = [];
+}
+
 /// <summary>
-/// Trigger → Intent → Plan → Safety → Suggestion. Actions still go through Confirmation.
+/// Trigger → Condition → Intent → Plan → Safety → Suggestion. Actions still go through Confirmation.
 /// </summary>
 public static class AutomationEngine
 {
@@ -161,12 +261,23 @@ public static class AutomationEngine
         UserState state,
         DetectedIntent intent,
         IAutomationFeedbackStore? feedback = null,
-        AutomationTriggerKind trigger = AutomationTriggerKind.Time)
+        AutomationTriggerKind trigger = AutomationTriggerKind.Time) =>
+        Run(state, intent, feedback, trigger, lastIntervention: null).Suggestion;
+
+    public static AutomationExecution Run(
+        UserState state,
+        DetectedIntent intent,
+        IAutomationFeedbackStore? feedback = null,
+        AutomationTriggerKind trigger = AutomationTriggerKind.Time,
+        DateTimeOffset? lastIntervention = null)
     {
         ArgumentNullException.ThrowIfNull(state);
         ArgumentNullException.ThrowIfNull(intent);
 
-        var urgency = trigger is AutomationTriggerKind.Calendar or AutomationTriggerKind.Startup
+        var urgency = trigger is AutomationTriggerKind.Calendar
+            or AutomationTriggerKind.Startup
+            or AutomationTriggerKind.SystemResume
+            or AutomationTriggerKind.FocusEnded
             ? 0.65
             : 0.35;
         if (state.CurrentCalendarTitle is not null)
@@ -174,32 +285,50 @@ public static class AutomationEngine
             urgency = 0.7;
         }
 
-        if (InterventionPolicy.ShouldStayQuiet(state, intent, urgency))
+        var dismissals = feedback?.ConsecutiveDismissals(intent.Kind) ?? 0;
+        var mode = InterventionPolicy.Decide(state, intent, urgency, dismissals, lastIntervention);
+        if (mode is InterventionMode.Silent or InterventionMode.Passive)
         {
-            return null;
+            return new AutomationExecution
+            {
+                Mode = mode,
+                Result = mode == InterventionMode.Silent ? "Stayed quiet." : "Noted without interrupting.",
+                Evidence = intent.Evidence
+            };
         }
 
         var rate = feedback?.AcceptanceRate(intent.Kind) ?? 0.5;
-        var confidence = Math.Clamp(intent.Confidence * (0.7 + (rate * 0.3)), 0, 0.99);
+        var confidence = SuggestionRanking.Adjust(intent.Confidence, rate);
         if (confidence < IntentEngine.ActionThreshold)
         {
-            return null;
+            return new AutomationExecution
+            {
+                Mode = InterventionMode.Silent,
+                Result = "Confidence too low after ranking.",
+                Evidence = intent.Evidence
+            };
         }
 
-        return intent.Kind switch
+        var suggestion = intent.Kind switch
         {
-            DetectedIntentKind.ContinueProject or DetectedIntentKind.PrepareWorkspace or DetectedIntentKind.OpenProject
+            DetectedIntentKind.ContinueProject
+                or DetectedIntentKind.ResumePreviousSession
+                or DetectedIntentKind.PrepareWorkspace
+                or DetectedIntentKind.OpenProject
                 => new AutomationSuggestion
                 {
-                    Intent = DetectedIntentKind.ContinueProject,
+                    Intent = intent.Kind == DetectedIntentKind.ResumePreviousSession
+                        ? DetectedIntentKind.ResumePreviousSession
+                        : DetectedIntentKind.ContinueProject,
                     Title = string.IsNullOrWhiteSpace(intent.ProjectName)
-                        ? "Your workspace is ready."
+                        ? "Continue where you left off?"
                         : $"{intent.ProjectName} workspace is ready.",
                     Detail = "Continue development?",
                     Confidence = Math.Round(confidence, 2),
                     RequiresConfirmation = true,
                     Safety = AutomationSafetyLevel.SafeAuto,
-                    ProjectName = intent.ProjectName
+                    ProjectName = intent.ProjectName,
+                    Evidence = intent.Evidence
                 },
             DetectedIntentKind.ReviewTasks => new AutomationSuggestion
             {
@@ -208,9 +337,9 @@ public static class AutomationEngine
                 Detail = state.ActiveTodo ?? "Review your list.",
                 Confidence = Math.Round(confidence, 2),
                 RequiresConfirmation = false,
-                Safety = AutomationSafetyLevel.SafeAuto
+                Safety = AutomationSafetyLevel.SafeAuto,
+                Evidence = intent.Evidence
             },
-            DetectedIntentKind.StartFocus => null,
             DetectedIntentKind.TakeBreak => new AutomationSuggestion
             {
                 Intent = DetectedIntentKind.TakeBreak,
@@ -218,9 +347,28 @@ public static class AutomationEngine
                 Detail = "Focus stays idle.",
                 Confidence = Math.Round(confidence, 2),
                 RequiresConfirmation = false,
-                Safety = AutomationSafetyLevel.SafeAuto
+                Safety = AutomationSafetyLevel.SafeAuto,
+                Evidence = intent.Evidence
             },
             _ => null
+        };
+
+        if (suggestion is null)
+        {
+            return new AutomationExecution { Mode = InterventionMode.Silent, Evidence = intent.Evidence };
+        }
+
+        return new AutomationExecution
+        {
+            Mode = mode,
+            Suggestion = suggestion,
+            Plan = new AutomationPlan
+            {
+                Summary = suggestion.Title,
+                RequiresConfirmation = suggestion.RequiresConfirmation
+            },
+            Result = "Suggestion prepared. Launch still requires confirmation.",
+            Evidence = intent.Evidence
         };
     }
 }

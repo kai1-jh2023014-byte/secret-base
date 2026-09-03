@@ -7,7 +7,8 @@ public enum MemoryScope
     Workspace = 2,
     Workflow = 3,
     Decision = 4,
-    Preference = 5
+    Preference = 5,
+    ActivitySummary = 6
 }
 
 public enum MemoryImportance
@@ -46,6 +47,8 @@ public sealed class MemoryEntry
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 
     public DateTimeOffset LastAccessedAt { get; set; } = DateTimeOffset.UtcNow;
+
+    public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
 
     public DateTimeOffset? ExpiresAt { get; set; }
 }
@@ -125,6 +128,12 @@ public interface IMemoryRetriever
         string? projectId = null,
         string? query = null,
         int take = 12);
+
+    IReadOnlyList<MemoryEntry> RecallRanked(
+        DateTimeOffset now,
+        string? query = null,
+        string? projectName = null,
+        int take = 8);
 }
 
 public sealed class MemoryStore : IMemoryStore
@@ -159,6 +168,7 @@ public sealed class MemoryStore : IMemoryStore
             }
 
             entry.Confidence = Math.Clamp(entry.Confidence, 0, 1);
+            entry.UpdatedAt = entry.UpdatedAt == default ? DateTimeOffset.UtcNow : entry.UpdatedAt;
             entry.LastAccessedAt = entry.CreatedAt == default ? DateTimeOffset.UtcNow : entry.LastAccessedAt;
             var existing = _entries.FindIndex(item =>
                 item.Scope == entry.Scope
@@ -232,6 +242,25 @@ public sealed class MemoryStore : IMemoryStore
         }
     }
 
+    public IReadOnlyList<MemoryEntry> RecallRanked(
+        DateTimeOffset now,
+        string? query = null,
+        string? projectName = null,
+        int take = 8)
+    {
+        lock (_gate)
+        {
+            PruneUnlocked(now);
+            var ranked = MemoryRanker.Rank(_entries, now, query, projectName, take);
+            foreach (var item in ranked)
+            {
+                item.LastAccessedAt = now;
+            }
+
+            return ranked;
+        }
+    }
+
     public MemoryDocument Snapshot()
     {
         lock (_gate)
@@ -288,6 +317,7 @@ public sealed class MemoryStore : IMemoryStore
         ProjectName = item.ProjectName,
         CreatedAt = item.CreatedAt,
         LastAccessedAt = item.LastAccessedAt,
+        UpdatedAt = item.UpdatedAt,
         ExpiresAt = item.ExpiresAt
     };
 }

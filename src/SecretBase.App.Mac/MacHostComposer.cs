@@ -121,6 +121,7 @@ public static class MacHostComposer
         var memoryStore = new JsonMemoryStore();
         var activityStore = new JsonActivityStore();
         var feedbackStore = new JsonAutomationFeedbackStore();
+        var sessionStore = new JsonWorkSessionStore();
         var layoutExisted = new JsonLayoutStore(logger: logger).Exists(RoomId.DefaultRoomId);
         var baseSettings = new JsonBaseSettingsStore().LoadOrCreate(layoutExisted);
         var baseExperience = new BaseExperienceServices(
@@ -140,8 +141,10 @@ public static class MacHostComposer
             () => time.GetLocalNow(),
             memoryStore,
             activityStore,
-            feedbackStore);
+            feedbackStore,
+            sessionStore);
         baseExperience.CurrentWorkspace = baseSettings.LastWorkspace;
+        logger.Info("observation", new NullComputerObservationService().CapabilityNote);
         var assistant = new AssistantService(
             assistantRegistry,
             new AssistantToolExecutor(

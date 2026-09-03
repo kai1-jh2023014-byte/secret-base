@@ -116,6 +116,8 @@ public sealed class AssistantToolExecutor : IAiToolExecutor
             AssistantToolNames.ActivityRecent => ActivityRecent(),
             AssistantToolNames.SearchBase => SearchBase(root),
             AssistantToolNames.UserState => UserState(),
+            AssistantToolNames.SituationNow => SituationNow(),
+            AssistantToolNames.SessionRecent => SessionRecent(),
             AssistantToolNames.AutomationFeedback => AutomationFeedback(root),
             _ => AssistantToolResult.Fail(AssistantUserMessages.ToolUnavailable)
         };
@@ -144,7 +146,9 @@ public sealed class AssistantToolExecutor : IAiToolExecutor
                 extras.Add("Workspace:\n" + WorkspacePreparer.FormatCard(_base.CurrentWorkspace));
             }
 
+            extras.Add(BaseAiCatalog.AllowedSlices);
             extras.Add("User state:\n" + FormatUserState(_base));
+            extras.Add("Situation:\n" + _base.ComposeSituation().Format());
             extras.Add("Continuation:\n" + _base.Continuation().Format());
 
             text += Environment.NewLine + Environment.NewLine + string.Join(Environment.NewLine, extras);
@@ -1126,6 +1130,12 @@ public sealed class AssistantToolExecutor : IAiToolExecutor
         AssistantToolArgumentValidator.TryGetInt(root, "minutes", 25, 5, 90, out var minutes, out _);
         AssistantToolArgumentValidator.TryGetString(root, "label", required: false, out var label, out _);
         var session = _base.Focus.Start(_base.Now, TimeSpan.FromMinutes(minutes), label);
+        _base.Sessions.StartOrContinue(
+            _base.Now,
+            _base.CurrentWorkspace?.ProjectId,
+            _base.CurrentWorkspace?.ProjectName,
+            _base.CurrentWorkspace?.Title);
+        _base.Sessions.Touch(session.Label, null, null, focusStarted: true);
         _base.Activity.Record(new ActivityEvent
         {
             Kind = ActivityKind.FocusStarted,
@@ -1165,7 +1175,9 @@ public sealed class AssistantToolExecutor : IAiToolExecutor
         }
 
         AssistantToolArgumentValidator.TryGetString(root, "query", required: false, out var query, out _);
-        var items = _base.Memory.Recall(_base.Now, query: query, take: 12);
+        var items = string.IsNullOrWhiteSpace(query)
+            ? _base.Memory.Recall(_base.Now, take: 12)
+            : _base.Memory.RecallRanked(_base.Now, query, _base.ComposeUserState().CurrentProjectName, 8);
         if (items.Count == 0)
         {
             return AssistantToolResult.Ok(
@@ -1332,8 +1344,56 @@ public sealed class AssistantToolExecutor : IAiToolExecutor
                 "Todo: " + (state.ActiveTodo ?? "(none)"),
                 "Activity: " + (string.IsNullOrWhiteSpace(state.RecentActivityLine) ? "(none)" : state.RecentActivityLine),
                 $"Intent: {intent.Kind} ({intent.Confidence:0.00}) — {intent.Rationale}",
+                intent.Evidence.Count == 0
+                    ? "Evidence: (none)"
+                    : "Evidence: " + string.Join("; ", intent.Evidence.Take(4)),
                 continuation.Format(),
+                BaseAiCatalog.AllowedSlices,
                 "Intent is not an action. Confirmation still applies before launch."
             ]);
+    }
+
+    private AssistantToolResult SituationNow()
+    {
+        if (_base is null)
+        {
+            return AssistantToolResult.Fail(
+                AssistantUserMessages.ToolUnavailable,
+                activityDomain: AssistantActivityDomains.Situation);
+        }
+
+        return AssistantToolResult.Ok(
+            _base.ComposeSituation().Format()
+            + Environment.NewLine
+            + BaseAiCatalog.Forbidden,
+            activity: "Situation ✓",
+            activityDomain: AssistantActivityDomains.Situation);
+    }
+
+    private AssistantToolResult SessionRecent()
+    {
+        if (_base is null)
+        {
+            return AssistantToolResult.Fail(
+                AssistantUserMessages.ToolUnavailable,
+                activityDomain: AssistantActivityDomains.Session);
+        }
+
+        var sessions = _base.Sessions.Recent(8);
+        if (sessions.Count == 0)
+        {
+            return AssistantToolResult.Ok(
+                "No work sessions recorded yet.",
+                activity: "Session ✓",
+                activityDomain: AssistantActivityDomains.Session);
+        }
+
+        var lines = sessions.Select(item =>
+            $"{item.StartedAt:HH:mm} {item.Summary}"
+            + (item.EndedAt is null ? " (open)" : string.Empty));
+        return AssistantToolResult.Ok(
+            string.Join(Environment.NewLine, lines),
+            activity: "Session ✓",
+            activityDomain: AssistantActivityDomains.Session);
     }
 }

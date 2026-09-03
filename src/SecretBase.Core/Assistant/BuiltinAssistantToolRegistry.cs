@@ -515,7 +515,7 @@ public sealed class BuiltinAssistantToolRegistry : IAiToolRegistry
         {
             Name = AssistantToolNames.ActivityRecent,
             Description =
-                "Read recent meaningful activity in Secret Base (not OS hooks). Read-only.",
+                "Read recent meaningful activity (Secret Base events plus sanitized computer observation). Names only. Read-only.",
             RiskLevel = ActionPrivilege.Observation,
             Capability = AssistantToolCapability.ReadOnly
         },
@@ -523,7 +523,7 @@ public sealed class BuiltinAssistantToolRegistry : IAiToolRegistry
         {
             Name = AssistantToolNames.SearchBase,
             Description =
-                "Deterministic search across memory, activity, projects, files, calendar, and todos. No disk crawl. Read-only.",
+                "Deterministic search across memory, activity, projects, files, calendar, todos, workspace, and sessions. No disk crawl. Read-only.",
             Parameters =
             [
                 new AssistantToolParameter
@@ -542,6 +542,22 @@ public sealed class BuiltinAssistantToolRegistry : IAiToolRegistry
             Name = AssistantToolNames.UserState,
             Description =
                 "Read current user state, likely intent, and project continuation context. Heuristic confidence — not an action. Read-only.",
+            RiskLevel = ActionPrivilege.Observation,
+            Capability = AssistantToolCapability.ReadOnly
+        },
+        new()
+        {
+            Name = AssistantToolNames.SituationNow,
+            Description =
+                "Read the current situation model with evidence (project, activity, calendar, todo, session). Names only. Read-only.",
+            RiskLevel = ActionPrivilege.Observation,
+            Capability = AssistantToolCapability.ReadOnly
+        },
+        new()
+        {
+            Name = AssistantToolNames.SessionRecent,
+            Description =
+                "Read recent work sessions (deterministic summaries). Read-only. Does not launch apps.",
             RiskLevel = ActionPrivilege.Observation,
             Capability = AssistantToolCapability.ReadOnly
         },

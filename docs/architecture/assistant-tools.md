@@ -24,7 +24,9 @@ RequiresConfirmation
   → Command → Service → Host launch (if ShouldLaunch / ShouldOpenCursorAtFolder)
 ```
 
-## Tool catalog (v0.7)
+## Tool catalog (v0.8)
+
+36 registered tools. Unknown names (including `shell.run`) are rejected.
 
 ### ReadOnly
 
@@ -39,10 +41,12 @@ RequiresConfirmation
 | `music_search` | `MusicCommand.SearchTrack` (if Search capability) |
 | `music_get_state` | Context / MusicService state |
 | `todo_list` | Local todos |
-| `memory_recall` | Durable `IMemoryStore` facts (names only) |
-| `activity_recent` | Meaningful activity (not OS hooks) |
-| `search_base` | Deterministic metadata search |
+| `memory_recall` | Ranked `IMemoryStore` facts (names only) |
+| `activity_recent` | Meaningful activity (Secret Base + sanitized observation) |
+| `search_base` | Deterministic metadata search (includes sessions) |
 | `user_state` | Heuristic user state + intent + continuation |
+| `situation_now` | Current situation with evidence |
+| `session_recent` | Deterministic work-session summaries |
 
 ### SafeAuto
 

@@ -1,4 +1,5 @@
 using SecretBase.Core.Automation;
+using SecretBase.Core.Situation;
 using SecretBase.Core.State;
 using SecretBase.Core.Workspace;
 
@@ -16,6 +17,8 @@ public sealed class BaseDashboardSnapshot
     public string ContinuationTitle { get; init; } = string.Empty;
 
     public string ContinuationDetail { get; init; } = string.Empty;
+
+    public string NextTaskLine { get; init; } = string.Empty;
 
     public bool ShowContinue { get; init; }
 
@@ -38,27 +41,36 @@ public static class BaseDashboardComposer
         UserState state,
         ProjectContinuationContext? continuation = null,
         AutomationSuggestion? suggestion = null,
-        int calendarCount = 0)
+        int calendarCount = 0,
+        CurrentSituation? situation = null)
     {
         ArgumentNullException.ThrowIfNull(state);
-        var project = continuation?.ProjectName ?? state.CurrentProjectName;
-        var last = continuation?.LastSession ?? state.RecentActivityLine;
+        var project = continuation?.ProjectName ?? situation?.ProjectName ?? state.CurrentProjectName;
+        var last = continuation?.LastSession ?? situation?.RecentActivity ?? state.RecentActivityLine;
+        var next = continuation?.NextTask ?? situation?.NextTask;
+        var calendarHeadline = state.CurrentCalendarTitle ?? state.UpcomingCalendarTitle ?? situation?.Calendar;
         var showContinue = !string.IsNullOrWhiteSpace(project) && state.Confidence >= 0.45;
+        var ready = state.FocusRunning
+            ? state.FocusLine
+            : !string.IsNullOrWhiteSpace(calendarHeadline)
+                ? calendarHeadline
+                : showContinue
+                    ? "Continue where you left off?"
+                    : "Your Base is ready.";
         return new BaseDashboardSnapshot
         {
             Time = state.Now.ToString("HH:mm"),
             Greeting = state.Greeting.ToUpperInvariant(),
-            ReadyLine = state.FocusRunning ? state.FocusLine : "Your Base is ready.",
+            ReadyLine = ready,
             ContinuationTitle = project ?? string.Empty,
             ContinuationDetail = string.IsNullOrWhiteSpace(last)
                 ? string.Empty
                 : "Last session: " + last,
+            NextTaskLine = string.IsNullOrWhiteSpace(next) ? string.Empty : "Next: " + next,
             ShowContinue = showContinue,
             CalendarLine = calendarCount > 0
                 ? $"{calendarCount} event{(calendarCount == 1 ? string.Empty : "s")}"
-                : state.UpcomingCalendarTitle is null
-                    ? "Quiet"
-                    : state.UpcomingCalendarTitle,
+                : calendarHeadline ?? "Quiet",
             TasksLine = state.OpenTodoCount == 0
                 ? "Clear"
                 : $"{state.OpenTodoCount} remaining",

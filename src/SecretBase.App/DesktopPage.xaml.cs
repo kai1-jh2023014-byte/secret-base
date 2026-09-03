@@ -19,6 +19,7 @@ using SecretBase.Core.Desktop;
 using SecretBase.Core.Focus;
 using SecretBase.Core.Integration;
 using SecretBase.Core.Music;
+using SecretBase.Core.Observation;
 using SecretBase.Core.Themes;
 using SecretBase.Core.Time;
 using SecretBase.Core.Todo;
@@ -93,6 +94,7 @@ public sealed partial class DesktopPage : Page
     private ITodoStore? _todoStore;
     private FocusSessionStore? _focus;
     private IBaseExperienceServices? _baseExperience;
+    private IComputerObservationService? _observation;
     private readonly List<DashboardWidgetView> _dashboardViews = [];
     private readonly List<WorkspaceWidgetView> _workspaceViews = [];
     private DateTimeOffset _lastAutomationEval;
@@ -188,6 +190,7 @@ public sealed partial class DesktopPage : Page
         var memoryStore = new JsonMemoryStore();
         var activityStore = new JsonActivityStore();
         var feedbackStore = new JsonAutomationFeedbackStore();
+        var sessionStore = new JsonWorkSessionStore();
         var layoutExisted = _layoutStore.Exists(RoomId.DefaultRoomId);
         _baseSettingsStore = new JsonBaseSettingsStore();
         _baseSettings = _baseSettingsStore.LoadOrCreate(layoutExisted);
@@ -232,7 +235,8 @@ public sealed partial class DesktopPage : Page
             () => (_timeProvider ?? new SystemTimeProvider()).GetLocalNow(),
             memoryStore,
             activityStore,
-            feedbackStore);
+            feedbackStore,
+            sessionStore);
         _baseExperience.CurrentWorkspace = _baseSettings.LastWorkspace;
         _assistant = new AssistantService(
             assistantRegistry,
@@ -266,6 +270,7 @@ public sealed partial class DesktopPage : Page
         InitializeTaskbarAiChat();
         _ = RefreshUpcomingEventsQuietAsync();
         DispatcherQueue.TryEnqueue(() => EvaluateQuietSuggestion(AutomationTriggerKind.Startup));
+        DispatcherQueue.TryEnqueue(StartComputerObservation);
         DispatcherQueue.TryEnqueue(async () => await MaybeShowOnboardingAsync());
         _logger.Info("desktop", $"Overlay desktop shown for room '{_layout.RoomId}' with {_layout.Widgets.Count} widget(s), {_layout.Blocks.Count} block(s).");
         _logger.Info("widget", "Widget hosts ready (Clock, Text, Calendar, Music, Creative, Workspace, Base, Apps, Base AI).");
@@ -1450,7 +1455,8 @@ public sealed partial class DesktopPage : Page
             state,
             _baseExperience.Continuation(),
             _baseExperience.LastSuggestion,
-            _upcomingEvents.Count);
+            _upcomingEvents.Count,
+            _baseExperience.ComposeSituation());
     }
 
     private void EvaluateQuietSuggestion(AutomationTriggerKind trigger)
@@ -1461,7 +1467,9 @@ public sealed partial class DesktopPage : Page
         }
 
         var now = (_timeProvider ?? new SystemTimeProvider()).GetLocalNow();
-        if (trigger == AutomationTriggerKind.Time
+        if ((trigger is AutomationTriggerKind.Time
+                or AutomationTriggerKind.Application
+                or AutomationTriggerKind.UserActivity)
             && now - _lastAutomationEval < TimeSpan.FromSeconds(60))
         {
             return;
@@ -2191,8 +2199,81 @@ public sealed partial class DesktopPage : Page
         ToggleDebugChrome();
     }
 
+    private void StartComputerObservation()
+    {
+        if (_observation is not null)
+        {
+            return;
+        }
+
+        try
+        {
+            _observation = new WindowsForegroundObservationService(() =>
+                _baseExperience?.ListProjects().Select(project => project.Name).ToArray() ?? []);
+            _observation.Observed += OnComputerObserved;
+            _observation.Start();
+            _logger?.Info("observation", _observation.CapabilityNote);
+        }
+        catch (Exception ex)
+        {
+            _logger?.Warn("observation", $"Observation not started (overlay continues). {ex.Message}");
+            _observation = new NullComputerObservationService();
+        }
+    }
+
+    private void OnComputerObserved(object? sender, ObservationEvent observation)
+    {
+        DispatcherQueue.TryEnqueue(() => IngestComputerObservation(observation));
+    }
+
+    private void IngestComputerObservation(ObservationEvent observation)
+    {
+        if (_baseExperience is null)
+        {
+            return;
+        }
+
+        try
+        {
+            if (!_baseExperience.IngestObservation(observation))
+            {
+                return;
+            }
+
+            var trigger = observation.Kind switch
+            {
+                ObservationKind.SystemStartup => AutomationTriggerKind.Startup,
+                ObservationKind.SystemResume => AutomationTriggerKind.SystemResume,
+                ObservationKind.IdleEnded or ObservationKind.UserActivityResumed => AutomationTriggerKind.UserActivity,
+                _ => AutomationTriggerKind.Application
+            };
+            EvaluateQuietSuggestion(trigger);
+        }
+        catch (Exception ex)
+        {
+            _logger?.Warn("observation", $"Observation ingest failed. {ex.Message}");
+        }
+    }
+
     private void OnUnloaded(object sender, RoutedEventArgs e)
     {
+        try
+        {
+            if (_observation is not null)
+            {
+                _observation.Observed -= OnComputerObserved;
+                _observation.Stop();
+                _observation.Dispose();
+                _observation = null;
+            }
+
+            _baseExperience?.Sessions.End((_timeProvider ?? new SystemTimeProvider()).GetLocalNow());
+        }
+        catch (Exception ex)
+        {
+            _logger?.Warn("observation", $"Observation shutdown skipped. {ex.Message}");
+        }
+
         PersistLayoutNow();
         DisposeWidgets();
     }

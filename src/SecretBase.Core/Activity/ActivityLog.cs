@@ -17,7 +17,10 @@ public enum ActivityKind
     GitStateNoted = 12,
     SuggestionAccepted = 13,
     SuggestionDismissed = 14,
-    SessionEnded = 15
+    SessionEnded = 15,
+    IdleStarted = 16,
+    IdleEnded = 17,
+    SystemObserved = 18
 }
 
 /// <summary>Normalized Base event. Not an OS hook. Names only — no paths or secrets.</summary>
@@ -170,6 +173,15 @@ public sealed class ActivityLog : IActivityLog
         ArgumentNullException.ThrowIfNull(activity);
         lock (_gate)
         {
+            var last = _events.LastOrDefault();
+            if (last is not null
+                && last.Kind == activity.Kind
+                && string.Equals(last.Title, activity.Title, StringComparison.OrdinalIgnoreCase)
+                && activity.At - last.At < TimeSpan.FromSeconds(20))
+            {
+                return;
+            }
+
             _events.Add(activity);
             if (_events.Count > MaxEvents)
             {

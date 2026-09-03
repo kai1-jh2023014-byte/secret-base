@@ -45,6 +45,7 @@ public sealed partial class DashboardWidgetView : UserControl
         WidgetSurfaceStyle.ApplyHeader(GreetingText, ReadyText, theme);
         WidgetSurfaceStyle.ApplyBody(ProjectText, theme);
         WidgetSurfaceStyle.ApplyMuted(SessionText, theme);
+        WidgetSurfaceStyle.ApplyMuted(NextText, theme);
         WidgetSurfaceStyle.ApplyMuted(SuggestionText, theme);
         WidgetSurfaceStyle.ApplyMuted(CalendarLabel, theme);
         WidgetSurfaceStyle.ApplyBody(CalendarValue, theme);
@@ -74,6 +75,7 @@ public sealed partial class DashboardWidgetView : UserControl
             ? "Nothing prepared yet"
             : card.ContinuationTitle;
         SessionText.Text = card.ContinuationDetail;
+        NextText.Text = card.NextTaskLine;
         SuggestionText.Text = string.IsNullOrWhiteSpace(card.SuggestionTitle)
             ? string.Empty
             : card.SuggestionTitle + (string.IsNullOrWhiteSpace(card.SuggestionDetail)
@@ -97,7 +99,6 @@ public sealed partial class DashboardWidgetView : UserControl
         }
 
         var session = _base.CurrentWorkspace ?? _prepare("Continue");
-        _base.RecordFeedback(true);
         await _continueAsync(session);
         Refresh();
         if (_theme is not null)
