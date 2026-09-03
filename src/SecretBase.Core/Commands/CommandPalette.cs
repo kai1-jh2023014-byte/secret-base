@@ -44,7 +44,8 @@ public static class CommandPalette
             new("search-memory", "Search memory", "What Secret Base remembers", "command", "memory", 0.8),
             new("timeline", "Today's activity", "Meaningful timeline", "command", "timeline", 0.78),
             new("explain", "Why this suggestion?", "Evidence and confidence", "command", "explain", 0.7),
-            new("cleanup", "Review unused files", "Candidates only — never deletes", "command", "cleanup", 0.65)
+            new("cleanup", "Review unused files", "Candidates only — never deletes", "command", "cleanup", 0.65),
+            new("integrations", "My Integrations", "Registered apps and APIs", "command", "integrations", 0.6)
         };
 
         foreach (var project in projects.Take(8))

@@ -15,7 +15,8 @@ public enum AutomationTriggerKind
     Application = 7,
     SystemResume = 8,
     ProjectState = 9,
-    FileState = 10
+    FileState = 10,
+    IntegrationEvent = 11
 }
 
 public enum InterventionMode

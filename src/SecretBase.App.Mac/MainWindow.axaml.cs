@@ -9,6 +9,7 @@ using SecretBase.Core.Automation;
 using SecretBase.Core.Base;
 using SecretBase.Core.Capture;
 using SecretBase.Core.Commands;
+using SecretBase.Core.Connectors;
 using SecretBase.Core.Memory;
 using SecretBase.Core.Workspace;
 using SecretBase.Core.Blocks;
@@ -423,6 +424,8 @@ public partial class MainWindow : Window
 
     private async void PrivacyButton_OnClick(object? sender, RoutedEventArgs e) => await ShowPrivacyAsync();
 
+    private async void IntegrationsButton_OnClick(object? sender, RoutedEventArgs e) => await ShowIntegrationsAsync();
+
     private async Task ShowPaletteAsync()
     {
         var items = _session.Base.Palette(string.Empty);
@@ -486,6 +489,59 @@ public partial class MainWindow : Window
                    + Environment.NewLine
                    + PersonalSpaceCatalog.Rules(_session.Base.Rules);
         await ShowInfoAsync("Privacy & automation", body);
+    }
+
+    private async Task ShowIntegrationsAsync()
+    {
+        DemoManifests.TryRegisterKnown(_session.Integrations.Registry, approveDemos: true);
+        var paste = new TextBox
+        {
+            AcceptsReturn = true,
+            Height = 120,
+            Watermark = "Paste secretbase.integration.json to register your app"
+        };
+        var status = new TextBlock
+        {
+            Text = _session.Integrations.CatalogText()
+                   + Environment.NewLine
+                   + Environment.NewLine
+                   + _session.Integrations.PermissionText(),
+            TextWrapping = Avalonia.Media.TextWrapping.Wrap
+        };
+        var register = new Button { Content = "Register pasted" };
+        var panel = new StackPanel { Margin = new Avalonia.Thickness(16), Spacing = 8 };
+        panel.Children.Add(new ScrollViewer { Height = 220, Content = status });
+        panel.Children.Add(paste);
+        panel.Children.Add(register);
+        var window = new Window
+        {
+            Title = "My Integrations",
+            Width = 560,
+            Height = 520,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Content = panel
+        };
+        register.Click += (_, _) =>
+        {
+            if (string.IsNullOrWhiteSpace(paste.Text))
+            {
+                return;
+            }
+
+            if (IntegrationDiscovery.TryRegisterJson(_session.Integrations.Registry, paste.Text, approved: true, out var error))
+            {
+                status.Text = _session.Integrations.CatalogText()
+                              + Environment.NewLine
+                              + Environment.NewLine
+                              + _session.Integrations.PermissionText();
+                paste.Text = string.Empty;
+            }
+            else
+            {
+                status.Text = error;
+            }
+        };
+        await window.ShowDialog(this);
     }
 
     private async Task ShowInfoAsync(string title, string body)

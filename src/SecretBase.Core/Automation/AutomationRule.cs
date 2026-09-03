@@ -25,6 +25,10 @@ public sealed class AutomationRule
     public DateTimeOffset? LastRun { get; set; }
 
     public string? LastResult { get; set; }
+
+    public string? IntegrationId { get; set; }
+
+    public string? IntegrationEventType { get; set; }
 }
 
 public sealed class AutomationRuleDocument
@@ -158,6 +162,23 @@ public static class AutomationScheduler
             rule.Enabled
             && rule.Trigger == trigger
             && (rule.RequiredIntent is null || rule.RequiredIntent == intent.Kind)
+            && (rule.LastRun is null || now - rule.LastRun.Value >= TimeSpan.FromMinutes(Math.Max(5, rule.CooldownMinutes))));
+    }
+
+    public static AutomationRule? MatchIntegration(
+        IReadOnlyList<AutomationRule> rules,
+        string integrationId,
+        string eventType,
+        DateTimeOffset now)
+    {
+        rules ??= [];
+        return rules.FirstOrDefault(rule =>
+            rule.Enabled
+            && rule.Trigger == AutomationTriggerKind.IntegrationEvent
+            && (string.IsNullOrWhiteSpace(rule.IntegrationId)
+                || rule.IntegrationId.Equals(integrationId, StringComparison.OrdinalIgnoreCase))
+            && (string.IsNullOrWhiteSpace(rule.IntegrationEventType)
+                || rule.IntegrationEventType.Equals(eventType, StringComparison.OrdinalIgnoreCase))
             && (rule.LastRun is null || now - rule.LastRun.Value >= TimeSpan.FromMinutes(Math.Max(5, rule.CooldownMinutes))));
     }
 }

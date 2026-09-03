@@ -71,6 +71,10 @@ public static class AssistantConfirmationPolicy
                 AssistantToolArgumentValidator.TryGetString(root, "target", required: false, out var target, out _)
                 && !string.IsNullOrWhiteSpace(target) =>
                 $"Open {target}.",
+            AssistantToolNames.IntegrationInvoke when
+                AssistantToolArgumentValidator.TryGetString(root, "capability", required: false, out var cap, out _)
+                && !string.IsNullOrWhiteSpace(cap) =>
+                $"Run integration '{cap}'.",
             AssistantToolNames.AppsOpen when
                 AssistantToolArgumentValidator.TryGetString(root, "app_id", required: false, out var appId, out _)
                 && !string.IsNullOrWhiteSpace(appId) =>
@@ -80,6 +84,7 @@ public static class AssistantConfirmationPolicy
             AssistantToolNames.CursorOpenProject => "Open this project in Cursor.",
             AssistantToolNames.IntegrationOpen => "Open this integration.",
             AssistantToolNames.AppsOpen => "Launch this registered app.",
+            AssistantToolNames.IntegrationInvoke => "Run this integration action.",
             AssistantToolNames.WorkspaceContinue => "Continue the prepared workspace (open the matched project).",
             AssistantToolNames.TodoAdd => "Add this task to Secret Base Todo.",
             _ => "Run this Secret Base action."

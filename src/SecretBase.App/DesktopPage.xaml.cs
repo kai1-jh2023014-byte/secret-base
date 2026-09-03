@@ -16,6 +16,7 @@ using SecretBase.Core.Blocks;
 using SecretBase.Core.Calendar;
 using SecretBase.Core.Capture;
 using SecretBase.Core.Commands;
+using SecretBase.Core.Connectors;
 using SecretBase.Core.Creative;
 using SecretBase.Core.Desktop;
 using SecretBase.Core.Focus;
@@ -89,6 +90,7 @@ public sealed partial class DesktopPage : Page
     private DesktopWorkspaceCatalog? _workspaceCatalog;
     private MusicCommandService? _musicCommands;
     private IntegrationCommandService? _integrationCommands;
+    private IntegrationHost? _integrationHost;
     private IAssistantService? _assistant;
     private IAssistantSettingsStore? _assistantSettings;
     private IBaseSettingsStore? _baseSettingsStore;
@@ -201,21 +203,6 @@ public sealed partial class DesktopPage : Page
         _launchSettingsStore = args.LaunchSettingsStore ?? new JsonAppLaunchSettingsStore();
         _assistantProviders = new AssistantProviderFactory(_secretStore);
         var assistantRegistry = BuiltinAssistantToolRegistry.Instance;
-        var assistantContext = new AssistantContextService(
-            calendar: _calendarCommands,
-            creative: _creativeCommands,
-            apps: _appCommands,
-            music: _musicCommands,
-            settings: () => _assistantSettings.LoadOrCreate(),
-            isOpenAiKeyConfigured: () =>
-                _secretStore is not null
-                && _secretStore.TryGetSecret(AssistantSecretKeys.OpenAiApiKey, out var key)
-                && !string.IsNullOrWhiteSpace(key),
-            isGeminiKeyConfigured: () =>
-                _secretStore is not null
-                && _secretStore.TryGetSecret(AssistantSecretKeys.GeminiApiKey, out var gemini)
-                && !string.IsNullOrWhiteSpace(gemini),
-            integrations: _integrationMemory);
         var workspaceCommands = new WorkspaceCommandService(
             _appCommands,
             _creativeCommands,
@@ -243,6 +230,35 @@ public sealed partial class DesktopPage : Page
             ruleStore);
         _baseExperience.CurrentWorkspace = _baseSettings.LastWorkspace;
         _baseExperience.Preferences = _baseSettings;
+        var secretResolver = _secretStore is null
+            ? null
+            : new SecretBase.Infrastructure.Integration.SecureIntegrationSecretResolver(_secretStore);
+        _integrationHost = new IntegrationHost(
+            new JsonIntegrationRegistryStore(logger: _logger),
+            new SecretBase.Infrastructure.Integration.CompositeIntegrationTransport(),
+            secretResolver,
+            _calendarCommands,
+            _appCommands,
+            _baseExperience.Activity,
+            _baseExperience.Memory,
+            _baseExperience.Rules);
+        _baseExperience.Integrations = _integrationHost;
+        var assistantContext = new AssistantContextService(
+            calendar: _calendarCommands,
+            creative: _creativeCommands,
+            apps: _appCommands,
+            music: _musicCommands,
+            settings: () => _assistantSettings.LoadOrCreate(),
+            isOpenAiKeyConfigured: () =>
+                _secretStore is not null
+                && _secretStore.TryGetSecret(AssistantSecretKeys.OpenAiApiKey, out var key)
+                && !string.IsNullOrWhiteSpace(key),
+            isGeminiKeyConfigured: () =>
+                _secretStore is not null
+                && _secretStore.TryGetSecret(AssistantSecretKeys.GeminiApiKey, out var gemini)
+                && !string.IsNullOrWhiteSpace(gemini),
+            integrations: _integrationMemory,
+            connectorHost: _integrationHost);
         _assistant = new AssistantService(
             assistantRegistry,
             new AssistantToolExecutor(
@@ -256,7 +272,8 @@ public sealed partial class DesktopPage : Page
                 assistantContext,
                 workspaceCommands,
                 _integrationMemory,
-                _baseExperience),
+                _baseExperience,
+                _integrationHost),
             () => _assistantProviders.Create(_assistantSettings.LoadOrCreate()),
             () => _assistantSettings.LoadOrCreate(),
             assistantContext);

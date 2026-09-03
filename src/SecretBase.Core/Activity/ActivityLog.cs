@@ -35,7 +35,8 @@ public enum ActivityKind
     CommandExecuted = 30,
     ConfirmationRequested = 31,
     ConfirmationAccepted = 32,
-    ConfirmationRejected = 33
+    ConfirmationRejected = 33,
+    IntegrationEvent = 34
 }
 
 /// <summary>Normalized Base event. Not an OS hook. Names only — no paths or secrets.</summary>

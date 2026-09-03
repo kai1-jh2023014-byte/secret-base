@@ -1,6 +1,7 @@
 using SecretBase.Core.Attention;
 using SecretBase.Core.Briefing;
 using SecretBase.Core.Capture;
+using SecretBase.Core.Connectors;
 using SecretBase.Core.Creative;
 using SecretBase.Core.Explain;
 using SecretBase.Core.Files;
@@ -31,7 +32,8 @@ public enum CommandKind
     Palette = 12,
     Privacy = 13,
     Attention = 14,
-    Project = 15
+    Project = 15,
+    Integrations = 16
 }
 
 public sealed class CommandDispatch
@@ -201,7 +203,35 @@ public static class CommandCenter
             {
                 Kind = CommandKind.Privacy,
                 Title = "Privacy",
-                Body = PrivacyManifest.Format(),
+                Body = PrivacyManifest.Format()
+                    + Environment.NewLine
+                    + Environment.NewLine
+                    + context.IntegrationPermissions(),
+                HandledWithoutLlm = true
+            };
+        }
+
+        if (Looks(text, "integration", "インテグレーション", "tetris", "my app", "自分のアプリ", "コネクタ"))
+        {
+            var read = context.TryIntegrationRead(text);
+            if (read is not null)
+            {
+                return new CommandDispatch
+                {
+                    Kind = CommandKind.Integrations,
+                    Title = read.NeedsConfirmation ? "Confirm integration action" : "Integration",
+                    Body = read.Message,
+                    HandledWithoutLlm = true,
+                    RequiresConfirmation = read.NeedsConfirmation,
+                    ToolHint = read.NeedsConfirmation ? "integration_invoke" : "integration_query"
+                };
+            }
+
+            return new CommandDispatch
+            {
+                Kind = CommandKind.Integrations,
+                Title = "My Integrations",
+                Body = context.IntegrationsCatalog(),
                 HandledWithoutLlm = true
             };
         }
@@ -291,4 +321,10 @@ public interface ICommandContext
     int DefaultFocusMinutes { get; }
 
     string MemoryCatalog(string? query = null);
+
+    string IntegrationsCatalog();
+
+    string IntegrationPermissions();
+
+    ConnectorOutcome? TryIntegrationRead(string utterance);
 }

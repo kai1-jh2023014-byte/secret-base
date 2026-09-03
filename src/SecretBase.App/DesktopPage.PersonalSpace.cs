@@ -3,6 +3,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using SecretBase.Core.Capture;
 using SecretBase.Core.Commands;
+using SecretBase.Core.Connectors;
 using SecretBase.Core.Memory;
 
 namespace SecretBase.App;
@@ -139,6 +140,12 @@ public sealed partial class DesktopPage
             return;
         }
 
+        if (item.Action == "integrations")
+        {
+            await ShowIntegrationsDialogAsync();
+            return;
+        }
+
         var dispatch = _baseExperience.Dispatch(PersonalSpaceCatalog.UtteranceFor(item));
         if (dispatch.Kind == CommandKind.Focus)
         {
@@ -162,6 +169,12 @@ public sealed partial class DesktopPage
         if (dispatch.Kind == CommandKind.Privacy)
         {
             await ShowPrivacyDialogAsync();
+            return;
+        }
+
+        if (dispatch.Kind == CommandKind.Integrations)
+        {
+            await ShowIntegrationsDialogAsync();
             return;
         }
 
@@ -208,7 +221,7 @@ public sealed partial class DesktopPage
         }
 
         var draft = _baseExperience.ClassifyCapture(box.Text ?? string.Empty);
-        CaptureDestination? force = destinations.SelectedItem as string switch
+        CaptureDestination? force = (destinations.SelectedItem as string) switch
         {
             "Idea" => CaptureDestination.Idea,
             "Todo" => CaptureDestination.Todo,
@@ -320,6 +333,151 @@ public sealed partial class DesktopPage
         {
             await ShowAutomationRulesDialogAsync();
         }
+    }
+
+    private async Task ShowIntegrationsDialogAsync()
+    {
+        if (_baseExperience is null)
+        {
+            return;
+        }
+
+        AllowFullWindowInput();
+        var items = _integrationHost?.Registry.List() ?? [];
+        var list = new ListBox
+        {
+            Height = 220,
+            ItemsSource = items.Select(IntegrationHost.FormatRegistration).ToList()
+        };
+        var panel = new StackPanel { Spacing = 8 };
+        panel.Children.Add(new TextBlock
+        {
+            Text = _baseExperience.IntegrationPermissions(),
+            TextWrapping = TextWrapping.WrapWholeWords
+        });
+        panel.Children.Add(list);
+        var paste = new TextBox
+        {
+            Header = "Register a manifest (paste secretbase.integration.json)",
+            AcceptsReturn = true,
+            Height = 88,
+            PlaceholderText = "{ \"id\": \"my-app\", ... }"
+        };
+        panel.Children.Add(paste);
+        var dialog = new ContentDialog
+        {
+            Title = "My Integrations",
+            Content = new ScrollViewer { MaxHeight = 360, Content = panel },
+            PrimaryButtonText = "Register pasted",
+            SecondaryButtonText = "Permissions",
+            CloseButtonText = "Close",
+            XamlRoot = XamlRoot
+        };
+        var result = await dialog.ShowAsync();
+        if (result == ContentDialogResult.Primary && _integrationHost is not null)
+        {
+            var json = paste.Text;
+            if (!string.IsNullOrWhiteSpace(json))
+            {
+                if (IntegrationDiscovery.TryRegisterJson(_integrationHost.Registry, json, approved: true, out var error))
+                {
+                    ShowHostStatus("Integration registered. Review permissions.");
+                }
+                else
+                {
+                    ShowHostStatus(error);
+                }
+            }
+            else
+            {
+                DemoManifests.TryRegisterKnown(_integrationHost.Registry, approveDemos: true);
+                ShowHostStatus("Example integrations are available.");
+            }
+        }
+        else if (result == ContentDialogResult.Secondary)
+        {
+            await ShowIntegrationPermissionsDialogAsync();
+        }
+    }
+
+    private async Task ShowIntegrationPermissionsDialogAsync()
+    {
+        if (_integrationHost is null)
+        {
+            return;
+        }
+
+        AllowFullWindowInput();
+        var items = _integrationHost.Registry.List().Where(item => item.Approved).ToList();
+        if (items.Count == 0)
+        {
+            await ShowTextDialogAsync("Permissions", _baseExperience?.IntegrationPermissions() ?? "No integrations.");
+            return;
+        }
+
+        var picker = new ComboBox
+        {
+            Header = "Integration",
+            ItemsSource = items.Select(item => item.DisplayName).ToList(),
+            SelectedIndex = 0
+        };
+        var checksHost = new StackPanel { Spacing = 6 };
+        void RenderChecks(int index)
+        {
+            checksHost.Children.Clear();
+            if (index < 0 || index >= items.Count)
+            {
+                return;
+            }
+
+            var rows = IntegrationPermissionGate.Matrix(items[index].Manifest, items[index].Permissions);
+            foreach (var row in rows)
+            {
+                checksHost.Children.Add(new CheckBox
+                {
+                    Content = row.Label,
+                    IsChecked = row.Granted,
+                    Tag = row.Flag
+                });
+            }
+        }
+
+        picker.SelectionChanged += (_, _) => RenderChecks(picker.SelectedIndex);
+        RenderChecks(0);
+        var panel = new StackPanel { Spacing = 8 };
+        panel.Children.Add(picker);
+        panel.Children.Add(checksHost);
+
+        var dialog = new ContentDialog
+        {
+            Title = "Integration permissions",
+            Content = panel,
+            PrimaryButtonText = "Save",
+            CloseButtonText = "Close",
+            XamlRoot = XamlRoot
+        };
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary)
+        {
+            return;
+        }
+
+        var granted = IntegrationPermissionKind.None;
+        foreach (var child in checksHost.Children)
+        {
+            if (child is CheckBox check && check.IsChecked == true && check.Tag is IntegrationPermissionKind flag)
+            {
+                granted |= flag;
+            }
+        }
+
+        var index = picker.SelectedIndex;
+        if (index < 0 || index >= items.Count)
+        {
+            return;
+        }
+
+        _integrationHost.Registry.SetPermissions(items[index].Id, granted);
+        ShowHostStatus("Permissions saved.");
     }
 
     private async Task ShowAutomationRulesDialogAsync()

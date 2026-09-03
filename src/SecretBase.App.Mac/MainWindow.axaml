@@ -49,6 +49,7 @@
                             <Button Content="Capture" Click="CaptureButton_OnClick" />
                             <Button Content="Memory" Click="MemoryButton_OnClick" />
                             <Button Content="Privacy" Click="PrivacyButton_OnClick" />
+                            <Button Content="Integrations" Click="IntegrationsButton_OnClick" />
                         </StackPanel>
                     </StackPanel>
                 </Border>

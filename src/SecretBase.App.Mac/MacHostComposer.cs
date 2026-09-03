@@ -5,6 +5,7 @@ using SecretBase.Core.Apps;
 using SecretBase.Core.Assistant;
 using SecretBase.Core.Base;
 using SecretBase.Core.Calendar;
+using SecretBase.Core.Connectors;
 using SecretBase.Core.Creative;
 using SecretBase.Core.Desktop;
 using SecretBase.Core.Focus;
@@ -44,6 +45,7 @@ public sealed class MacHostSession
     public required IAssistantSettingsStore AssistantSettings { get; init; }
     public required IAssistantService Assistant { get; init; }
     public required IBaseExperienceServices Base { get; init; }
+    public required IntegrationHost Integrations { get; init; }
     public required IPathPickService PathPicker { get; init; }
     public required IBaseSettingsStore SettingsStore { get; init; }
     public required BaseSettings Preferences { get; init; }
@@ -101,19 +103,6 @@ public static class MacHostComposer
         var assistantSettings = new JsonAssistantSettingsStore();
         var assistantProviders = new AssistantProviderFactory(secrets);
         var assistantRegistry = BuiltinAssistantToolRegistry.Instance;
-        var assistantContext = new AssistantContextService(
-            calendar: calendarCommands,
-            creative: creativeCommands,
-            apps: appCommands,
-            music: musicCommands,
-            settings: () => assistantSettings.LoadOrCreate(),
-            isOpenAiKeyConfigured: () =>
-                secrets.TryGetSecret(AssistantSecretKeys.OpenAiApiKey, out var key)
-                && !string.IsNullOrWhiteSpace(key),
-            isGeminiKeyConfigured: () =>
-                secrets.TryGetSecret(AssistantSecretKeys.GeminiApiKey, out var gemini)
-                && !string.IsNullOrWhiteSpace(gemini),
-            integrations: integrationMemory);
         var workspaceCommands = new WorkspaceCommandService(
             appCommands,
             creativeCommands,
@@ -150,7 +139,31 @@ public static class MacHostComposer
             ruleStore);
         baseExperience.CurrentWorkspace = baseSettings.LastWorkspace;
         baseExperience.Preferences = baseSettings;
+        var integrationHost = new IntegrationHost(
+            new JsonIntegrationRegistryStore(logger: logger),
+            new CompositeIntegrationTransport(),
+            new SecureIntegrationSecretResolver(secrets),
+            calendarCommands,
+            appCommands,
+            baseExperience.Activity,
+            baseExperience.Memory,
+            baseExperience.Rules);
+        baseExperience.Integrations = integrationHost;
         logger.Info("observation", new NullComputerObservationService().CapabilityNote);
+        var assistantContext = new AssistantContextService(
+            calendar: calendarCommands,
+            creative: creativeCommands,
+            apps: appCommands,
+            music: musicCommands,
+            settings: () => assistantSettings.LoadOrCreate(),
+            isOpenAiKeyConfigured: () =>
+                secrets.TryGetSecret(AssistantSecretKeys.OpenAiApiKey, out var key)
+                && !string.IsNullOrWhiteSpace(key),
+            isGeminiKeyConfigured: () =>
+                secrets.TryGetSecret(AssistantSecretKeys.GeminiApiKey, out var gemini)
+                && !string.IsNullOrWhiteSpace(gemini),
+            integrations: integrationMemory,
+            connectorHost: integrationHost);
         var assistant = new AssistantService(
             assistantRegistry,
             new AssistantToolExecutor(
@@ -164,7 +177,8 @@ public static class MacHostComposer
                 assistantContext,
                 workspaceCommands,
                 integrationMemory,
-                baseExperience),
+                baseExperience,
+                integrationHost),
             () => assistantProviders.Create(assistantSettings.LoadOrCreate()),
             () => assistantSettings.LoadOrCreate(),
             assistantContext);
@@ -187,6 +201,7 @@ public static class MacHostComposer
             AssistantSettings = assistantSettings,
             Assistant = assistant,
             Base = baseExperience,
+            Integrations = integrationHost,
             PathPicker = new MacPathPickService(),
             SettingsStore = settingsStore,
             Preferences = baseSettings
