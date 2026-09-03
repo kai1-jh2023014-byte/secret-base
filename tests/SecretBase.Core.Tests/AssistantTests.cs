@@ -9,6 +9,7 @@ using SecretBase.Core.Integration;
 using SecretBase.Core.Music;
 using SecretBase.Core.Security;
 using SecretBase.Core.Time;
+using SecretBase.Core.Workspace;
 using SecretBase.Core.Widgets;
 using SecretBase.Core.Widgets.Ai;
 using SecretBase.Core.Widgets.Assistant;
@@ -21,7 +22,11 @@ public class AssistantToolRegistryTests
     public void BuiltinRegistry_ListsMvpTools_WithConfirmationPolicy()
     {
         var registry = BuiltinAssistantToolRegistry.Instance;
-        Assert.Equal(16, registry.Tools.Count);
+        Assert.Equal(22, registry.Tools.Count);
+        Assert.NotNull(registry.Find(AssistantToolNames.CalendarAddEvent));
+        Assert.NotNull(registry.Find(AssistantToolNames.CalendarApplyUsual));
+        Assert.NotNull(registry.Find(AssistantToolNames.WorkspaceOpenNamed));
+        Assert.NotNull(registry.Find(AssistantToolNames.FilesDelete));
         Assert.NotNull(registry.Find(AssistantToolNames.AssistantGetContext));
         Assert.NotNull(registry.Find(AssistantToolNames.CalendarGetToday));
         Assert.NotNull(registry.Find("CALENDAR_GET_UPCOMING"));
@@ -54,6 +59,11 @@ public class AssistantToolRegistryTests
         Assert.True(registry.Find(AssistantToolNames.IntegrationOpen)!.RequiresConfirmation);
         Assert.True(registry.Find(AssistantToolNames.AppsOpen)!.RequiresConfirmation);
         Assert.True(registry.Find(AssistantToolNames.MusicPlay)!.RequiresConfirmation);
+        Assert.True(registry.Find(AssistantToolNames.CalendarAddEvent)!.RequiresConfirmation);
+        Assert.True(registry.Find(AssistantToolNames.CalendarApplyUsual)!.RequiresConfirmation);
+        Assert.True(registry.Find(AssistantToolNames.WorkspaceOpenNamed)!.RequiresConfirmation);
+        Assert.True(registry.Find(AssistantToolNames.WorkspaceRemove)!.RequiresConfirmation);
+        Assert.True(registry.Find(AssistantToolNames.FilesDelete)!.RequiresConfirmation);
 
         Assert.Equal(ActionPrivilege.Observation, registry.Find(AssistantToolNames.CalendarGetToday)!.RiskLevel);
         Assert.Equal(ActionPrivilege.UserConfirmationRequired, registry.Find(AssistantToolNames.CursorOpenProject)!.RiskLevel);
@@ -350,6 +360,37 @@ public class AssistantToolExecutorTests
     }
 
     [Fact]
+    public async Task AgentTools_AddLocalEvent_AndRefuseUnregisteredFileDelete()
+    {
+        var day = new DateOnly(2026, 9, 3);
+        var offset = TimeSpan.FromHours(9);
+        var calendar = new CalendarCommandService(
+            new CalendarService(
+            [
+                new LocalCalendarProvider()
+            ]),
+            new AgentToolTime(new DateTimeOffset(day.ToDateTime(new TimeOnly(8, 0)), offset)));
+        var workspace = new WorkspaceCommandService(calendar: calendar);
+        var executor = new AssistantToolExecutor(
+            BuiltinAssistantToolRegistry.Instance,
+            calendar: calendar,
+            workspace: workspace);
+
+        var added = await executor.ExecuteAsync(
+            AssistantToolNames.CalendarAddEvent,
+            """{"title":"東進","hour":14,"minute":0}""");
+        Assert.True(added.Succeeded);
+        Assert.Contains("東進", added.ContentForModel, StringComparison.Ordinal);
+        Assert.Contains("local", added.ContentForModel, StringComparison.OrdinalIgnoreCase);
+
+        var deleted = await executor.ExecuteAsync(
+            AssistantToolNames.FilesDelete,
+            """{"name":"homework.pdf"}""");
+        Assert.False(deleted.Succeeded);
+        Assert.Contains("will not delete files on disk", deleted.ErrorMessage, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task CursorOpen_ReportsCursorCouldNotBeOpened_WhenUnavailable()
     {
         var projects = new CreativeProjectService(new MemoryCreativeProjectStore());
@@ -368,6 +409,11 @@ public class AssistantToolExecutorTests
         Assert.False(result.Succeeded);
         Assert.Equal(AssistantUserMessages.CursorOpenFailed, result.ErrorMessage);
     }
+}
+
+file sealed class AgentToolTime(DateTimeOffset instant) : ITimeProvider
+{
+    public DateTimeOffset GetLocalNow() => instant;
 }
 
 public class AssistantServiceTests

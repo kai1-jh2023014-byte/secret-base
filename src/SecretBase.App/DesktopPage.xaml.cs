@@ -27,7 +27,9 @@ using SecretBase.Core.Widgets.Creative;
 using SecretBase.Core.Widgets.Music;
 using SecretBase.Core.Widgets.Text;
 using SecretBase.Core.Widgets.Web;
+using SecretBase.Core.Workspace;
 using SecretBase.Infrastructure.Assistant;
+using SecretBase.Infrastructure.Integration;
 using SecretBase.Infrastructure.Music;
 using SecretBase.Infrastructure.Calendar;
 using SecretBase.Infrastructure.Logging;
@@ -69,6 +71,10 @@ public sealed partial class DesktopPage : Page
     private AiCommandService? _aiCommands;
     private AppCommandService? _appCommands;
     private CalendarCommandService? _calendarCommands;
+    private CalendarService? _calendarService;
+    private ILocalCalendarStore? _localCalendarStore;
+    private IIntegrationMemory? _integrationMemory;
+    private DesktopWorkspaceCatalog? _workspaceCatalog;
     private MusicCommandService? _musicCommands;
     private IntegrationCommandService? _integrationCommands;
     private IAssistantService? _assistant;
@@ -131,14 +137,27 @@ public sealed partial class DesktopPage : Page
         _appCommands = args.AppCommands
             ?? new AppCommandService(new CustomAppService(new JsonCustomAppStore()), projectService);
         var time = _timeProvider ?? new SystemTimeProvider();
-        _calendarCommands = new CalendarCommandService(
-            CalendarServiceFactory.Create(
-                CalendarWidgetConfiguration.CreateDefault(),
-                time,
-                secretStore: _secretStore,
-                openBrowser: url => TryOpenHttpsUrl(url)),
-            time);
+        _localCalendarStore = new JsonLocalCalendarStore();
+        _calendarService = CalendarServiceFactory.Create(
+            CalendarWidgetConfiguration.CreateDefault(),
+            time,
+            secretStore: _secretStore,
+            openBrowser: url => TryOpenHttpsUrl(url),
+            localStore: _localCalendarStore);
+        _calendarCommands = new CalendarCommandService(_calendarService, time);
         _musicCommands = new MusicCommandService(MusicServiceFactory.Create(_secretStore, TryOpenHttpsUrl));
+        _integrationMemory = new JsonIntegrationMemoryStore();
+        if (_secretStore is not null)
+        {
+            IntegrationMemorySynchronizer.SyncFromSecrets(_integrationMemory, _secretStore);
+        }
+        _workspaceCatalog = _intake is null
+            ? null
+            : new DesktopWorkspaceCatalog(
+                () => _layout,
+                _intake,
+                PersistLayoutNow,
+                ShowHostStatus);
         _integrationCommands = new IntegrationCommandService(
             calendar: _calendarCommands,
             music: _musicCommands,
@@ -163,7 +182,13 @@ public sealed partial class DesktopPage : Page
             isGeminiKeyConfigured: () =>
                 _secretStore is not null
                 && _secretStore.TryGetSecret(AssistantSecretKeys.GeminiApiKey, out var gemini)
-                && !string.IsNullOrWhiteSpace(gemini));
+                && !string.IsNullOrWhiteSpace(gemini),
+            integrations: _integrationMemory);
+        var workspaceCommands = new WorkspaceCommandService(
+            _appCommands,
+            _creativeCommands,
+            _calendarCommands,
+            _workspaceCatalog);
         _assistant = new AssistantService(
             assistantRegistry,
             new AssistantToolExecutor(
@@ -174,7 +199,9 @@ public sealed partial class DesktopPage : Page
                 _integrationCommands,
                 _appCommands,
                 _musicCommands,
-                assistantContext),
+                assistantContext,
+                workspaceCommands,
+                _integrationMemory),
             () => _assistantProviders.Create(_assistantSettings.LoadOrCreate()),
             () => _assistantSettings.LoadOrCreate(),
             assistantContext);
@@ -597,11 +624,12 @@ public sealed partial class DesktopPage : Page
             var config = CalendarWidgetConfiguration.FromDictionary(instance.Configuration);
             instance.Configuration = config.ToDictionary();
 
-            var service = CalendarServiceFactory.Create(
+            var service = _calendarService ?? CalendarServiceFactory.Create(
                 config,
                 _timeProvider ?? new SystemTimeProvider(),
                 secretStore: _secretStore,
-                openBrowser: url => TryOpenBrowserUrl(url));
+                openBrowser: url => TryOpenBrowserUrl(url),
+                localStore: _localCalendarStore);
             var view = new CalendarWidgetView();
             view.Initialize(
                 config,
@@ -613,7 +641,8 @@ public sealed partial class DesktopPage : Page
                     instance.Configuration = updated.ToDictionary();
                     PersistLayoutNow();
                 },
-                cache: _calendarCache);
+                cache: _calendarCache,
+                integrations: _integrationMemory);
             if (_theme is not null)
             {
                 view.ApplyTheme(_theme);
@@ -636,7 +665,8 @@ public sealed partial class DesktopPage : Page
                     PersistLayoutNow();
                 },
                 openUrl: url => TryOpenHttpsUrl(url),
-                musicService: _musicCommands.MusicService);
+                musicService: _musicCommands.MusicService,
+                integrations: _integrationMemory);
             if (_theme is not null)
             {
                 view.ApplyTheme(_theme);
@@ -1697,6 +1727,36 @@ public sealed partial class DesktopPage : Page
         if (_layout is null)
         {
             return;
+        }
+
+        if (_intake is not null)
+        {
+            var failed = 0;
+            foreach (var item in block.Items.ToList())
+            {
+                if (!item.HiddenFromDesktop)
+                {
+                    continue;
+                }
+
+                if (!_intake.TryRestoreToDesktop(item.Target, item.DesktopOriginPath, out _, out var error))
+                {
+                    failed++;
+                    ShowHostStatus(error ?? $"Could not return '{item.Name}' to the Desktop.");
+                    continue;
+                }
+
+                block.Items.Remove(item);
+            }
+
+            if (failed > 0)
+            {
+                PersistLayoutNow();
+                RenderDesktopObjects();
+                RefreshDebugStatus();
+                ShowHostStatus("Some items could not be returned to the Desktop. The Block was kept.");
+                return;
+            }
         }
 
         _layout.Blocks.RemoveAll(b => b.Id == block.Id);

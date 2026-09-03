@@ -2,6 +2,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
+using SecretBase.Core.Integration;
 using SecretBase.Core.Music;
 using SecretBase.Core.Themes;
 using SecretBase.Core.Widgets.Music;
@@ -28,6 +29,7 @@ public sealed partial class MusicWidgetView : UserControl
     private int _commandGate;
 
     private bool _connectDismissed;
+    private IIntegrationMemory? _integrations;
 
     public MusicWidgetView()
     {
@@ -39,11 +41,13 @@ public sealed partial class MusicWidgetView : UserControl
         MusicWidgetConfiguration configuration,
         Action<MusicWidgetConfiguration>? onConfigurationChanged = null,
         Func<string, bool>? openUrl = null,
-        MusicService? musicService = null)
+        MusicService? musicService = null,
+        IIntegrationMemory? integrations = null)
     {
         _configuration = configuration;
         _onConfigurationChanged = onConfigurationChanged;
         _openUrl = openUrl;
+        _integrations = integrations;
         if (musicService is not null)
         {
             _musicService = musicService;
@@ -70,6 +74,7 @@ public sealed partial class MusicWidgetView : UserControl
         var spotify = _musicService.Providers.FirstOrDefault(p => p.ProviderId == "spotify");
         if (spotify?.AuthStatus == MusicAuthStatus.Connected)
         {
+            _integrations?.RememberConnected(IntegrationMemoryIds.Spotify, "Spotify", inAppExperience: true);
             return "Source: Spotify";
         }
 

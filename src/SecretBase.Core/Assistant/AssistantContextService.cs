@@ -24,6 +24,7 @@ public sealed class AssistantContextService : IAssistantContextService
     private readonly Func<AssistantSettings> _settings;
     private readonly Func<bool> _isOpenAiKeyConfigured;
     private readonly Func<bool>? _isGeminiKeyConfigured;
+    private readonly IIntegrationMemory? _integrations;
 
     public AssistantContextService(
         CalendarCommandService? calendar = null,
@@ -33,7 +34,8 @@ public sealed class AssistantContextService : IAssistantContextService
         ITimeProvider? time = null,
         Func<AssistantSettings>? settings = null,
         Func<bool>? isOpenAiKeyConfigured = null,
-        Func<bool>? isGeminiKeyConfigured = null)
+        Func<bool>? isGeminiKeyConfigured = null,
+        IIntegrationMemory? integrations = null)
     {
         _calendar = calendar;
         _creative = creative;
@@ -43,6 +45,7 @@ public sealed class AssistantContextService : IAssistantContextService
         _settings = settings ?? (() => new AssistantSettings());
         _isOpenAiKeyConfigured = isOpenAiKeyConfigured ?? (() => false);
         _isGeminiKeyConfigured = isGeminiKeyConfigured;
+        _integrations = integrations;
     }
 
     public Task<AssistantContextSnapshot> GetSnapshotAsync(CancellationToken cancellationToken = default) =>
@@ -202,11 +205,7 @@ public sealed class AssistantContextService : IAssistantContextService
         }
 
         var integrations = scope.HasFlag(AssistantContextScope.Integrations)
-            ? IntegrationCatalog.Commands
-                .Select(c => c.Domain)
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .OrderBy(d => d, StringComparer.OrdinalIgnoreCase)
-                .ToArray()
+            ? BuildIntegrationLabels()
             : Array.Empty<string>();
         if (scope.HasFlag(AssistantContextScope.Integrations))
         {
@@ -276,6 +275,35 @@ public sealed class AssistantContextService : IAssistantContextService
         }
 
         return Task.FromResult<AssistantProjectSummary?>(ToProjectSummary(result.Project));
+    }
+
+    private string[] BuildIntegrationLabels()
+    {
+        var labels = new List<string>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (_integrations is not null)
+        {
+            foreach (var entry in _integrations.List())
+            {
+                labels.Add(entry.ToContextLabel());
+                seen.Add(entry.Id);
+            }
+        }
+
+        foreach (var domain in IntegrationCatalog.Commands
+                     .Select(c => c.Domain)
+                     .Distinct(StringComparer.OrdinalIgnoreCase)
+                     .OrderBy(d => d, StringComparer.OrdinalIgnoreCase))
+        {
+            if (seen.Contains(domain) || labels.Any(l => l.Contains(domain, StringComparison.OrdinalIgnoreCase)))
+            {
+                continue;
+            }
+
+            labels.Add(domain);
+        }
+
+        return labels.ToArray();
     }
 
     public AssistantMusicState GetMusicState()

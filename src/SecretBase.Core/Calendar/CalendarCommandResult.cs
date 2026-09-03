@@ -17,12 +17,15 @@ public sealed class CalendarCommandResult
 
     public bool LaunchIsExternalLink { get; init; }
 
+    public UsualScheduleSlot? Usual { get; init; }
+
     public static CalendarCommandResult Ok(
         CalendarCommandKind kind,
         IReadOnlyList<CalendarEvent>? events = null,
         bool shouldLaunch = false,
         string? launchTarget = null,
-        bool launchIsExternalLink = false) =>
+        bool launchIsExternalLink = false,
+        UsualScheduleSlot? usual = null) =>
         new()
         {
             Succeeded = true,
@@ -30,7 +33,8 @@ public sealed class CalendarCommandResult
             Events = events ?? Array.Empty<CalendarEvent>(),
             ShouldLaunch = shouldLaunch,
             LaunchTarget = launchTarget,
-            LaunchIsExternalLink = launchIsExternalLink
+            LaunchIsExternalLink = launchIsExternalLink,
+            Usual = usual
         };
 
     public static CalendarCommandResult Fail(CalendarCommandKind kind, string error) =>

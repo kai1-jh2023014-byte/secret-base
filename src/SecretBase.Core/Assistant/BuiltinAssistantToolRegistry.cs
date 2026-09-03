@@ -41,6 +41,92 @@ public sealed class BuiltinAssistantToolRegistry : IAiToolRegistry
         },
         new()
         {
+            Name = AssistantToolNames.CalendarAddEvent,
+            Description =
+                "Add a local Secret Base calendar event for today (title + time). Shows in the Calendar widget. Does not write to Google. Requires confirmation.",
+            Parameters =
+            [
+                new AssistantToolParameter
+                {
+                    Name = "title",
+                    Type = "string",
+                    Description = "Event title. Not a file path.",
+                    Required = true
+                },
+                new AssistantToolParameter
+                {
+                    Name = "hour",
+                    Type = "integer",
+                    Description = "Start hour 0-23. Default is the current hour.",
+                    Required = false
+                },
+                new AssistantToolParameter
+                {
+                    Name = "minute",
+                    Type = "integer",
+                    Description = "Start minute 0-59. Default 0.",
+                    Required = false
+                },
+                new AssistantToolParameter
+                {
+                    Name = "duration_minutes",
+                    Type = "integer",
+                    Description = "Length in minutes, 15-480. Default 60.",
+                    Required = false
+                }
+            ],
+            RiskLevel = ActionPrivilege.SafeAction,
+            Capability = AssistantToolCapability.RequiresConfirmation
+        },
+        new()
+        {
+            Name = AssistantToolNames.CalendarRememberUsual,
+            Description =
+                "Remember a usual local schedule slot (title + time) for later apply. Requires confirmation.",
+            Parameters =
+            [
+                new AssistantToolParameter
+                {
+                    Name = "title",
+                    Type = "string",
+                    Description = "Usual event title.",
+                    Required = true
+                },
+                new AssistantToolParameter
+                {
+                    Name = "hour",
+                    Type = "integer",
+                    Description = "Start hour 0-23.",
+                    Required = true
+                },
+                new AssistantToolParameter
+                {
+                    Name = "minute",
+                    Type = "integer",
+                    Description = "Start minute 0-59. Default 0.",
+                    Required = false
+                },
+                new AssistantToolParameter
+                {
+                    Name = "duration_minutes",
+                    Type = "integer",
+                    Description = "Length in minutes. Default 60.",
+                    Required = false
+                }
+            ],
+            RiskLevel = ActionPrivilege.SafeAction,
+            Capability = AssistantToolCapability.RequiresConfirmation
+        },
+        new()
+        {
+            Name = AssistantToolNames.CalendarApplyUsual,
+            Description =
+                "Apply the remembered usual schedule onto today's local calendar. Fails honestly if none is saved. Requires confirmation.",
+            RiskLevel = ActionPrivilege.SafeAction,
+            Capability = AssistantToolCapability.RequiresConfirmation
+        },
+        new()
+        {
             Name = AssistantToolNames.CreativeListProjects,
             Description = "List Creative Projects registered in Secret Base.",
             RiskLevel = ActionPrivilege.Observation,
@@ -207,18 +293,79 @@ public sealed class BuiltinAssistantToolRegistry : IAiToolRegistry
         {
             Name = AssistantToolNames.MusicPlay,
             Description =
-                "Play a track_id returned by music_search when playback capability exists. Do not invent Spotify/YouTube playback. Requires confirmation.",
+                "Play a track in the Secret Base Music widget. Pass track_id from music_search, or query to search then play the first result (Spotify if connected, otherwise the demo catalog). Requires confirmation.",
             Parameters =
             [
                 new AssistantToolParameter
                 {
                     Name = "track_id",
                     Type = "string",
-                    Description = "Track id from the previous search result.",
+                    Description = "Track id from music_search. Optional if query is set.",
+                    Required = false
+                },
+                new AssistantToolParameter
+                {
+                    Name = "query",
+                    Type = "string",
+                    Description = "Song or artist to search then play. Not a URL or file path.",
+                    Required = false
+                }
+            ],
+            RiskLevel = ActionPrivilege.SafeAction,
+            Capability = AssistantToolCapability.RequiresConfirmation
+        },
+        new()
+        {
+            Name = AssistantToolNames.WorkspaceOpenNamed,
+            Description =
+                "Open a registered Block item, My App, or Creative Project by display name (not a file path). Requires confirmation.",
+            Parameters =
+            [
+                new AssistantToolParameter
+                {
+                    Name = "name",
+                    Type = "string",
+                    Description = "Registered name as shown in Secret Base. Not a disk path.",
                     Required = true
                 }
             ],
             RiskLevel = ActionPrivilege.SafeAction,
+            Capability = AssistantToolCapability.RequiresConfirmation
+        },
+        new()
+        {
+            Name = AssistantToolNames.WorkspaceRemove,
+            Description =
+                "After confirmation: return a hidden Block item to Desktop, or unregister a My App / Creative Project / local event. NEVER deletes files on disk.",
+            Parameters =
+            [
+                new AssistantToolParameter
+                {
+                    Name = "name",
+                    Type = "string",
+                    Description = "Registered Secret Base name. Paths are rejected.",
+                    Required = true
+                }
+            ],
+            RiskLevel = ActionPrivilege.UserConfirmationRequired,
+            Capability = AssistantToolCapability.RequiresConfirmation
+        },
+        new()
+        {
+            Name = AssistantToolNames.FilesDelete,
+            Description =
+                "Important: Secret Base never deletes OS files. Same as workspace_remove — return a Block item to Desktop or unregister a Secret Base item after confirmation. If the user asked to delete a disk file that is not registered, refuse.",
+            Parameters =
+            [
+                new AssistantToolParameter
+                {
+                    Name = "name",
+                    Type = "string",
+                    Description = "Registered name only. File paths are rejected.",
+                    Required = true
+                }
+            ],
+            RiskLevel = ActionPrivilege.UserConfirmationRequired,
             Capability = AssistantToolCapability.RequiresConfirmation
         }
     ];

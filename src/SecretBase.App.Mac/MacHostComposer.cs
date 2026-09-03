@@ -9,8 +9,10 @@ using SecretBase.Core.Music;
 using SecretBase.Core.Time;
 using SecretBase.Core.Widgets.Ai;
 using SecretBase.Core.Widgets.Calendar;
+using SecretBase.Core.Workspace;
 using SecretBase.Infrastructure.Assistant;
 using SecretBase.Infrastructure.Calendar;
+using SecretBase.Infrastructure.Integration;
 using SecretBase.Infrastructure.Logging;
 using SecretBase.Infrastructure.Music;
 using SecretBase.Infrastructure.Persistence;
@@ -70,14 +72,17 @@ public static class MacHostComposer
             projectService);
         var time = new SystemTimeProvider();
         bool OpenHttps(string url) => MacHttpsLauncher.TryOpen(url);
-        var calendarCommands = new CalendarCommandService(
-            CalendarServiceFactory.Create(
-                CalendarWidgetConfiguration.CreateDefault(),
-                time,
-                secretStore: secrets,
-                openBrowser: OpenHttps),
-            time);
+        var localCalendar = new JsonLocalCalendarStore();
+        var calendarService = CalendarServiceFactory.Create(
+            CalendarWidgetConfiguration.CreateDefault(),
+            time,
+            secretStore: secrets,
+            openBrowser: OpenHttps,
+            localStore: localCalendar);
+        var calendarCommands = new CalendarCommandService(calendarService, time);
         var musicCommands = new MusicCommandService(MusicServiceFactory.Create(secrets, OpenHttps));
+        var integrationMemory = new JsonIntegrationMemoryStore();
+        IntegrationMemorySynchronizer.SyncFromSecrets(integrationMemory, secrets);
         var integrationCommands = new IntegrationCommandService(
             calendar: calendarCommands,
             music: musicCommands,
@@ -99,7 +104,12 @@ public static class MacHostComposer
                 && !string.IsNullOrWhiteSpace(key),
             isGeminiKeyConfigured: () =>
                 secrets.TryGetSecret(AssistantSecretKeys.GeminiApiKey, out var gemini)
-                && !string.IsNullOrWhiteSpace(gemini));
+                && !string.IsNullOrWhiteSpace(gemini),
+            integrations: integrationMemory);
+        var workspaceCommands = new WorkspaceCommandService(
+            appCommands,
+            creativeCommands,
+            calendarCommands);
         var assistant = new AssistantService(
             assistantRegistry,
             new AssistantToolExecutor(
@@ -110,7 +120,9 @@ public static class MacHostComposer
                 integrationCommands,
                 appCommands,
                 musicCommands,
-                assistantContext),
+                assistantContext,
+                workspaceCommands,
+                integrationMemory),
             () => assistantProviders.Create(assistantSettings.LoadOrCreate()),
             () => assistantSettings.LoadOrCreate(),
             assistantContext);

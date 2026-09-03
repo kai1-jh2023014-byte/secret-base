@@ -28,8 +28,24 @@ public sealed class AppCommandService
             AppCommandKind.ListApps => AppCommandResult.Ok(AppCommandKind.ListApps, apps: _apps.List()),
             AppCommandKind.OpenApp => OpenApp(command),
             AppCommandKind.OpenAppInCursor => OpenInCursor(command),
+            AppCommandKind.RemoveApp => RemoveApp(command),
             _ => AppCommandResult.Fail(command.Kind, "Unknown app command.")
         };
+    }
+
+    private AppCommandResult RemoveApp(AppCommand command)
+    {
+        if (!_apps.TryGet(command.AppId, out var app) || app is null)
+        {
+            return AppCommandResult.Fail(AppCommandKind.RemoveApp, "App is not registered.");
+        }
+
+        if (!_apps.TryRemove(command.AppId, out var error))
+        {
+            return AppCommandResult.Fail(AppCommandKind.RemoveApp, error);
+        }
+
+        return AppCommandResult.Ok(AppCommandKind.RemoveApp, app: app);
     }
 
     private AppCommandResult OpenApp(AppCommand command)

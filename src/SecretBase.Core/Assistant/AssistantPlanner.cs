@@ -14,6 +14,31 @@ public static class AssistantPlanner
         maxSteps = Math.Clamp(maxSteps, 1, AssistantSettings.MaxStepsHardCap);
         var text = userText?.Trim() ?? string.Empty;
 
+        if (LooksLikeDelete(text))
+        {
+            return Clamp(BuildRemovePlan(text), maxSteps);
+        }
+
+        if (LooksLikePlayMusic(text))
+        {
+            return Clamp(BuildPlayMusicPlan(), maxSteps);
+        }
+
+        if (LooksLikeUsualSchedule(text))
+        {
+            return Clamp(BuildUsualSchedulePlan(), maxSteps);
+        }
+
+        if (LooksLikeAddSchedule(text))
+        {
+            return Clamp(BuildAddSchedulePlan(), maxSteps);
+        }
+
+        if (LooksLikeOpenNamed(text) && !LooksLikeProject(text))
+        {
+            return Clamp(BuildOpenNamedPlan(), maxSteps);
+        }
+
         if (LooksLikeStartProject(text) || (intent == AssistantIntentKind.ActionRequest && LooksLikeProject(text)))
         {
             return Clamp(BuildStartProjectPlan(text, snapshot), maxSteps);
@@ -129,6 +154,107 @@ public static class AssistantPlanner
         };
     }
 
+    private static AssistantPlan BuildPlayMusicPlan() =>
+        new()
+        {
+            Summary = "曲を探して Music ウィジェットで再生します（確認が必要）。",
+            Steps =
+            [
+                new AssistantPlanStep
+                {
+                    Index = 1,
+                    Title = "音楽カタログを確認",
+                    Kind = AssistantPlanStepKind.Read,
+                    ToolName = AssistantToolNames.MusicGetState
+                },
+                new AssistantPlanStep
+                {
+                    Index = 2,
+                    Title = "再生する（確認が必要）",
+                    Kind = AssistantPlanStepKind.ConfirmAction,
+                    ToolName = AssistantToolNames.MusicPlay,
+                    RequiresConfirmation = true
+                }
+            ]
+        };
+
+    private static AssistantPlan BuildUsualSchedulePlan() =>
+        new()
+        {
+            Summary = "いつもの予定を今日のローカルカレンダーに入れます（確認が必要）。",
+            Steps =
+            [
+                new AssistantPlanStep
+                {
+                    Index = 1,
+                    Title = "今日の予定を確認",
+                    Kind = AssistantPlanStepKind.Read,
+                    ToolName = AssistantToolNames.CalendarGetToday
+                },
+                new AssistantPlanStep
+                {
+                    Index = 2,
+                    Title = "いつもの予定を入れる（確認が必要）",
+                    Kind = AssistantPlanStepKind.ConfirmAction,
+                    ToolName = AssistantToolNames.CalendarApplyUsual,
+                    RequiresConfirmation = true
+                }
+            ]
+        };
+
+    private static AssistantPlan BuildAddSchedulePlan() =>
+        new()
+        {
+            Summary = "ローカルカレンダーに予定を追加します（確認が必要）。",
+            Steps =
+            [
+                new AssistantPlanStep
+                {
+                    Index = 1,
+                    Title = "予定を追加（確認が必要）",
+                    Kind = AssistantPlanStepKind.ConfirmAction,
+                    ToolName = AssistantToolNames.CalendarAddEvent,
+                    RequiresConfirmation = true
+                }
+            ]
+        };
+
+    private static AssistantPlan BuildOpenNamedPlan() =>
+        new()
+        {
+            Summary = "登録済みのファイル / アプリを名前で開きます（確認が必要）。",
+            Steps =
+            [
+                new AssistantPlanStep
+                {
+                    Index = 1,
+                    Title = "名前で開く（確認が必要）",
+                    Kind = AssistantPlanStepKind.ConfirmAction,
+                    ToolName = AssistantToolNames.WorkspaceOpenNamed,
+                    RequiresConfirmation = true
+                }
+            ]
+        };
+
+    private static AssistantPlan BuildRemovePlan(string text) =>
+        new()
+        {
+            Summary = "ディスク上のファイルは削除しません。Block アイテムをデスクトップに戻すか、登録を外します（確認が必要）。",
+            Steps =
+            [
+                new AssistantPlanStep
+                {
+                    Index = 1,
+                    Title = LooksLikeDelete(text)
+                        ? "登録を外す / デスクトップに戻す（確認が必要）"
+                        : "登録を外す（確認が必要）",
+                    Kind = AssistantPlanStepKind.ConfirmAction,
+                    ToolName = AssistantToolNames.FilesDelete,
+                    RequiresConfirmation = true
+                }
+            ]
+        };
+
     private static string? ResolveProjectHint(string text, AssistantContextSnapshot? snapshot)
     {
         if (snapshot?.Projects is { Count: > 0 })
@@ -150,6 +276,43 @@ public static class AssistantPlanner
 
         return null;
     }
+
+    private static bool LooksLikePlayMusic(string text) =>
+        text.Contains("かけて", StringComparison.Ordinal)
+        || text.Contains("あの曲", StringComparison.Ordinal)
+        || ((text.Contains("再生", StringComparison.Ordinal)
+             || text.Contains("play", StringComparison.OrdinalIgnoreCase))
+            && (text.Contains("曲", StringComparison.Ordinal)
+                || text.Contains("音楽", StringComparison.Ordinal)
+                || text.Contains("song", StringComparison.OrdinalIgnoreCase)
+                || text.Contains("music", StringComparison.OrdinalIgnoreCase)
+                || text.Contains("spotify", StringComparison.OrdinalIgnoreCase)));
+
+    private static bool LooksLikeUsualSchedule(string text) =>
+        text.Contains("いつも", StringComparison.Ordinal)
+        || text.Contains("usual", StringComparison.OrdinalIgnoreCase);
+
+    private static bool LooksLikeAddSchedule(string text) =>
+        (text.Contains("予定", StringComparison.Ordinal)
+         || text.Contains("schedule", StringComparison.OrdinalIgnoreCase)
+         || text.Contains("event", StringComparison.OrdinalIgnoreCase))
+        && (text.Contains("入れて", StringComparison.Ordinal)
+            || text.Contains("いれて", StringComparison.Ordinal)
+            || text.Contains("追加", StringComparison.Ordinal)
+            || text.Contains("add", StringComparison.OrdinalIgnoreCase))
+        && !LooksLikeUsualSchedule(text);
+
+    private static bool LooksLikeOpenNamed(string text) =>
+        (text.Contains("ファイル", StringComparison.Ordinal)
+         || text.Contains("file", StringComparison.OrdinalIgnoreCase)
+         || text.Contains("あの", StringComparison.Ordinal))
+        && (text.Contains("開いて", StringComparison.Ordinal)
+            || text.Contains("open", StringComparison.OrdinalIgnoreCase));
+
+    private static bool LooksLikeDelete(string text) =>
+        text.Contains("削除", StringComparison.Ordinal)
+        || text.Contains("delete", StringComparison.OrdinalIgnoreCase)
+        || text.Contains("消して", StringComparison.Ordinal);
 
     private static bool LooksLikeTodayPriority(string text) =>
         text.Contains("今日", StringComparison.Ordinal)

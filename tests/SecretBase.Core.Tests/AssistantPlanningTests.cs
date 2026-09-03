@@ -69,6 +69,42 @@ public class AssistantPlannerTests
     }
 
     [Fact]
+    public void BuildsAgentPlans_ForMusicScheduleOpenAndDelete()
+    {
+        var play = AssistantPlanner.TryBuildFromIntent(
+            AssistantIntentKind.ActionRequest,
+            "あの曲をかけて",
+            snapshot: null,
+            maxSteps: 5);
+        Assert.NotNull(play);
+        Assert.Contains(play!.Steps, s => s.ToolName == AssistantToolNames.MusicPlay && s.RequiresConfirmation);
+
+        var usual = AssistantPlanner.TryBuildFromIntent(
+            AssistantIntentKind.ActionRequest,
+            "いつも通りの予定をいれて",
+            snapshot: null,
+            maxSteps: 5);
+        Assert.NotNull(usual);
+        Assert.Contains(usual!.Steps, s => s.ToolName == AssistantToolNames.CalendarApplyUsual && s.RequiresConfirmation);
+
+        var openFile = AssistantPlanner.TryBuildFromIntent(
+            AssistantIntentKind.ActionRequest,
+            "あのファイルを開いて",
+            snapshot: null,
+            maxSteps: 5);
+        Assert.NotNull(openFile);
+        Assert.Contains(openFile!.Steps, s => s.ToolName == AssistantToolNames.WorkspaceOpenNamed);
+
+        var delete = AssistantPlanner.TryBuildFromIntent(
+            AssistantIntentKind.ActionRequest,
+            "あのファイルを削除して",
+            snapshot: null,
+            maxSteps: 5);
+        Assert.NotNull(delete);
+        Assert.Contains(delete!.Steps, s => s.ToolName == AssistantToolNames.FilesDelete && s.RequiresConfirmation);
+    }
+
+    [Fact]
     public void Settings_ClampsMaxSteps()
     {
         var settings = AssistantSettingsMigrator.MigrateToCurrent(new AssistantSettings

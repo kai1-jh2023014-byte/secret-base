@@ -120,6 +120,8 @@ public class LayoutPersistenceTests
                 Name = "Cursor",
                 Type = BlockItemType.Application,
                 Target = @"C:\Tools\Cursor\Cursor.exe",
+                HiddenFromDesktop = true,
+                DesktopOriginPath = @"C:\Users\me\Desktop\Cursor.lnk",
                 X = 12,
                 Y = 20
             });
@@ -148,6 +150,8 @@ public class LayoutPersistenceTests
             Assert.Equal(2, loaded.Items.Count);
             Assert.Equal(BlockItemType.Application, loaded.Items[0].Type);
             Assert.Equal(@"C:\Tools\Cursor\Cursor.exe", loaded.Items[0].Target);
+            Assert.True(loaded.Items[0].HiddenFromDesktop);
+            Assert.Equal(@"C:\Users\me\Desktop\Cursor.lnk", loaded.Items[0].DesktopOriginPath);
             Assert.Equal(12, loaded.Items[0].X);
             Assert.Equal(20, loaded.Items[0].Y);
             Assert.Equal(BlockItemType.Folder, loaded.Items[1].Type);

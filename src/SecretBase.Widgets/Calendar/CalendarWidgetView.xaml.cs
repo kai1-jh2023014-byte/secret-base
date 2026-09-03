@@ -5,6 +5,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Shapes;
 using SecretBase.Core.Calendar;
+using SecretBase.Core.Integration;
 using SecretBase.Core.Themes;
 using SecretBase.Core.Time;
 using SecretBase.Core.Widgets.Calendar;
@@ -25,6 +26,7 @@ public sealed partial class CalendarWidgetView : UserControl
     private ICalendarAgendaCache? _cache;
     private Func<string, bool>? _openUrl;
     private Action<CalendarWidgetConfiguration>? _onConfigurationChanged;
+    private IIntegrationMemory? _integrations;
     private ThemeDefinition? _theme;
     private int _refreshGate;
     private int _connectGate;
@@ -41,7 +43,8 @@ public sealed partial class CalendarWidgetView : UserControl
         ITimeProvider? timeProvider = null,
         Func<string, bool>? openUrl = null,
         Action<CalendarWidgetConfiguration>? onConfigurationChanged = null,
-        ICalendarAgendaCache? cache = null)
+        ICalendarAgendaCache? cache = null,
+        IIntegrationMemory? integrations = null)
     {
         _configuration = configuration;
         _service = service;
@@ -49,6 +52,7 @@ public sealed partial class CalendarWidgetView : UserControl
         _openUrl = openUrl;
         _onConfigurationChanged = onConfigurationChanged;
         _cache = cache;
+        _integrations = integrations;
         UpdateProviderLabel();
         UpdateConnectVisibility();
         _ = RefreshAgendaAsync();
@@ -64,11 +68,58 @@ public sealed partial class CalendarWidgetView : UserControl
         WidgetSurfaceStyle.ApplyMuted(StatusLabel, theme);
         WidgetSurfaceStyle.ApplyGhostButton(RefreshButton, theme);
         WidgetSurfaceStyle.ApplyGhostButton(OpenCalendarButton, theme);
+        WidgetSurfaceStyle.ApplyGhostButton(AddEventButton, theme);
         WidgetSurfaceStyle.ApplyActionButton(ConnectButton, theme, accent: true);
         RestyleAgendaItems();
     }
 
     private void RefreshButton_Click(object sender, RoutedEventArgs e) => _ = RefreshAgendaAsync();
+
+    private void AddEventButton_Click(object sender, RoutedEventArgs e)
+    {
+        var local = _service?.Providers.OfType<LocalCalendarProvider>().FirstOrDefault();
+        if (local is null)
+        {
+            StatusLabel.Visibility = Visibility.Visible;
+            StatusLabel.Text = "Local calendar is unavailable.";
+            return;
+        }
+
+        var title = AddTitleBox.Text?.Trim() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(title))
+        {
+            StatusLabel.Visibility = Visibility.Visible;
+            StatusLabel.Text = "Enter an event title.";
+            return;
+        }
+
+        var now = _timeProvider.GetLocalNow();
+        var day = DateOnly.FromDateTime(now.DateTime);
+        var timeText = AddTimeBox.Text?.Trim() ?? string.Empty;
+        DateTimeOffset start;
+        if (string.IsNullOrWhiteSpace(timeText))
+        {
+            start = new DateTimeOffset(day.ToDateTime(new TimeOnly(now.Hour, 0)), now.Offset);
+        }
+        else if (TimeOnly.TryParse(timeText, CultureInfo.InvariantCulture, out var parsed)
+                 || TimeOnly.TryParse(timeText, CultureInfo.CurrentCulture, out parsed))
+        {
+            start = new DateTimeOffset(day.ToDateTime(parsed), now.Offset);
+        }
+        else
+        {
+            StatusLabel.Visibility = Visibility.Visible;
+            StatusLabel.Text = "Use time like 14:00.";
+            return;
+        }
+
+        local.AddEvent(title, start, start.AddHours(1));
+        AddTitleBox.Text = string.Empty;
+        AddTimeBox.Text = string.Empty;
+        StatusLabel.Visibility = Visibility.Visible;
+        StatusLabel.Text = "Added to Secret Base (local). Not pushed to Google.";
+        _ = RefreshAgendaAsync();
+    }
 
     private void OpenCalendarButton_Click(object sender, RoutedEventArgs e)
     {
@@ -111,6 +162,10 @@ public sealed partial class CalendarWidgetView : UserControl
             StatusLabel.Text = $"Connecting {authProvider.DisplayName}…";
             await authProvider.AuthenticateAsync();
             StatusLabel.Text = $"{authProvider.DisplayName} connected.";
+            _integrations?.RememberConnected(
+                IntegrationMemoryIds.GoogleCalendar,
+                authProvider.DisplayName,
+                inAppExperience: true);
             await RefreshAgendaAsync();
         }
         catch (Exception ex)
@@ -252,6 +307,26 @@ public sealed partial class CalendarWidgetView : UserControl
         var missingClient = _service.Providers.Any(p =>
             p.Capabilities.HasFlag(CalendarProviderCapabilities.Authentication)
             && p.AuthStatus == CalendarAuthStatus.NotConfigured);
+
+        var googleConnected = _service.Providers.Any(p =>
+            string.Equals(p.ProviderId, CalendarProviderIds.Google, StringComparison.Ordinal)
+            && p.AuthStatus == CalendarAuthStatus.Connected);
+        if (googleConnected)
+        {
+            _integrations?.RememberConnected(
+                IntegrationMemoryIds.GoogleCalendar,
+                "Google Calendar",
+                inAppExperience: true);
+            OpenCalendarButton.Opacity = 0.55;
+            ToolTipService.SetToolTip(
+                OpenCalendarButton,
+                "Optional: open Google Calendar in the browser. Agenda stays in this widget.");
+        }
+        else
+        {
+            OpenCalendarButton.Opacity = 1;
+            ToolTipService.SetToolTip(OpenCalendarButton, "Open calendar in the browser");
+        }
 
         // Show Connect only when OAuth client is present but disconnected/error.
         ConnectButton.Visibility = needsAuth && !missingClient

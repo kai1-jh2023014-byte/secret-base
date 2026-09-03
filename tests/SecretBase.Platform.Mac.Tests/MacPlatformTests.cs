@@ -234,6 +234,35 @@ public class MacBlockItemIntakeServiceTests
         Assert.False(result.MovedFromSource);
         Assert.Equal("/Applications/Safari.app", result.TargetPath);
     }
+
+    [Fact]
+    public void DesktopFile_IsMovedAndRestored()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "secret-base-tests", Guid.NewGuid().ToString("N"));
+        var desktop = Path.Combine(root, "Desktop");
+        var storage = Path.Combine(root, "block-items");
+        Directory.CreateDirectory(desktop);
+        var source = Path.Combine(desktop, "Notes.txt");
+        File.WriteAllText(source, "hello");
+        try
+        {
+            var service = new MacBlockItemIntakeService(storage, [desktop], ["/Applications"]);
+            var result = service.TryIntake(source, Guid.NewGuid(), Guid.NewGuid());
+            Assert.True(result.Succeeded);
+            Assert.True(result.MovedFromSource);
+            Assert.False(File.Exists(source));
+            Assert.True(service.TryRestoreToDesktop(result.TargetPath, result.DesktopOriginPath, out var restored, out var error));
+            Assert.Null(error);
+            Assert.True(File.Exists(restored));
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
 }
 
 public class MacHttpsLauncherTests
