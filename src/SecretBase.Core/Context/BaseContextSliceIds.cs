@@ -15,4 +15,6 @@ public static class BaseContextSliceIds
     public const string Integrations = "integrations";
     public const string Preferences = "preferences";
     public const string RecentActivity = "recent";
+    public const string Memory = "memory";
+    public const string Intent = "intent";
 }

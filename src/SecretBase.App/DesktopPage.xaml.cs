@@ -6,6 +6,7 @@ using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Navigation;
 using SecretBase.App.Desktop;
 using SecretBase.Core;
+using SecretBase.Core.Activity;
 using SecretBase.Core.Ai;
 using SecretBase.Core.Apps;
 using SecretBase.Core.Assistant;
@@ -28,6 +29,7 @@ using SecretBase.Core.Widgets.Assistant;
 using SecretBase.Core.Widgets.Calendar;
 using SecretBase.Core.Widgets.Clock;
 using SecretBase.Core.Widgets.Creative;
+using SecretBase.Core.Widgets.Dashboard;
 using SecretBase.Core.Widgets.Music;
 using SecretBase.Core.Widgets.Text;
 using SecretBase.Core.Widgets.Web;
@@ -48,6 +50,7 @@ using SecretBase.Widgets.Assistant;
 using SecretBase.Widgets.Calendar;
 using SecretBase.Widgets.Clock;
 using SecretBase.Widgets.Creative;
+using SecretBase.Widgets.Dashboard;
 using SecretBase.Widgets.Music;
 using SecretBase.Widgets.Text;
 using SecretBase.Widgets.Theming;
@@ -90,6 +93,9 @@ public sealed partial class DesktopPage : Page
     private ITodoStore? _todoStore;
     private FocusSessionStore? _focus;
     private IBaseExperienceServices? _baseExperience;
+    private readonly List<DashboardWidgetView> _dashboardViews = [];
+    private readonly List<WorkspaceWidgetView> _workspaceViews = [];
+    private DateTimeOffset _lastAutomationEval;
     private IReadOnlyList<CalendarEvent> _upcomingEvents = [];
     private IAutoStartService? _autoStart;
     private IAppLaunchSettingsStore? _launchSettingsStore;
@@ -179,6 +185,9 @@ public sealed partial class DesktopPage : Page
         _assistantSettings = new JsonAssistantSettingsStore();
         _todoStore = new JsonTodoStore();
         _focus = new FocusSessionStore();
+        var memoryStore = new JsonMemoryStore();
+        var activityStore = new JsonActivityStore();
+        var feedbackStore = new JsonAutomationFeedbackStore();
         var layoutExisted = _layoutStore.Exists(RoomId.DefaultRoomId);
         _baseSettingsStore = new JsonBaseSettingsStore();
         _baseSettings = _baseSettingsStore.LoadOrCreate(layoutExisted);
@@ -220,7 +229,10 @@ public sealed partial class DesktopPage : Page
                 return listed is { Succeeded: true } ? listed.Apps.ToList() : [];
             },
             () => _upcomingEvents,
-            () => (_timeProvider ?? new SystemTimeProvider()).GetLocalNow());
+            () => (_timeProvider ?? new SystemTimeProvider()).GetLocalNow(),
+            memoryStore,
+            activityStore,
+            feedbackStore);
         _baseExperience.CurrentWorkspace = _baseSettings.LastWorkspace;
         _assistant = new AssistantService(
             assistantRegistry,
@@ -253,9 +265,10 @@ public sealed partial class DesktopPage : Page
         RenderDesktopObjects();
         InitializeTaskbarAiChat();
         _ = RefreshUpcomingEventsQuietAsync();
+        DispatcherQueue.TryEnqueue(() => EvaluateQuietSuggestion(AutomationTriggerKind.Startup));
         DispatcherQueue.TryEnqueue(async () => await MaybeShowOnboardingAsync());
         _logger.Info("desktop", $"Overlay desktop shown for room '{_layout.RoomId}' with {_layout.Widgets.Count} widget(s), {_layout.Blocks.Count} block(s).");
-        _logger.Info("widget", "Widget hosts ready (Clock, Text, Calendar, Music, Creative, Workspace, Apps, Base AI).");
+        _logger.Info("widget", "Widget hosts ready (Clock, Text, Calendar, Music, Creative, Workspace, Base, Apps, Base AI).");
         _logger.Info("assistant", "Taskbar AI chat bar ready (Ctrl+Shift+K). Does not replace Windows Search.");
         _logger.Info("block", "Block host ready (use Blk button to add; drop + drag icons inside a Block).");
         _logger.Info("theme", "Theme editor ready (Aa button) — colors apply to all widgets and Blocks.");
@@ -832,6 +845,32 @@ public sealed partial class DesktopPage : Page
                 view.ApplyTheme(_theme);
             }
 
+            _workspaceViews.Add(view);
+            return view;
+        }
+
+        if (instance.Type == WidgetTypes.Dashboard)
+        {
+            var config = DashboardWidgetConfiguration.FromDictionary(instance.Configuration);
+            instance.Configuration = config.ToDictionary();
+            if (_baseExperience is null)
+            {
+                return null;
+            }
+
+            var view = new DashboardWidgetView();
+            view.Initialize(
+                _baseExperience,
+                ComposeDashboard,
+                PrepareWorkspace,
+                ContinueWorkspaceAsync,
+                DismissSuggestion);
+            if (_theme is not null)
+            {
+                view.ApplyTheme(_theme);
+            }
+
+            _dashboardViews.Add(view);
             return view;
         }
 
@@ -1323,6 +1362,8 @@ public sealed partial class DesktopPage : Page
                 _layout.RoomId, 320 + cascade, 60 + cascade),
             WidgetTypes.Workspace => DefaultWidgetFactory.CreateWorkspace(
                 _layout.RoomId, 360 + cascade, 80 + cascade),
+            WidgetTypes.Dashboard => DefaultWidgetFactory.CreateDashboard(
+                _layout.RoomId, 48 + cascade, 270 + cascade),
             _ => null
         };
 
@@ -1390,6 +1431,75 @@ public sealed partial class DesktopPage : Page
             suggestion);
     }
 
+    private BaseDashboardSnapshot ComposeDashboard()
+    {
+        if (_baseExperience is null)
+        {
+            return new BaseDashboardSnapshot();
+        }
+
+        var music = _musicCommands?.MusicService is null
+            ? null
+            : new AssistantMusicState
+            {
+                CurrentTrackTitle = null,
+                CurrentTrackArtist = null
+            };
+        var state = _baseExperience.ComposeUserState(music, _assistant?.ProviderStatus);
+        return BaseDashboardComposer.Compose(
+            state,
+            _baseExperience.Continuation(),
+            _baseExperience.LastSuggestion,
+            _upcomingEvents.Count);
+    }
+
+    private void EvaluateQuietSuggestion(AutomationTriggerKind trigger)
+    {
+        if (_baseExperience is null)
+        {
+            return;
+        }
+
+        var now = (_timeProvider ?? new SystemTimeProvider()).GetLocalNow();
+        if (trigger == AutomationTriggerKind.Time
+            && now - _lastAutomationEval < TimeSpan.FromSeconds(60))
+        {
+            return;
+        }
+
+        _lastAutomationEval = now;
+        var suggestion = _baseExperience.EvaluateAutomation(trigger);
+        if (suggestion is not null)
+        {
+            ShowHostStatus(suggestion.Title + " " + suggestion.Detail);
+        }
+
+        RefreshPersonalSpace();
+    }
+
+    private void DismissSuggestion()
+    {
+        if (_baseExperience is not null)
+        {
+            _baseExperience.LastSuggestion = null;
+        }
+
+        RefreshPersonalSpace();
+    }
+
+    private void RefreshPersonalSpace()
+    {
+        foreach (var view in _dashboardViews)
+        {
+            view.Refresh();
+        }
+
+        foreach (var view in _workspaceViews)
+        {
+            view.Refresh();
+        }
+    }
+
     private WorkspaceSession PrepareWorkspace(string intent)
     {
         var session = WorkspacePreparer.Prepare(
@@ -1398,11 +1508,9 @@ public sealed partial class DesktopPage : Page
             _baseExperience?.ListApps() ?? [],
             _todoStore?.LoadOrCreate() ?? new TodoList(),
             _upcomingEvents,
-            (_timeProvider ?? new SystemTimeProvider()).GetLocalNow());
-        if (_baseExperience is not null)
-        {
-            _baseExperience.CurrentWorkspace = session;
-        }
+            (_timeProvider ?? new SystemTimeProvider()).GetLocalNow(),
+            _baseExperience?.Memory.Recall((_timeProvider ?? new SystemTimeProvider()).GetLocalNow()));
+        _baseExperience?.RememberPreparedWorkspace(session);
 
         if (_baseSettings is not null && _baseSettingsStore is not null)
         {
@@ -1411,6 +1519,7 @@ public sealed partial class DesktopPage : Page
         }
 
         ShowHostStatus("Workspace prepared. Apps were not launched.");
+        RefreshPersonalSpace();
         return session;
     }
 
@@ -1431,13 +1540,28 @@ public sealed partial class DesktopPage : Page
             || string.IsNullOrWhiteSpace(session.ProjectId)
             || _creativeCommands is null)
         {
+            _baseExperience?.RecordFeedback(false);
+            RefreshPersonalSpace();
             return;
         }
 
         var opened = _creativeCommands.Execute(CreativeCommand.OpenCreativeProject(session.ProjectId));
+        if (opened.Succeeded)
+        {
+            _baseExperience?.Activity.Record(new ActivityEvent
+            {
+                Kind = ActivityKind.ProjectOpened,
+                Title = "Project opened",
+                ProjectName = opened.Project?.Name ?? session.ProjectName,
+                At = (_timeProvider ?? new SystemTimeProvider()).GetLocalNow()
+            });
+            _baseExperience?.RecordFeedback(true);
+        }
+
         ShowHostStatus(opened.Succeeded
             ? $"Opened {opened.Project?.Name ?? session.ProjectName}."
             : opened.ErrorMessage ?? "Could not open project.");
+        RefreshPersonalSpace();
     }
 
     private async Task RefreshUpcomingEventsQuietAsync()
@@ -1453,6 +1577,7 @@ public sealed partial class DesktopPage : Page
             if (result.Succeeded)
             {
                 _upcomingEvents = result.Events.ToList();
+                EvaluateQuietSuggestion(AutomationTriggerKind.Calendar);
             }
         }
         catch (Exception ex)
@@ -1474,6 +1599,7 @@ public sealed partial class DesktopPage : Page
         var music = new CheckBox { Content = "Music", IsChecked = false };
         var projects = new CheckBox { Content = "Projects", IsChecked = true };
         var todo = new CheckBox { Content = "Todo / Workspace", IsChecked = true };
+        var dashboard = new CheckBox { Content = "Base status", IsChecked = true };
         var atmosphere = new ComboBox
         {
             Header = "Atmosphere",
@@ -1494,6 +1620,7 @@ public sealed partial class DesktopPage : Page
         panel.Children.Add(music);
         panel.Children.Add(projects);
         panel.Children.Add(todo);
+        panel.Children.Add(dashboard);
         panel.Children.Add(atmosphere);
 
         var dialog = new ContentDialog
@@ -1540,6 +1667,12 @@ public sealed partial class DesktopPage : Page
         {
             modules.Add(BaseModules.Todo);
             await EnsureWidgetAsync(WidgetTypes.Workspace);
+        }
+
+        if (dashboard.IsChecked == true)
+        {
+            modules.Add(BaseModules.Dashboard);
+            await EnsureWidgetAsync(WidgetTypes.Dashboard);
         }
 
         var chosen = atmosphere.SelectedItem as string ?? BaseAtmosphere.Calm;
@@ -2072,5 +2205,7 @@ public sealed partial class DesktopPage : Page
         }
 
         _widgetDisposables.Clear();
+        _dashboardViews.Clear();
+        _workspaceViews.Clear();
     }
 }

@@ -113,6 +113,13 @@ public static class WidgetCatalog
         },
         new()
         {
+            Id = "dashboard",
+            Group = WidgetCatalogGroups.Base,
+            Label = "Base",
+            WidgetType = WidgetTypes.Dashboard
+        },
+        new()
+        {
             Id = "apps",
             Group = WidgetCatalogGroups.Apps,
             Label = "My Apps",

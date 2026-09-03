@@ -46,7 +46,19 @@ Highest principle:
 - ✅ Secret Base AI v0.4 Personal AI Workspace (Plan / Confirm / Action / Result; AI MVP complete)
 - ✅ v0.6 Base Experience: Base AI, context aggregator, Workspace session, Todo, Focus, time-aware suggestions, File Intelligence (suggest-only), onboarding that does not wipe existing layouts, Clock Base style, design tokens (`SurfaceElevated`, `MotionDurationMs`)
 - ✅ Provider fallback: preferred remote → Local → graceful unavailable
+- ✅ v0.7 Personal AI OS: Memory, Activity, User State, Intent, Automation Engine (quiet), Project Continuation, Base dashboard Mini App, File Intelligence 2.0, Universal Search
 - ⏭ Gemini tool-calling, YouTube Music official API (when available), autonomous agents — out of scope
+
+## v0.7 Personal AI OS
+
+Secret Base understands time, calendar, todos, projects, files, apps, music, and prior sessions — then prepares a workspace quietly. Intent is not an Action.
+
+```
+Context + Memory + Activity → User State → Intent (confidence)
+    → Plan → Safety Gate → Confirmation if required → Action → Feedback → Memory
+```
+
+Safety lanes unchanged: **Safe Auto** / **Confirmation** / **Explicit**. No arbitrary shell. No disk crawl. No OS file delete. No always-on LLM.
 
 ## v0.6 Base Experience
 
@@ -82,6 +94,7 @@ Web Widget: WebView2 with **no Host Bridge**. Dangerous URL schemes rejected.
 - [Secret Base AI](ai-assistant.md)
 - [Assistant Context](assistant-context.md)
 - [Assistant Tools](assistant-tools.md)
+- [Personal AI OS](personal-ai-os.md)
 - [Assistant Planning](assistant-planning.md)
 - [Assistant Security](assistant-security.md)
 - [Assistant Context](assistant-context.md)

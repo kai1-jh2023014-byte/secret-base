@@ -2,27 +2,71 @@ using SecretBase.Core.Creative;
 
 namespace SecretBase.Core.Files;
 
+public enum FileCandidateKind
+{
+    Unused = 0,
+    Recent = 1,
+    Relevant = 2,
+    Duplicate = 3,
+    Temporary = 4,
+    Important = 5
+}
+
 /// <summary>
-/// Suggests unused registered files. Never crawls the disk and never deletes.
+/// Suggests registered-file candidates. Never crawls the disk and never deletes.
+/// The three-argument constructor stays compatible with existing callers.
 /// </summary>
 public sealed record FileCleanupCandidate(
     string Name,
     string Reason,
-    string? ProjectName);
+    string? ProjectName,
+    FileCandidateKind Kind = FileCandidateKind.Unused);
 
 public static class FileIntelligence
 {
     public static readonly TimeSpan DefaultUnusedAge = TimeSpan.FromDays(30);
+    public static readonly TimeSpan RecentWindow = TimeSpan.FromDays(7);
 
     public static IReadOnlyList<FileCleanupCandidate> SuggestCleanup(
         IReadOnlyList<CreativeProject> projects,
         DateTimeOffset now,
         TimeSpan? unusedAge = null)
     {
+        return Classify(projects, now, currentProjectName: null, unusedAge)
+            .Where(candidate => candidate.Kind is FileCandidateKind.Unused or FileCandidateKind.Temporary)
+            .Take(12)
+            .ToList();
+    }
+
+    public static IReadOnlyList<FileCleanupCandidate> Classify(
+        IReadOnlyList<CreativeProject> projects,
+        DateTimeOffset now,
+        string? currentProjectName = null,
+        TimeSpan? unusedAge = null)
+    {
         projects ??= [];
         var age = unusedAge ?? DefaultUnusedAge;
-        var candidates = new List<FileCleanupCandidate>();
+        var nameOwners = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var project in projects)
+        {
+            foreach (var resource in project.Resources.Where(item =>
+                         item.Kind == CreativeProjectResourceKind.File
+                         && !string.IsNullOrWhiteSpace(item.Name)))
+            {
+                if (!nameOwners.TryGetValue(resource.Name, out var owners))
+                {
+                    owners = [];
+                    nameOwners[resource.Name] = owners;
+                }
 
+                if (!owners.Contains(project.Name, StringComparer.OrdinalIgnoreCase))
+                {
+                    owners.Add(project.Name);
+                }
+            }
+        }
+
+        var candidates = new List<FileCleanupCandidate>();
         foreach (var project in projects)
         {
             var recentNames = new HashSet<string>(
@@ -30,11 +74,12 @@ public static class FileIntelligence
                     .Where(item => !string.IsNullOrWhiteSpace(item.Name))
                     .Select(item => item.Name),
                 StringComparer.OrdinalIgnoreCase);
-
             var lastOpened = project.RecentItems
                 .Select(item => (DateTimeOffset?)item.OpenedAt)
                 .DefaultIfEmpty()
                 .Max();
+            var isCurrent = !string.IsNullOrWhiteSpace(currentProjectName)
+                            && string.Equals(project.Name, currentProjectName, StringComparison.OrdinalIgnoreCase);
 
             foreach (var resource in project.Resources)
             {
@@ -44,29 +89,35 @@ public static class FileIntelligence
                     continue;
                 }
 
-                if (!recentNames.Contains(resource.Name))
+                var kind = ClassifyOne(
+                    resource.Name,
+                    recentNames.Contains(resource.Name),
+                    lastOpened,
+                    now,
+                    age,
+                    isCurrent,
+                    nameOwners.TryGetValue(resource.Name, out var owners) && owners.Count > 1);
+                var reason = kind switch
                 {
-                    candidates.Add(new FileCleanupCandidate(
-                        resource.Name,
-                        "Not opened from Secret Base recently",
-                        project.Name));
-                    continue;
-                }
-
-                if (lastOpened is not null && now - lastOpened.Value > age)
-                {
-                    candidates.Add(new FileCleanupCandidate(
-                        resource.Name,
-                        $"Not used in {(int)(now - lastOpened.Value).TotalDays} days",
-                        project.Name));
-                }
+                    FileCandidateKind.Important => "Looks like a durable project document",
+                    FileCandidateKind.Relevant => "Relevant to the current project",
+                    FileCandidateKind.Recent => "Opened from Secret Base recently",
+                    FileCandidateKind.Duplicate => "Same name registered in more than one project",
+                    FileCandidateKind.Temporary => "Looks temporary",
+                    _ => lastOpened is not null && now - lastOpened.Value > age
+                        ? $"Not used in {(int)(now - lastOpened.Value).TotalDays} days"
+                        : "Not opened from Secret Base recently"
+                };
+                candidates.Add(new FileCleanupCandidate(resource.Name, reason, project.Name, kind));
             }
         }
 
         return candidates
-            .GroupBy(candidate => candidate.Name, StringComparer.OrdinalIgnoreCase)
+            .GroupBy(candidate => candidate.Name + "|" + candidate.Kind, StringComparer.OrdinalIgnoreCase)
             .Select(group => group.First())
-            .Take(12)
+            .OrderBy(candidate => candidate.Kind)
+            .ThenBy(candidate => candidate.Name, StringComparer.OrdinalIgnoreCase)
+            .Take(24)
             .ToList();
     }
 
@@ -89,11 +140,63 @@ public static class FileIntelligence
             var project = string.IsNullOrWhiteSpace(candidate.ProjectName)
                 ? string.Empty
                 : $" ({candidate.ProjectName})";
-            lines.Add($"○ {candidate.Name}{project}");
+            var kind = candidate.Kind == FileCandidateKind.Unused
+                ? string.Empty
+                : $" [{candidate.Kind}]";
+            lines.Add($"○ {candidate.Name}{project}{kind}");
         }
 
         lines.Add(string.Empty);
         lines.Add("Secret Base will not delete files on disk. [Review]");
         return string.Join(Environment.NewLine, lines);
     }
+
+    private static FileCandidateKind ClassifyOne(
+        string name,
+        bool recentlyOpened,
+        DateTimeOffset? lastOpened,
+        DateTimeOffset now,
+        TimeSpan unusedAge,
+        bool currentProject,
+        bool duplicate)
+    {
+        if (LooksTemporary(name))
+        {
+            return FileCandidateKind.Temporary;
+        }
+
+        if (LooksImportant(name))
+        {
+            return FileCandidateKind.Important;
+        }
+
+        if (duplicate)
+        {
+            return FileCandidateKind.Duplicate;
+        }
+
+        if (currentProject && recentlyOpened)
+        {
+            return FileCandidateKind.Relevant;
+        }
+
+        if (recentlyOpened && lastOpened is not null && now - lastOpened.Value <= RecentWindow)
+        {
+            return FileCandidateKind.Recent;
+        }
+
+        return FileCandidateKind.Unused;
+    }
+
+    private static bool LooksTemporary(string name) =>
+        name.Contains(".tmp", StringComparison.OrdinalIgnoreCase)
+        || name.Contains(".bak", StringComparison.OrdinalIgnoreCase)
+        || name.StartsWith("tmp", StringComparison.OrdinalIgnoreCase)
+        || name.Contains("temp", StringComparison.OrdinalIgnoreCase);
+
+    private static bool LooksImportant(string name) =>
+        name.Contains("readme", StringComparison.OrdinalIgnoreCase)
+        || name.Contains("agents", StringComparison.OrdinalIgnoreCase)
+        || name.Contains("important", StringComparison.OrdinalIgnoreCase)
+        || name.EndsWith(".sln", StringComparison.OrdinalIgnoreCase);
 }

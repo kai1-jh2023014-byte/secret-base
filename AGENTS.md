@@ -128,11 +128,11 @@ Prefer Core / Infrastructure / Platform.Mac unit tests for new domain logic. Win
 
 ---
 
-## Current status (v0.6 Base Experience)
+## Current status (v0.7 Personal AI OS)
 
-Working: overlay desktop, Clock (Base status style), Calendar, Music (IMusicProvider + Spotify OAuth), Creative Projects, My Apps allowlist, Workspace block, Base AI (context → plan → confirm → action, remote→local fallback), local Todo/Focus, time-aware workspace suggestions, file cleanup suggestions, first-run onboarding that does not wipe existing users.
+Working: overlay desktop, Clock (Base status), Calendar, Music, Creative Projects, My Apps allowlist, Workspace, Base dashboard, Base AI (context + memory + intent → plan → confirm → action, remote→local fallback), persistent Memory, Activity aggregation, User State + confidence, Intent Engine, Automation Engine (quiet-by-default), File Intelligence 2.0 (classify, never delete), Universal Search (deterministic), first-run onboarding that does not wipe existing users.
 
-Not built: Rooms UI, plugins, marketplace, YouTube Music official API (open-web only), Google Tasks write, unrestricted filesystem/shell.
+Not built: Rooms UI, plugins, marketplace, YouTube Music official API (open-web only), Google Tasks write, unrestricted filesystem/shell, always-on LLM.
 
 ---
 
@@ -161,6 +161,7 @@ Unless the human explicitly requests otherwise:
 
 - [README.md](README.md)
 - [Architecture overview](docs/architecture/overview.md)
+- [Personal AI OS](docs/architecture/personal-ai-os.md)
 - [macOS host](docs/architecture/macos.md)
 - [Tech stack](docs/architecture/tech-stack.md)
 - [Security boundaries](docs/architecture/security-boundaries.md)

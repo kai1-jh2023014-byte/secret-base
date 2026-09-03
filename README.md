@@ -9,11 +9,11 @@
 | Area | Experience |
 |------|------------|
 | **Overlay** | Wallpaper shows through; click outside widgets → normal Desktop |
-| **Widgets** | Clock (Base status), Text, Web, Calendar, Music, Workspace, AI Workspace, Base AI, Creative (Projects), My Apps |
+| **Widgets** | Clock (Base status), Text, Web, Calendar, Music, Workspace, Base (status card), AI Workspace, Base AI, Creative (Projects), My Apps |
 | **Projects** | Create a Project → Dashboard → Open Folder / Cursor / ChatGPT |
 | **Apps** | Register your own exe / folder / https URL and launch it (no Shell, no admin) |
 | **Classroom** | Opens official Google Classroom in the **existing Web Widget** (no new Classroom UI) |
-| **AI** | **Base AI** understands Calendar, Projects, Todo, Workspace, Music, and Apps; prepares a workspace quietly; confirms before launch. Remote AI falls back to Local. |
+| **AI** | **Base AI** understands Calendar, Projects, Todo, Workspace, Memory, Activity, and Intent; prepares a workspace quietly; confirms before launch. Remote AI falls back to Local. |
 | **Theme** | Shared colors, fonts, corner radius, transparency |
 | **Safe Exit** | **Ctrl+Shift+Q** — process end only; Windows / macOS shell untouched |
 
@@ -109,7 +109,9 @@ Remote (OpenAI / Gemini) is optional. With no API key, Base AI uses **Local** (O
 - [Creative Workspace / Projects](docs/architecture/creative-workspace.md)
 - [AI Workspace](docs/architecture/ai-workspace.md)
 - [Secret Base AI](docs/architecture/ai-assistant.md)
+- [Personal AI OS](docs/architecture/personal-ai-os.md)
 - [Assistant Context](docs/architecture/assistant-context.md)
+- [Personal AI OS](docs/architecture/personal-ai-os.md)
 - [Assistant Tools](docs/architecture/assistant-tools.md)
 - [AI Planning](docs/architecture/ai-planning.md)
 - [AI Security](docs/architecture/ai-security.md)

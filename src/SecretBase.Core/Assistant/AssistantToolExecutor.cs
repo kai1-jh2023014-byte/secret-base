@@ -1,4 +1,5 @@
 using System.Text.Json;
+using SecretBase.Core.Activity;
 using SecretBase.Core.Ai;
 using SecretBase.Core.Apps;
 using SecretBase.Core.Base;
@@ -7,7 +8,9 @@ using SecretBase.Core.Creative;
 using SecretBase.Core.Files;
 using SecretBase.Core.Focus;
 using SecretBase.Core.Integration;
+using SecretBase.Core.Memory;
 using SecretBase.Core.Music;
+using SecretBase.Core.Search;
 using SecretBase.Core.Todo;
 using SecretBase.Core.Workspace;
 
@@ -108,6 +111,12 @@ public sealed class AssistantToolExecutor : IAiToolExecutor
             AssistantToolNames.TodoAdd => TodoAdd(root),
             AssistantToolNames.FocusStart => FocusStart(root),
             AssistantToolNames.FilesSuggestCleanup => FilesSuggestCleanup(),
+            AssistantToolNames.MemoryRecall => MemoryRecall(root),
+            AssistantToolNames.MemoryRemember => MemoryRemember(root),
+            AssistantToolNames.ActivityRecent => ActivityRecent(),
+            AssistantToolNames.SearchBase => SearchBase(root),
+            AssistantToolNames.UserState => UserState(),
+            AssistantToolNames.AutomationFeedback => AutomationFeedback(root),
             _ => AssistantToolResult.Fail(AssistantUserMessages.ToolUnavailable)
         };
     }
@@ -134,6 +143,9 @@ public sealed class AssistantToolExecutor : IAiToolExecutor
             {
                 extras.Add("Workspace:\n" + WorkspacePreparer.FormatCard(_base.CurrentWorkspace));
             }
+
+            extras.Add("User state:\n" + FormatUserState(_base));
+            extras.Add("Continuation:\n" + _base.Continuation().Format());
 
             text += Environment.NewLine + Environment.NewLine + string.Join(Environment.NewLine, extras);
         }
@@ -979,8 +991,9 @@ public sealed class AssistantToolExecutor : IAiToolExecutor
             _base.ListApps(),
             _base.LoadTodos(),
             _base.ListUpcomingEvents(),
-            _base.Now);
-        _base.CurrentWorkspace = session;
+            _base.Now,
+            _base.Memory.Recall(_base.Now));
+        _base.RememberPreparedWorkspace(session);
         return AssistantToolResult.Ok(
             WorkspacePreparer.FormatCard(session),
             activity: "Workspace prepared",
@@ -1004,8 +1017,9 @@ public sealed class AssistantToolExecutor : IAiToolExecutor
                           _base.ListApps(),
                           _base.LoadTodos(),
                           _base.ListUpcomingEvents(),
-                          _base.Now);
-        _base.CurrentWorkspace = session;
+                          _base.Now,
+                          _base.Memory.Recall(_base.Now));
+        _base.RememberPreparedWorkspace(session);
 
         if (string.IsNullOrWhiteSpace(session.ProjectId) || _creative is null)
         {
@@ -1025,6 +1039,14 @@ public sealed class AssistantToolExecutor : IAiToolExecutor
                 opened.ErrorMessage ?? AssistantUserMessages.ProjectsFailed,
                 activityDomain: AssistantActivityDomains.Workspace);
         }
+
+        _base.Activity.Record(new ActivityEvent
+        {
+            Kind = ActivityKind.ProjectOpened,
+            Title = "Project opened",
+            ProjectName = opened.Project?.Name ?? session.ProjectName,
+            At = _base.Now
+        });
 
         var card = WorkspacePreparer.FormatCard(session)
                    + Environment.NewLine
@@ -1080,6 +1102,12 @@ public sealed class AssistantToolExecutor : IAiToolExecutor
         var list = _base.LoadTodos();
         list.Items.Add(TodoItem.Create(title));
         _base.SaveTodos(list);
+        _base.Activity.Record(new ActivityEvent
+        {
+            Kind = ActivityKind.TodoCreated,
+            Title = title,
+            At = _base.Now
+        });
         return AssistantToolResult.Ok(
             $"Added todo: {title}",
             activity: "Todo ✓",
@@ -1098,6 +1126,13 @@ public sealed class AssistantToolExecutor : IAiToolExecutor
         AssistantToolArgumentValidator.TryGetInt(root, "minutes", 25, 5, 90, out var minutes, out _);
         AssistantToolArgumentValidator.TryGetString(root, "label", required: false, out var label, out _);
         var session = _base.Focus.Start(_base.Now, TimeSpan.FromMinutes(minutes), label);
+        _base.Activity.Record(new ActivityEvent
+        {
+            Kind = ActivityKind.FocusStarted,
+            Title = session.Label,
+            ProjectName = _base.CurrentWorkspace?.ProjectName,
+            At = _base.Now
+        });
         return AssistantToolResult.Ok(
             $"Started {session.Label} for {minutes} minutes. No apps were launched.",
             activity: "Focus ✓",
@@ -1118,5 +1153,187 @@ public sealed class AssistantToolExecutor : IAiToolExecutor
             FileIntelligence.FormatSuggestion(candidates),
             activity: "Files ✓",
             activityDomain: AssistantActivityDomains.Files);
+    }
+
+    private AssistantToolResult MemoryRecall(JsonElement root)
+    {
+        if (_base is null)
+        {
+            return AssistantToolResult.Fail(
+                AssistantUserMessages.ToolUnavailable,
+                activityDomain: AssistantActivityDomains.Memory);
+        }
+
+        AssistantToolArgumentValidator.TryGetString(root, "query", required: false, out var query, out _);
+        var items = _base.Memory.Recall(_base.Now, query: query, take: 12);
+        if (items.Count == 0)
+        {
+            return AssistantToolResult.Ok(
+                "No durable memories yet.",
+                activity: "Memory ✓",
+                activityDomain: AssistantActivityDomains.Memory);
+        }
+
+        var lines = items.Select(item =>
+            $"{item.Scope}: {item.Summary}"
+            + (string.IsNullOrWhiteSpace(item.ProjectName) ? string.Empty : $" ({item.ProjectName})"));
+        return AssistantToolResult.Ok(
+            string.Join(Environment.NewLine, lines),
+            activity: "Memory ✓",
+            activityDomain: AssistantActivityDomains.Memory);
+    }
+
+    private AssistantToolResult MemoryRemember(JsonElement root)
+    {
+        if (_base is null)
+        {
+            return AssistantToolResult.Fail(
+                AssistantUserMessages.ToolUnavailable,
+                activityDomain: AssistantActivityDomains.Memory);
+        }
+
+        if (!AssistantToolArgumentValidator.TryGetString(root, "key", required: true, out var key, out var error)
+            || !AssistantToolArgumentValidator.TryGetString(root, "summary", required: true, out var summary, out error))
+        {
+            return AssistantToolResult.Fail(error, activityDomain: AssistantActivityDomains.Memory);
+        }
+
+        AssistantToolArgumentValidator.TryGetString(root, "detail", required: false, out var detail, out _);
+        try
+        {
+            _base.Memory.Remember(new MemoryEntry
+            {
+                Scope = MemoryScope.Decision,
+                Key = key,
+                Summary = summary,
+                Detail = detail,
+                Source = "assistant",
+                Confidence = 0.7,
+                Importance = MemoryImportance.Normal,
+                ProjectId = _base.CurrentWorkspace?.ProjectId,
+                ProjectName = _base.CurrentWorkspace?.ProjectName,
+                CreatedAt = _base.Now,
+                LastAccessedAt = _base.Now,
+                ExpiresAt = MemoryPolicy.DefaultExpiry(MemoryScope.Decision, _base.Now)
+            });
+        }
+        catch (InvalidOperationException)
+        {
+            return AssistantToolResult.Fail(
+                "Memory refused a sensitive or path-like payload.",
+                activityDomain: AssistantActivityDomains.Memory);
+        }
+
+        return AssistantToolResult.Ok(
+            "Remembered: " + summary,
+            activity: "Memory ✓",
+            activityDomain: AssistantActivityDomains.Memory);
+    }
+
+    private AssistantToolResult ActivityRecent()
+    {
+        if (_base is null)
+        {
+            return AssistantToolResult.Fail(
+                AssistantUserMessages.ToolUnavailable,
+                activityDomain: AssistantActivityDomains.Activity);
+        }
+
+        var meaningful = _base.Activity.Meaningful(_base.Now);
+        if (meaningful.Count == 0)
+        {
+            return AssistantToolResult.Ok(
+                "No recent activity in Secret Base.",
+                activity: "Activity ✓",
+                activityDomain: AssistantActivityDomains.Activity);
+        }
+
+        var lines = meaningful.TakeLast(8).Select(item =>
+            $"{item.Title} — {item.Summary}");
+        return AssistantToolResult.Ok(
+            string.Join(Environment.NewLine, lines),
+            activity: "Activity ✓",
+            activityDomain: AssistantActivityDomains.Activity);
+    }
+
+    private AssistantToolResult SearchBase(JsonElement root)
+    {
+        if (_base is null)
+        {
+            return AssistantToolResult.Fail(
+                AssistantUserMessages.ToolUnavailable,
+                activityDomain: AssistantActivityDomains.Search);
+        }
+
+        if (!AssistantToolArgumentValidator.TryGetString(root, "query", required: true, out var query, out var error))
+        {
+            return AssistantToolResult.Fail(error, activityDomain: AssistantActivityDomains.Search);
+        }
+
+        return AssistantToolResult.Ok(
+            BaseSearch.Format(_base.Search(query)),
+            activity: "Search ✓",
+            activityDomain: AssistantActivityDomains.Search);
+    }
+
+    private AssistantToolResult UserState()
+    {
+        if (_base is null)
+        {
+            return AssistantToolResult.Fail(
+                AssistantUserMessages.ToolUnavailable,
+                activityDomain: AssistantActivityDomains.State);
+        }
+
+        return AssistantToolResult.Ok(
+            FormatUserState(_base),
+            activity: "State ✓",
+            activityDomain: AssistantActivityDomains.State);
+    }
+
+    private AssistantToolResult AutomationFeedback(JsonElement root)
+    {
+        if (_base is null)
+        {
+            return AssistantToolResult.Fail(
+                AssistantUserMessages.ToolUnavailable,
+                activityDomain: AssistantActivityDomains.Automation);
+        }
+
+        var accepted = root.TryGetProperty("accepted", out var el)
+                       && el.ValueKind is JsonValueKind.True;
+        if (!root.TryGetProperty("accepted", out _))
+        {
+            return AssistantToolResult.Fail(
+                "accepted is required.",
+                activityDomain: AssistantActivityDomains.Automation);
+        }
+
+        _base.RecordFeedback(accepted);
+        return AssistantToolResult.Ok(
+            accepted ? "Recorded accept." : "Recorded dismiss.",
+            activity: "Automation ✓",
+            activityDomain: AssistantActivityDomains.Automation);
+    }
+
+    private static string FormatUserState(IBaseExperienceServices services)
+    {
+        var state = services.ComposeUserState();
+        var intent = services.DetectIntent();
+        var continuation = services.Continuation();
+        return string.Join(
+            Environment.NewLine,
+            [
+                $"{state.Greeting} · confidence {state.Confidence:0.00}",
+                "Project: " + (state.CurrentProjectName ?? "(none)"),
+                "Workspace: " + (state.CurrentWorkspaceTitle ?? "(none)"),
+                "Focus: " + state.FocusLine,
+                "Calendar: " + (state.CurrentCalendarTitle ?? state.UpcomingCalendarTitle ?? "(none)"),
+                "Todo: " + (state.ActiveTodo ?? "(none)"),
+                "Activity: " + (string.IsNullOrWhiteSpace(state.RecentActivityLine) ? "(none)" : state.RecentActivityLine),
+                $"Intent: {intent.Kind} ({intent.Confidence:0.00}) — {intent.Rationale}",
+                continuation.Format(),
+                "Intent is not an action. Confirmation still applies before launch."
+            ]);
     }
 }

@@ -46,6 +46,12 @@ public static class AssistantToolNames
     public const string TodoAdd = "todo_add";
     public const string FocusStart = "focus_start";
     public const string FilesSuggestCleanup = "files_suggest_cleanup";
+    public const string MemoryRecall = "memory_recall";
+    public const string MemoryRemember = "memory_remember";
+    public const string ActivityRecent = "activity_recent";
+    public const string SearchBase = "search_base";
+    public const string UserState = "user_state";
+    public const string AutomationFeedback = "automation_feedback";
 }
 
 public static class AssistantActivityDomains
@@ -62,6 +68,11 @@ public static class AssistantActivityDomains
     public const string Todo = "Todo";
     public const string Focus = "Focus";
     public const string Files = "Files";
+    public const string Memory = "Memory";
+    public const string Activity = "Activity";
+    public const string Search = "Search";
+    public const string State = "State";
+    public const string Automation = "Automation";
 }
 
 public static class AssistantUserMessages

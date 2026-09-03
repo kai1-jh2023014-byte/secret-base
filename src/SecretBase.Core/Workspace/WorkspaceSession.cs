@@ -23,6 +23,10 @@ public sealed class WorkspaceSession
 
     public DateTimeOffset PreparedAt { get; init; }
 
+    public bool FocusWasRunning { get; init; }
+
+    public string AiNote { get; init; } = string.Empty;
+
     public string StatusLine =>
         string.IsNullOrWhiteSpace(ProjectName) ? Title : $"{Title} · {ProjectName}";
 }

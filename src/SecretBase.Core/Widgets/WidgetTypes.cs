@@ -31,4 +31,7 @@ public static class WidgetTypes
 
     /// <summary>Prepared work mode: project, registered apps/files, next task, focus.</summary>
     public const string Workspace = "workspace";
+
+    /// <summary>Personal Space status card — greeting, continuation, quiet suggestion.</summary>
+    public const string Dashboard = "dashboard";
 }

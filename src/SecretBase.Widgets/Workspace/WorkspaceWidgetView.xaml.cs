@@ -1,5 +1,6 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using SecretBase.Core.Activity;
 using SecretBase.Core.Base;
 using SecretBase.Core.Themes;
 using SecretBase.Core.Workspace;
@@ -107,6 +108,13 @@ public sealed partial class WorkspaceWidgetView : UserControl
     private void FocusButton_Click(object sender, RoutedEventArgs e)
     {
         _base?.Focus.Start(_base.Now);
+        _base?.Activity.Record(new ActivityEvent
+        {
+            Kind = ActivityKind.FocusStarted,
+            Title = "Focus",
+            ProjectName = _base.CurrentWorkspace?.ProjectName,
+            At = _base.Now
+        });
         Refresh();
     }
 }
