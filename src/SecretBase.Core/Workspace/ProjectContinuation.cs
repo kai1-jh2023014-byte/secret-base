@@ -1,5 +1,6 @@
 using SecretBase.Core.Activity;
 using SecretBase.Core.Memory;
+using SecretBase.Core.Session;
 using SecretBase.Core.State;
 using SecretBase.Core.Todo;
 
@@ -18,6 +19,8 @@ public sealed class ProjectContinuationContext
     public IReadOnlyList<string> Relevant { get; init; } = [];
 
     public double Confidence { get; init; }
+
+    public IReadOnlyList<string> Evidence { get; init; } = [];
 
     public string Format()
     {
@@ -45,20 +48,23 @@ public static class ProjectContinuation
         WorkspaceSession? workspace,
         IReadOnlyList<MemoryEntry> memories,
         IReadOnlyList<MeaningfulActivity> activities,
-        TodoList? todos)
+        TodoList? todos,
+        WorkSession? lastSession = null)
     {
         memories ??= [];
         activities ??= [];
         todos ??= new TodoList();
-        var projectName = state.CurrentProjectName ?? workspace?.ProjectName;
-        var projectId = state.CurrentProjectId ?? workspace?.ProjectId;
+        var projectName = state.CurrentProjectName ?? workspace?.ProjectName ?? lastSession?.ProjectName;
+        var projectId = state.CurrentProjectId ?? workspace?.ProjectId ?? lastSession?.ProjectId;
         var sessionMemory = memories.FirstOrDefault(item => item.Scope == MemoryScope.Session)
                             ?? memories.FirstOrDefault(item => item.Scope == MemoryScope.Project);
-        var last = workspace?.LastSessionSummary
+        var last = lastSession?.Summary
+                   ?? workspace?.LastSessionSummary
                    ?? sessionMemory?.Summary
                    ?? activities.LastOrDefault()?.Summary
                    ?? string.Empty;
-        var next = workspace?.NextTask
+        var next = lastSession?.UnfinishedTasks.FirstOrDefault()
+                   ?? workspace?.NextTask
                    ?? todos.Items.FirstOrDefault(item => !item.IsDone)?.Title
                    ?? sessionMemory?.Detail
                    ?? string.Empty;
@@ -82,6 +88,22 @@ public static class ProjectContinuation
             }
         }
 
+        if (lastSession is not null)
+        {
+            relevant.AddRange(lastSession.OpenedResources.Take(3));
+        }
+
+        var evidence = new List<string>();
+        if (!string.IsNullOrWhiteSpace(last))
+        {
+            evidence.Add("Last session: " + last);
+        }
+
+        if (!string.IsNullOrWhiteSpace(next))
+        {
+            evidence.Add("Next: " + next);
+        }
+
         return new ProjectContinuationContext
         {
             ProjectId = projectId,
@@ -89,7 +111,8 @@ public static class ProjectContinuation
             LastSession = last,
             NextTask = next ?? string.Empty,
             Relevant = relevant.Distinct(StringComparer.OrdinalIgnoreCase).Take(6).ToList(),
-            Confidence = state.Confidence
+            Confidence = state.Confidence,
+            Evidence = evidence
         };
     }
 }

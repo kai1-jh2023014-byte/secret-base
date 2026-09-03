@@ -66,4 +66,30 @@ public class PersonalIntelligencePersistenceTests
             Directory.Delete(dir, recursive: true);
         }
     }
+
+    [Fact]
+    public void Sessions_RoundTrip_AndCorruptBecomesEmpty()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "secret-base-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var path = Path.Combine(dir, "sessions.json");
+            var store = new JsonWorkSessionStore(path);
+            var now = DateTimeOffset.UtcNow;
+            store.StartOrContinue(now, "p1", "Secret Base", "Base AI");
+            store.Touch("Intent Engine", "IntentEngine.cs", "Evidence ranking", false);
+            var restored = new JsonWorkSessionStore(path);
+            Assert.Equal("Secret Base", restored.Current?.ProjectName);
+            Assert.Contains("Intent Engine", restored.Current?.Summary, StringComparison.Ordinal);
+
+            File.WriteAllText(path, "{ broken");
+            Assert.Null(new JsonWorkSessionStore(path).Current);
+            Assert.Empty(new JsonWorkSessionStore(path).Recent());
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
 }

@@ -7,7 +7,10 @@ using SecretBase.Core.Creative;
 using SecretBase.Core.Focus;
 using SecretBase.Core.Intent;
 using SecretBase.Core.Memory;
+using SecretBase.Core.Observation;
 using SecretBase.Core.Search;
+using SecretBase.Core.Session;
+using SecretBase.Core.Situation;
 using SecretBase.Core.State;
 using SecretBase.Core.Todo;
 using SecretBase.Core.Workspace;
@@ -33,7 +36,11 @@ public interface IBaseExperienceServices
 
     IAutomationFeedbackStore AutomationFeedback { get; }
 
+    IWorkSessionStore Sessions { get; }
+
     AutomationSuggestion? LastSuggestion { get; set; }
+
+    DateTimeOffset? LastInterventionAt { get; }
 
     IReadOnlyList<CreativeProject> ListProjects();
 
@@ -49,11 +56,19 @@ public interface IBaseExperienceServices
 
     DetectedIntent DetectIntent(string? utterance = null);
 
+    CurrentSituation ComposeSituation();
+
     ProjectContinuationContext Continuation();
 
     AutomationSuggestion? EvaluateAutomation(AutomationTriggerKind trigger = AutomationTriggerKind.Time);
 
+    AutomationExecution EvaluatePipeline(AutomationTriggerKind trigger = AutomationTriggerKind.Time);
+
     IReadOnlyList<SearchHit> Search(string query);
+
+    bool IngestObservation(ObservationEvent observation);
+
+    UserModelSnapshot UserModel();
 
     void RememberPreparedWorkspace(WorkspaceSession session);
 
@@ -77,7 +92,8 @@ public sealed class BaseExperienceServices : IBaseExperienceServices
         Func<DateTimeOffset> now,
         IMemoryStore? memory = null,
         IActivityLog? activity = null,
-        IAutomationFeedbackStore? feedback = null)
+        IAutomationFeedbackStore? feedback = null,
+        IWorkSessionStore? sessions = null)
     {
         _todos = todos ?? throw new ArgumentNullException(nameof(todos));
         Focus = focus ?? throw new ArgumentNullException(nameof(focus));
@@ -88,6 +104,7 @@ public sealed class BaseExperienceServices : IBaseExperienceServices
         Memory = memory ?? new MemoryStore();
         Activity = activity ?? new ActivityLog();
         AutomationFeedback = feedback ?? new AutomationFeedbackStore();
+        Sessions = sessions ?? new WorkSessionStore();
     }
 
     public FocusSessionStore Focus { get; }
@@ -100,7 +117,13 @@ public sealed class BaseExperienceServices : IBaseExperienceServices
 
     public IAutomationFeedbackStore AutomationFeedback { get; }
 
+    public IWorkSessionStore Sessions { get; }
+
     public AutomationSuggestion? LastSuggestion { get; set; }
+
+    public DateTimeOffset? LastInterventionAt { get; private set; }
+
+    private bool _focusWasRunning;
 
     public TodoList LoadTodos() => _todos.LoadOrCreate();
 
@@ -129,39 +152,109 @@ public sealed class BaseExperienceServices : IBaseExperienceServices
             Memory.Recall(Now));
 
     public DetectedIntent DetectIntent(string? utterance = null) =>
-        IntentEngine.Detect(ComposeUserState(), utterance);
+        IntentEngine.Detect(ComposeUserState(), ComposeSituation(), Sessions.Current ?? Sessions.Recent(1).FirstOrDefault(), utterance);
+
+    public CurrentSituation ComposeSituation()
+    {
+        var state = ComposeUserState();
+        return SituationComposer.Compose(
+            state,
+            Activity.Meaningful(Now),
+            Memory.RecallRanked(Now, projectName: state.CurrentProjectName),
+            Sessions.Current ?? Sessions.Recent(1).FirstOrDefault(),
+            Focus.Current,
+            ListUpcomingEvents(),
+            LoadTodos());
+    }
 
     public ProjectContinuationContext Continuation() =>
         ProjectContinuation.Build(
             ComposeUserState(),
             CurrentWorkspace,
-            Memory.Recall(Now),
+            Memory.RecallRanked(Now, projectName: ComposeUserState().CurrentProjectName),
             Activity.Meaningful(Now),
-            LoadTodos());
+            LoadTodos(),
+            Sessions.Current ?? Sessions.Recent(1).FirstOrDefault());
 
-    public AutomationSuggestion? EvaluateAutomation(AutomationTriggerKind trigger = AutomationTriggerKind.Time)
+    public AutomationSuggestion? EvaluateAutomation(AutomationTriggerKind trigger = AutomationTriggerKind.Time) =>
+        EvaluatePipeline(trigger).Suggestion;
+
+    public AutomationExecution EvaluatePipeline(AutomationTriggerKind trigger = AutomationTriggerKind.Time)
     {
+        var running = Focus.Current is { IsRunning: true } && !Focus.Current.IsComplete(Now);
+        if (_focusWasRunning && !running)
+        {
+            trigger = AutomationTriggerKind.FocusEnded;
+            Activity.Record(new ActivityEvent
+            {
+                Kind = ActivityKind.FocusEnded,
+                Title = "Focus ended",
+                ProjectName = CurrentWorkspace?.ProjectName,
+                At = Now
+            });
+            Sessions.Touch("focus ended", null, null, false);
+        }
+
+        _focusWasRunning = running;
         var state = ComposeUserState();
-        var intent = IntentEngine.Detect(state);
-        var suggestion = AutomationEngine.Evaluate(state, intent, AutomationFeedback, trigger);
-        LastSuggestion = suggestion;
-        return suggestion;
+        var situation = ComposeSituation();
+        var intent = IntentEngine.Detect(state, situation, Sessions.Current ?? Sessions.Recent(1).FirstOrDefault());
+        var execution = AutomationEngine.Run(state, intent, AutomationFeedback, trigger, LastInterventionAt);
+        LastSuggestion = execution.Suggestion;
+        if (execution.Suggestion is not null)
+        {
+            LastInterventionAt = Now;
+        }
+
+        return execution;
     }
 
     public IReadOnlyList<SearchHit> Search(string query) =>
         BaseSearch.Query(
             query,
-            Memory.Recall(Now, take: 40),
+            Memory.RecallRanked(Now, query, ComposeUserState().CurrentProjectName, 40),
             Activity.Recent(80),
             ListProjects(),
             ListUpcomingEvents(),
             LoadTodos(),
-            CurrentWorkspace);
+            CurrentWorkspace,
+            Sessions.Recent(8));
+
+    public bool IngestObservation(ObservationEvent observation)
+    {
+        ArgumentNullException.ThrowIfNull(observation);
+        var last = Activity.Recent(1).LastOrDefault();
+        var mapped = ObservationNormalizer.ToActivity(observation, ListApps(), ListProjects(), last);
+        if (mapped is null)
+        {
+            return false;
+        }
+
+        Activity.Record(mapped);
+        if (!string.IsNullOrWhiteSpace(mapped.ProjectName) || mapped.Kind == ActivityKind.ApplicationOpened)
+        {
+            Sessions.StartOrContinue(Now, CurrentWorkspace?.ProjectId, mapped.ProjectName ?? CurrentWorkspace?.ProjectName, CurrentWorkspace?.Title);
+            Sessions.Touch(mapped.Title, mapped.Detail, LoadTodos().Items.FirstOrDefault(item => !item.IsDone)?.Title, false);
+        }
+
+        return true;
+    }
+
+    public UserModelSnapshot UserModel() =>
+        UserModelBuilder.From(
+            Activity.Recent(100),
+            ListProjects(),
+            ListApps(),
+            preferredFocusMinutes: 25,
+            feedback: AutomationFeedback.Recent(40),
+            preferredWorkspace: CurrentWorkspace?.Title);
 
     public void RememberPreparedWorkspace(WorkspaceSession session)
     {
         ArgumentNullException.ThrowIfNull(session);
         CurrentWorkspace = session;
+        Sessions.StartOrContinue(Now, session.ProjectId, session.ProjectName, session.Title);
+        Sessions.Touch(session.LastSessionSummary, session.SuggestedFileNames.FirstOrDefault(), session.NextTask, false);
         Activity.Record(new ActivityEvent
         {
             Kind = ActivityKind.WorkspacePrepared,
@@ -227,6 +320,10 @@ public sealed class BaseExperienceServices : IBaseExperienceServices
             ProjectName = LastSuggestion.ProjectName,
             At = Now
         });
+        if (accepted)
+        {
+            Sessions.Touch("suggestion accepted", null, null, false);
+        }
     }
 
     private void TryRemember(MemoryEntry entry)

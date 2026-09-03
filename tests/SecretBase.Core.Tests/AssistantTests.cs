@@ -22,10 +22,12 @@ public class AssistantToolRegistryTests
     public void BuiltinRegistry_ListsMvpTools_WithConfirmationPolicy()
     {
         var registry = BuiltinAssistantToolRegistry.Instance;
-        Assert.Equal(34, registry.Tools.Count);
+        Assert.Equal(36, registry.Tools.Count);
         Assert.NotNull(registry.Find(AssistantToolNames.MemoryRecall));
         Assert.NotNull(registry.Find(AssistantToolNames.SearchBase));
         Assert.NotNull(registry.Find(AssistantToolNames.UserState));
+        Assert.NotNull(registry.Find(AssistantToolNames.SituationNow));
+        Assert.NotNull(registry.Find(AssistantToolNames.SessionRecent));
         Assert.Equal(AssistantToolCapability.SafeAuto, registry.Find(AssistantToolNames.MemoryRemember)!.Capability);
         Assert.True(AssistantConfirmationPolicy.CanAutoExecute(registry.Find(AssistantToolNames.MemoryRemember)!));
         Assert.NotNull(registry.Find(AssistantToolNames.CalendarAddEvent));

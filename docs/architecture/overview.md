@@ -47,7 +47,20 @@ Highest principle:
 - ✅ v0.6 Base Experience: Base AI, context aggregator, Workspace session, Todo, Focus, time-aware suggestions, File Intelligence (suggest-only), onboarding that does not wipe existing layouts, Clock Base style, design tokens (`SurfaceElevated`, `MotionDurationMs`)
 - ✅ Provider fallback: preferred remote → Local → graceful unavailable
 - ✅ v0.7 Personal AI OS: Memory, Activity, User State, Intent, Automation Engine (quiet), Project Continuation, Base dashboard Mini App, File Intelligence 2.0, Universal Search
+- ✅ v0.8: Observation layer (Windows foreground/idle, privacy-first), Situation model with evidence, ranked Memory recall, work Sessions, evidence-based Intent (including ResumePreviousSession), Automation pipeline + intervention modes, learning without privilege escalation, Base situation-first UX, session search
 - ⏭ Gemini tool-calling, YouTube Music official API (when available), autonomous agents — out of scope
+
+## v0.8 Personal AI OS completion
+
+Secret Base closes the loop with the computer where it is safe to observe: sanitized foreground/idle events become Activity, then Situation + Intent with evidence. Continue still asks. Learning never auto-launches.
+
+```
+Observation → Activity → Memory / Context → Situation → Intent
+    → Workspace / Session → Automation → Intervention → Safety → Confirmation → Action
+    → Feedback → Ranking (not privilege)
+```
+
+Safety lanes unchanged: **Safe Auto** / **Confirmation** / **Explicit**. No arbitrary shell. No disk crawl. No OS file delete. No always-on LLM. No learning → auto action.
 
 ## v0.7 Personal AI OS
 

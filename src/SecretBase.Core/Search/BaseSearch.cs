@@ -2,6 +2,7 @@ using SecretBase.Core.Activity;
 using SecretBase.Core.Calendar;
 using SecretBase.Core.Creative;
 using SecretBase.Core.Memory;
+using SecretBase.Core.Session;
 using SecretBase.Core.Todo;
 using SecretBase.Core.Workspace;
 
@@ -11,7 +12,9 @@ public sealed record SearchHit(
     string Kind,
     string Title,
     string Detail,
-    double Score);
+    double Score,
+    DateTimeOffset? At = null,
+    string Source = "");
 
 /// <summary>Deterministic metadata search. No LLM. No disk crawl. Names only.</summary>
 public static class BaseSearch
@@ -23,7 +26,8 @@ public static class BaseSearch
         IReadOnlyList<CreativeProject> projects,
         IReadOnlyList<CalendarEvent> events,
         TodoList? todos,
-        WorkspaceSession? workspace)
+        WorkspaceSession? workspace,
+        IReadOnlyList<WorkSession>? sessions = null)
     {
         var q = (query ?? string.Empty).Trim();
         if (q.Length == 0)
@@ -59,6 +63,23 @@ public static class BaseSearch
             if (score > 0)
             {
                 hits.Add(new SearchHit("workspace", workspace.Title, workspace.LastSessionSummary, score));
+            }
+        }
+
+        if (sessions is not null)
+        {
+            foreach (var session in sessions)
+            {
+                var score = Math.Max(Match(session.Summary, q), Match(session.PrimaryActivity, q));
+                if (score <= 0 && !string.IsNullOrWhiteSpace(session.ProjectName))
+                {
+                    score = Match(session.ProjectName, q);
+                }
+
+                if (score > 0)
+                {
+                    hits.Add(new SearchHit("session", session.Summary, session.ProjectName ?? string.Empty, score * 1.05, session.StartedAt, "session"));
+                }
             }
         }
 

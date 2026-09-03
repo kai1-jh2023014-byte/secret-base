@@ -52,7 +52,19 @@ public partial class MainWindow : Window
             InitializeAutoStartToggle();
             RefreshHistory();
         };
-        Closing += (_, _) => _session.Logger.Info("lifecycle", "Safe exit — process end only.");
+        Closing += (_, _) =>
+        {
+            try
+            {
+                _session.Base.Sessions.End(_session.TimeProvider.GetLocalNow());
+            }
+            catch (Exception)
+            {
+                // Session persist must never block safe exit.
+            }
+
+            _session.Logger.Info("lifecycle", "Safe exit — process end only.");
+        };
 
         _clockTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
         _clockTimer.Tick += (_, _) =>
@@ -106,13 +118,17 @@ public partial class MainWindow : Window
             state,
             continuation,
             _session.Base.LastSuggestion,
-            _session.Base.ListUpcomingEvents().Count);
+            _session.Base.ListUpcomingEvents().Count,
+            _session.Base.ComposeSituation());
         GreetingText.Text = card.Greeting;
         ReadyText.Text = card.ReadyLine;
         ProjectText.Text = string.IsNullOrWhiteSpace(card.ContinuationTitle)
             ? "Nothing prepared yet"
             : card.ContinuationTitle;
-        SessionText.Text = card.ContinuationDetail;
+        SessionText.Text = string.Join(
+            Environment.NewLine,
+            new[] { card.ContinuationDetail, card.NextTaskLine }
+                .Where(line => !string.IsNullOrWhiteSpace(line)));
         SuggestionText.Text = string.IsNullOrWhiteSpace(card.SuggestionTitle)
             ? string.Empty
             : card.SuggestionTitle + (string.IsNullOrWhiteSpace(card.SuggestionDetail)

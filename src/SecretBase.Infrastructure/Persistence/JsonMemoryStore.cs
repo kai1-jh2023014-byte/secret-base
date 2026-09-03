@@ -51,6 +51,13 @@ public sealed class JsonMemoryStore : IMemoryStore
         int take = 12) =>
         _inner.Recall(now, scope, projectId, query, take);
 
+    public IReadOnlyList<MemoryEntry> RecallRanked(
+        DateTimeOffset now,
+        string? query = null,
+        string? projectName = null,
+        int take = 8) =>
+        _inner.RecallRanked(now, query, projectName, take);
+
     public MemoryDocument Snapshot() => _inner.Snapshot();
 
     private MemoryDocument LoadUnlocked()

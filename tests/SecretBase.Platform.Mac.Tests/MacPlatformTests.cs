@@ -217,7 +217,7 @@ public class MacCompatibilityServiceTests
     {
         var info = new MacCompatibilityService().GetCurrent();
         Assert.Equal(MacCompatibilityService.NotApplicableWindowsAppSdk, info.WindowsAppSdkPackageVersion);
-        Assert.Equal("0.7.0", info.AppVersion);
+        Assert.Equal("0.8.0", info.AppVersion);
     }
 }
 

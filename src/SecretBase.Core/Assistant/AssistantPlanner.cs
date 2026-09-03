@@ -473,6 +473,9 @@ public static class AssistantPlanner
         || text.Contains("再開", StringComparison.Ordinal)
         || text.Contains("continue", StringComparison.OrdinalIgnoreCase)
         || text.Contains("resume", StringComparison.OrdinalIgnoreCase)
+        || text.Contains("yesterday", StringComparison.OrdinalIgnoreCase)
+        || text.Contains("昨日", StringComparison.Ordinal)
+        || text.Contains("前回", StringComparison.Ordinal)
         || (text.Contains("開発", StringComparison.Ordinal)
             && (text.Contains("したい", StringComparison.Ordinal) || text.Contains("続け", StringComparison.Ordinal)));
 

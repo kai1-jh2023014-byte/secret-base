@@ -128,11 +128,11 @@ Prefer Core / Infrastructure / Platform.Mac unit tests for new domain logic. Win
 
 ---
 
-## Current status (v0.7 Personal AI OS)
+## Current status (v0.8 Personal AI OS)
 
-Working: overlay desktop, Clock (Base status), Calendar, Music, Creative Projects, My Apps allowlist, Workspace, Base dashboard, Base AI (context + memory + intent → plan → confirm → action, remote→local fallback), persistent Memory, Activity aggregation, User State + confidence, Intent Engine, Automation Engine (quiet-by-default), File Intelligence 2.0 (classify, never delete), Universal Search (deterministic), first-run onboarding that does not wipe existing users.
+Working: overlay desktop, Clock (Base status), Calendar, Music, Creative Projects, My Apps allowlist, Workspace, Base dashboard (situation-first), Base AI (context + memory + situation + intent → plan → confirm → action, remote→local fallback), persistent Memory with ranked recall, Activity aggregation, privacy-first Windows foreground/idle observation, Situation model with evidence, User State + confidence, evidence-based Intent Engine, work sessions, Automation pipeline (quiet-by-default intervention modes), learning that never escalates privilege, File Intelligence 2.0 (classify, never delete), Universal Search including sessions, first-run onboarding that does not wipe existing users.
 
-Not built: Rooms UI, plugins, marketplace, YouTube Music official API (open-web only), Google Tasks write, unrestricted filesystem/shell, always-on LLM.
+Not built: Rooms UI, plugins, marketplace, YouTube Music official API (open-web only), Google Tasks write, unrestricted filesystem/shell, always-on LLM. WinUI overlay cannot be executed on Linux CI — use the Windows manual QA checklist.
 
 ---
 
@@ -162,6 +162,7 @@ Unless the human explicitly requests otherwise:
 - [README.md](README.md)
 - [Architecture overview](docs/architecture/overview.md)
 - [Personal AI OS](docs/architecture/personal-ai-os.md)
+- [Windows manual QA (v0.8)](docs/guides/windows-manual-qa-v08.md)
 - [macOS host](docs/architecture/macos.md)
 - [Tech stack](docs/architecture/tech-stack.md)
 - [Security boundaries](docs/architecture/security-boundaries.md)

@@ -219,3 +219,9 @@ See [2026-09-03-macos-host.md](2026-09-03-macos-host.md).
 **Decision:** Add long-term Memory (scoped, TTL, importance, no secrets/paths), Activity events aggregated into meaningful work, User State with heuristic confidence, Intent Engine (intent ≠ action), Automation Engine wrapping TimeAwareAdvisor with quiet-by-default InterventionPolicy and accept/dismiss learning, Project Continuation context, deterministic Universal Search, File Intelligence 2.0 classifications, and a Base dashboard Mini App that is **not** seeded into existing layouts. Reuse Confirmation, Step Budget, Allowlist, Single Instance, startup containment, and corrupt JSON recovery. LLM stays event-driven (user chat), never at startup.
 
 **Why:** Secret Base should feel like *my computer, understood by AI* — prepare the next workspace, remember last session, stay quiet during Focus, and never auto-launch or delete.
+
+## 2026-09-03 — Personal AI OS completion (v0.8)
+
+**Decision:** Close the observe→understand→remember→intent→prepare→suggest→safety→act→learn loop without weakening Confirmation, Allowlist, Step Budget, or Safe Auto / Confirmation / Explicit. Add a privacy-first Observation abstraction (`IComputerObservationService`) implemented on Windows with documented user32 APIs only (process name + idle; browser titles dropped unless they name a registered project). Core gains Situation (evidence), ranked Memory recall, WorkSession persistence, evidence-based Intent including ResumePreviousSession, an Automation pipeline with Silent/Passive/Suggest/Confirm, and learning that may change ranking but never Confirmation→Auto Action. Base AI tools `situation_now` and `session_recent` are read-only. Default layouts stay Clock+Text.
+
+**Why:** v0.7 understood Secret Base internals. v0.8 understands the user's computer just enough to continue yesterday's work — and still asks before acting.

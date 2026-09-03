@@ -18,6 +18,16 @@ public sealed class UserModelSnapshot
     public int TypicalWorkEndHour { get; set; } = 18;
 
     public string? PreferredMusicProvider { get; set; }
+
+    public string? PreferredWorkspace { get; set; }
+
+    public int SuggestionAccepts { get; set; }
+
+    public int SuggestionDismissals { get; set; }
+
+    public double SuggestionAcceptanceRate { get; set; } = 0.5;
+
+    public List<string> CommonProjectSequences { get; set; } = [];
 }
 
 public static class UserModelBuilder
@@ -26,7 +36,9 @@ public static class UserModelBuilder
         IReadOnlyList<ActivityEvent> activities,
         IReadOnlyList<CreativeProject> projects,
         IReadOnlyList<CustomApp> apps,
-        int preferredFocusMinutes = 25)
+        int preferredFocusMinutes = 25,
+        IReadOnlyList<SecretBase.Core.Automation.AutomationFeedback>? feedback = null,
+        string? preferredWorkspace = null)
     {
         activities ??= [];
         var projectHits = activities
@@ -60,13 +72,22 @@ public static class UserModelBuilder
         var start = hours.Count == 0 ? 9 : hours.Min();
         var end = hours.Count == 0 ? 18 : Math.Max(start + 1, hours.Max());
 
+        var accepts = feedback?.Count(item => item.Accepted) ?? 0;
+        var dismissals = feedback?.Count(item => !item.Accepted) ?? 0;
+        var rate = accepts + dismissals == 0 ? 0.5 : accepts / (double)(accepts + dismissals);
+
         return new UserModelSnapshot
         {
             FrequentProjects = projectHits,
             FrequentApps = appHits,
             PreferredFocusMinutes = preferredFocusMinutes,
             TypicalWorkStartHour = Math.Clamp(start, 6, 12),
-            TypicalWorkEndHour = Math.Clamp(end, 13, 22)
+            TypicalWorkEndHour = Math.Clamp(end, 13, 22),
+            PreferredWorkspace = preferredWorkspace,
+            SuggestionAccepts = accepts,
+            SuggestionDismissals = dismissals,
+            SuggestionAcceptanceRate = Math.Round(rate, 2),
+            CommonProjectSequences = projectHits.Take(4).ToList()
         };
     }
 }

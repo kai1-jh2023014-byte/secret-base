@@ -52,6 +52,8 @@ public static class AssistantToolNames
     public const string SearchBase = "search_base";
     public const string UserState = "user_state";
     public const string AutomationFeedback = "automation_feedback";
+    public const string SituationNow = "situation_now";
+    public const string SessionRecent = "session_recent";
 }
 
 public static class AssistantActivityDomains
@@ -72,6 +74,8 @@ public static class AssistantActivityDomains
     public const string Activity = "Activity";
     public const string Search = "Search";
     public const string State = "State";
+    public const string Situation = "Situation";
+    public const string Session = "Session";
     public const string Automation = "Automation";
 }
 

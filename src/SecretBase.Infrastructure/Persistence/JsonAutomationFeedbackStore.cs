@@ -39,6 +39,8 @@ public sealed class JsonAutomationFeedbackStore : IAutomationFeedbackStore
 
     public double AcceptanceRate(DetectedIntentKind intent) => _inner.AcceptanceRate(intent);
 
+    public int ConsecutiveDismissals(DetectedIntentKind intent) => _inner.ConsecutiveDismissals(intent);
+
     private AutomationFeedbackDocument LoadUnlocked()
     {
         if (!File.Exists(_path))
