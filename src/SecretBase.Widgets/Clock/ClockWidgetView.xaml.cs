@@ -9,13 +9,14 @@ using SecretBase.Widgets.Theming;
 
 namespace SecretBase.Widgets.Clock;
 
-/// <summary>Atelier Clock — editorial digital / analog / focus / minimal styles.</summary>
+/// <summary>Atelier Clock — editorial digital / analog / focus / minimal / base styles.</summary>
 public sealed partial class ClockWidgetView : UserControl, IDisposable
 {
     private readonly DispatcherTimer _timer;
     private ITimeProvider _timeProvider = new SystemTimeProvider();
     private ClockWidgetConfiguration _configuration = ClockWidgetConfiguration.CreateDefault();
     private Action<ClockWidgetConfiguration>? _onConfigurationChanged;
+    private Func<ClockBaseStatus?>? _statusSource;
     private ThemeDefinition? _theme;
     private bool _disposed;
 
@@ -31,11 +32,13 @@ public sealed partial class ClockWidgetView : UserControl, IDisposable
     public void Initialize(
         ClockWidgetConfiguration configuration,
         ITimeProvider? timeProvider = null,
-        Action<ClockWidgetConfiguration>? onConfigurationChanged = null)
+        Action<ClockWidgetConfiguration>? onConfigurationChanged = null,
+        Func<ClockBaseStatus?>? statusSource = null)
     {
         _configuration = configuration;
         _timeProvider = timeProvider ?? new SystemTimeProvider();
         _onConfigurationChanged = onConfigurationChanged;
+        _statusSource = statusSource;
         RefreshDisplay();
     }
 
@@ -45,8 +48,12 @@ public sealed partial class ClockWidgetView : UserControl, IDisposable
         WidgetSurfaceStyle.ApplyLayeredChrome(OuterShell, RootBorder, theme);
         TimeText.Foreground = ThemePainter.Brush(theme.WidgetForeground);
         DateText.Foreground = ThemePainter.Brush(theme.ForegroundMuted);
+        StatusText.Foreground = ThemePainter.Brush(theme.Accent);
+        NextText.Foreground = ThemePainter.Brush(theme.ForegroundMuted);
         TimeText.FontFamily = new FontFamily(theme.FontFamily);
         DateText.FontFamily = new FontFamily(theme.FontFamily);
+        StatusText.FontFamily = new FontFamily(theme.FontFamily);
+        NextText.FontFamily = new FontFamily(theme.FontFamily);
         AccentHairline.Background = ThemePainter.Brush(theme.Accent, 0.9);
         AnalogRingOuter.Stroke = ThemePainter.Brush(theme.Border, 0.35);
         AnalogFace.Stroke = ThemePainter.Brush(theme.Border, 0.7);
@@ -66,7 +73,7 @@ public sealed partial class ClockWidgetView : UserControl, IDisposable
         }
 
         RefreshDisplay();
-        WidgetSurfaceStyle.FadeOpacity(this, 1, 220);
+        WidgetSurfaceStyle.FadeOpacity(this, 1, _theme?.MotionDurationMs ?? 220);
         if (!_timer.IsEnabled)
         {
             _timer.Start();
@@ -83,6 +90,7 @@ public sealed partial class ClockWidgetView : UserControl, IDisposable
         var scale = Math.Clamp(_configuration.SizeScale, 0.75, 1.5);
         var style = _configuration.DisplayStyle ?? ClockWidgetConfiguration.StyleDigital;
         var isAnalog = string.Equals(style, ClockWidgetConfiguration.StyleAnalog, StringComparison.Ordinal);
+        var isBase = string.Equals(style, ClockWidgetConfiguration.StyleBase, StringComparison.Ordinal);
         DigitalPanel.Visibility = isAnalog ? Visibility.Collapsed : Visibility.Visible;
         AnalogPanel.Visibility = isAnalog ? Visibility.Visible : Visibility.Collapsed;
         AccentHairline.Visibility = style is ClockWidgetConfiguration.StyleMinimal
@@ -92,18 +100,41 @@ public sealed partial class ClockWidgetView : UserControl, IDisposable
         if (isAnalog)
         {
             UpdateAnalogHands(now);
+            StatusText.Visibility = Visibility.Collapsed;
+            NextText.Visibility = Visibility.Collapsed;
             return;
         }
 
-        var (time, date) = ClockDisplayFormatter.Format(_timeProvider, _configuration);
-        TimeText.Text = time;
-        DateText.Text = date;
-        DateText.Visibility = string.IsNullOrEmpty(date) ? Visibility.Collapsed : Visibility.Visible;
+        if (isBase)
+        {
+            var status = _statusSource?.Invoke();
+            var (time, date, next, statusLine) = ClockDisplayFormatter.FormatBase(
+                _timeProvider,
+                _configuration,
+                status);
+            TimeText.Text = time;
+            DateText.Text = date;
+            DateText.Visibility = string.IsNullOrEmpty(date) ? Visibility.Collapsed : Visibility.Visible;
+            StatusText.Text = statusLine;
+            StatusText.Visibility = string.IsNullOrWhiteSpace(statusLine) ? Visibility.Collapsed : Visibility.Visible;
+            NextText.Text = next;
+            NextText.Visibility = string.IsNullOrWhiteSpace(next) ? Visibility.Collapsed : Visibility.Visible;
+        }
+        else
+        {
+            var (time, date) = ClockDisplayFormatter.Format(_timeProvider, _configuration);
+            TimeText.Text = time;
+            DateText.Text = date;
+            DateText.Visibility = string.IsNullOrEmpty(date) ? Visibility.Collapsed : Visibility.Visible;
+            StatusText.Visibility = Visibility.Collapsed;
+            NextText.Visibility = Visibility.Collapsed;
+        }
 
         TimeText.FontSize = style switch
         {
             ClockWidgetConfiguration.StyleMinimal => 56 * scale,
             ClockWidgetConfiguration.StyleFocus => 38 * scale,
+            ClockWidgetConfiguration.StyleBase => 42 * scale,
             _ => 44 * scale
         };
         TimeText.FontWeight = style == ClockWidgetConfiguration.StyleMinimal
@@ -114,6 +145,8 @@ public sealed partial class ClockWidgetView : UserControl, IDisposable
             ? HorizontalAlignment.Center
             : HorizontalAlignment.Left;
         DateText.HorizontalAlignment = TimeText.HorizontalAlignment;
+        StatusText.HorizontalAlignment = TimeText.HorizontalAlignment;
+        NextText.HorizontalAlignment = TimeText.HorizontalAlignment;
         DateText.FontSize = style switch
         {
             ClockWidgetConfiguration.StyleMinimal => 12 * scale,
@@ -146,7 +179,7 @@ public sealed partial class ClockWidgetView : UserControl, IDisposable
         var styleBox = new ComboBox
         {
             Header = "Style",
-            ItemsSource = new[] { "Digital", "Minimal", "Analog", "Focus" },
+            ItemsSource = new[] { "Base", "Digital", "Minimal", "Analog", "Focus" },
             HorizontalAlignment = HorizontalAlignment.Stretch
         };
         styleBox.SelectedItem = _configuration.DisplayStyle switch
@@ -154,6 +187,7 @@ public sealed partial class ClockWidgetView : UserControl, IDisposable
             ClockWidgetConfiguration.StyleMinimal => "Minimal",
             ClockWidgetConfiguration.StyleAnalog => "Analog",
             ClockWidgetConfiguration.StyleFocus => "Focus",
+            ClockWidgetConfiguration.StyleBase => "Base",
             _ => "Digital"
         };
 
@@ -196,6 +230,7 @@ public sealed partial class ClockWidgetView : UserControl, IDisposable
             "Minimal" => ClockWidgetConfiguration.StyleMinimal,
             "Analog" => ClockWidgetConfiguration.StyleAnalog,
             "Focus" => ClockWidgetConfiguration.StyleFocus,
+            "Base" => ClockWidgetConfiguration.StyleBase,
             _ => ClockWidgetConfiguration.StyleDigital
         };
         _configuration.Use24HourFormat = format24.IsChecked == true;

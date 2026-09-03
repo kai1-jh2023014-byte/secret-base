@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="utf-8"?>
+<UserControl
+    x:Class="SecretBase.Widgets.Workspace.WorkspaceWidgetView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d">
+
+    <Border
+        x:Name="OuterShell"
+        Background="#20151A24"
+        CornerRadius="20"
+        Padding="2"
+        BorderThickness="1"
+        BorderBrush="#28FFFFFF">
+        <Border
+            x:Name="RootBorder"
+            Padding="16,14"
+            Background="#D9181E28"
+            CornerRadius="18"
+            BorderThickness="1"
+            BorderBrush="#3DFFFFFF"
+            MinWidth="260"
+            MinHeight="280">
+            <Grid RowSpacing="8">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <StackPanel Spacing="2">
+                    <TextBlock
+                        x:Name="HeaderText"
+                        Text="Workspace"
+                        FontSize="15"
+                        FontWeight="SemiBold"
+                        CharacterSpacing="40" />
+                    <TextBlock
+                        x:Name="SubtitleText"
+                        Text="Prepared for this moment"
+                        FontSize="11"
+                        Opacity="0.75" />
+                </StackPanel>
+
+                <ScrollViewer
+                    Grid.Row="1"
+                    VerticalScrollBarVisibility="Auto"
+                    HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel Spacing="10">
+                        <TextBlock
+                            x:Name="TitleText"
+                            FontSize="18"
+                            FontWeight="SemiLight"
+                            TextWrapping="WrapWholeWords"
+                            Text="Nothing prepared yet" />
+                        <TextBlock
+                            x:Name="LastSessionText"
+                            FontSize="12"
+                            Opacity="0.85"
+                            TextWrapping="WrapWholeWords" />
+                        <TextBlock
+                            x:Name="PreparedText"
+                            FontSize="12"
+                            TextWrapping="WrapWholeWords" />
+                        <TextBlock
+                            x:Name="AppsText"
+                            FontSize="12"
+                            TextWrapping="WrapWholeWords" />
+                        <TextBlock
+                            x:Name="FilesText"
+                            FontSize="12"
+                            TextWrapping="WrapWholeWords" />
+                        <TextBlock
+                            x:Name="NextText"
+                            FontSize="12"
+                            TextWrapping="WrapWholeWords" />
+                        <TextBlock
+                            x:Name="FocusText"
+                            FontSize="12"
+                            TextWrapping="WrapWholeWords" />
+                        <TextBlock
+                            x:Name="EmptyText"
+                            FontSize="12"
+                            Opacity="0.75"
+                            TextWrapping="WrapWholeWords"
+                            Text="Ask Base AI to continue a project, or prepare a workspace here. Secret Base will not launch apps until you confirm." />
+                    </StackPanel>
+                </ScrollViewer>
+
+                <StackPanel
+                    Grid.Row="2"
+                    Orientation="Horizontal"
+                    Spacing="8">
+                    <Button
+                        x:Name="PrepareButton"
+                        Content="Prepare"
+                        MinWidth="88"
+                        Click="PrepareButton_Click" />
+                    <Button
+                        x:Name="ContinueButton"
+                        Content="Continue"
+                        MinWidth="88"
+                        Click="ContinueButton_Click" />
+                    <Button
+                        x:Name="FocusButton"
+                        Content="Pomodoro"
+                        MinWidth="88"
+                        Click="FocusButton_Click" />
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Border>
+</UserControl>

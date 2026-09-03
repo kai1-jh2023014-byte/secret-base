@@ -9,6 +9,7 @@ public static class WidgetCatalogGroups
     public const string Creative = "Creative";
     public const string Ai = "AI";
     public const string Apps = "Apps";
+    public const string Base = "Base";
 }
 
 public enum WidgetCatalogKind
@@ -100,8 +101,15 @@ public static class WidgetCatalog
         {
             Id = "assistant",
             Group = WidgetCatalogGroups.Ai,
-            Label = "Secret Base AI",
+            Label = "Base AI",
             WidgetType = WidgetTypes.Assistant
+        },
+        new()
+        {
+            Id = "workspace",
+            Group = WidgetCatalogGroups.Base,
+            Label = "Workspace",
+            WidgetType = WidgetTypes.Workspace
         },
         new()
         {

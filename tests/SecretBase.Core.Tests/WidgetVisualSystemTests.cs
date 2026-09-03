@@ -16,6 +16,8 @@ public class WidgetVisualSystemTests
         Assert.True(theme.Spacing >= 8);
         Assert.False(string.IsNullOrWhiteSpace(theme.Border));
         Assert.False(string.IsNullOrWhiteSpace(theme.SurfaceSecondary));
+        Assert.False(string.IsNullOrWhiteSpace(theme.SurfaceElevated));
+        Assert.True(theme.MotionDurationMs >= 120);
     }
 
     [Fact]
@@ -29,5 +31,7 @@ public class WidgetVisualSystemTests
         Assert.Equal(source.Border, target.Border);
         Assert.Equal(source.SurfaceSecondary, target.SurfaceSecondary);
         Assert.Equal(source.Spacing, target.Spacing);
+        Assert.Equal(source.SurfaceElevated, target.SurfaceElevated);
+        Assert.Equal(source.MotionDurationMs, target.MotionDurationMs);
     }
 }

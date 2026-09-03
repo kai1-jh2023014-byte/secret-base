@@ -1,10 +1,14 @@
 using System.Text.Json;
 using SecretBase.Core.Ai;
 using SecretBase.Core.Apps;
+using SecretBase.Core.Base;
 using SecretBase.Core.Calendar;
 using SecretBase.Core.Creative;
+using SecretBase.Core.Files;
+using SecretBase.Core.Focus;
 using SecretBase.Core.Integration;
 using SecretBase.Core.Music;
+using SecretBase.Core.Todo;
 using SecretBase.Core.Workspace;
 
 namespace SecretBase.Core.Assistant;
@@ -25,6 +29,7 @@ public sealed class AssistantToolExecutor : IAiToolExecutor
     private readonly IAssistantContextService? _context;
     private readonly WorkspaceCommandService? _workspace;
     private readonly IIntegrationMemory? _integrations;
+    private readonly IBaseExperienceServices? _base;
 
     public AssistantToolExecutor(
         IAiToolRegistry registry,
@@ -36,7 +41,8 @@ public sealed class AssistantToolExecutor : IAiToolExecutor
         MusicCommandService? music = null,
         IAssistantContextService? context = null,
         WorkspaceCommandService? workspace = null,
-        IIntegrationMemory? integrations = null)
+        IIntegrationMemory? integrations = null,
+        IBaseExperienceServices? baseExperience = null)
     {
         _registry = registry ?? throw new ArgumentNullException(nameof(registry));
         _calendar = calendar;
@@ -48,6 +54,7 @@ public sealed class AssistantToolExecutor : IAiToolExecutor
         _context = context;
         _workspace = workspace;
         _integrations = integrations;
+        _base = baseExperience;
     }
 
     public async Task<AssistantToolResult> ExecuteAsync(
@@ -95,6 +102,12 @@ public sealed class AssistantToolExecutor : IAiToolExecutor
             AssistantToolNames.WorkspaceOpenNamed => WorkspaceOpen(root),
             AssistantToolNames.WorkspaceRemove => WorkspaceRemove(root),
             AssistantToolNames.FilesDelete => WorkspaceRemove(root),
+            AssistantToolNames.WorkspacePrepare => WorkspacePrepare(root),
+            AssistantToolNames.WorkspaceContinue => WorkspaceContinue(root),
+            AssistantToolNames.TodoList => TodoList(),
+            AssistantToolNames.TodoAdd => TodoAdd(root),
+            AssistantToolNames.FocusStart => FocusStart(root),
+            AssistantToolNames.FilesSuggestCleanup => FilesSuggestCleanup(),
             _ => AssistantToolResult.Fail(AssistantUserMessages.ToolUnavailable)
         };
     }
@@ -111,6 +124,19 @@ public sealed class AssistantToolExecutor : IAiToolExecutor
 
         var snapshot = await _context.GetSnapshotAsync(cancellationToken).ConfigureAwait(false);
         var text = AssistantContextService.FormatForModel(snapshot);
+        if (_base is not null)
+        {
+            var extras = new List<string>();
+            var openTodos = _base.LoadTodos().Items.Where(item => !item.IsDone).Take(8).Select(item => item.Title).ToList();
+            extras.Add("Todos: " + (openTodos.Count == 0 ? "(none)" : string.Join(", ", openTodos)));
+            extras.Add("Focus: " + _base.Focus.Current.StatusLine(_base.Now));
+            if (_base.CurrentWorkspace is not null)
+            {
+                extras.Add("Workspace:\n" + WorkspacePreparer.FormatCard(_base.CurrentWorkspace));
+            }
+
+            text += Environment.NewLine + Environment.NewLine + string.Join(Environment.NewLine, extras);
+        }
         if (text.Contains("sk-", StringComparison.OrdinalIgnoreCase)
             || text.Contains("apiKey", StringComparison.OrdinalIgnoreCase)
             || text.Contains("Bearer ", StringComparison.Ordinal))
@@ -935,5 +961,162 @@ public sealed class AssistantToolExecutor : IAiToolExecutor
             return $"{when} {e.Title}";
         });
         return $"{events.Count} event(s) {window}:\n" + string.Join('\n', lines);
+    }
+
+    private AssistantToolResult WorkspacePrepare(JsonElement root)
+    {
+        if (_base is null)
+        {
+            return AssistantToolResult.Fail(
+                AssistantUserMessages.ToolUnavailable,
+                activityDomain: AssistantActivityDomains.Workspace);
+        }
+
+        AssistantToolArgumentValidator.TryGetString(root, "intent", required: false, out var intent, out _);
+        var session = WorkspacePreparer.Prepare(
+            intent ?? string.Empty,
+            _base.ListProjects(),
+            _base.ListApps(),
+            _base.LoadTodos(),
+            _base.ListUpcomingEvents(),
+            _base.Now);
+        _base.CurrentWorkspace = session;
+        return AssistantToolResult.Ok(
+            WorkspacePreparer.FormatCard(session),
+            activity: "Workspace prepared",
+            activityDomain: AssistantActivityDomains.Workspace);
+    }
+
+    private AssistantToolResult WorkspaceContinue(JsonElement root)
+    {
+        if (_base is null)
+        {
+            return AssistantToolResult.Fail(
+                AssistantUserMessages.ToolUnavailable,
+                activityDomain: AssistantActivityDomains.Workspace);
+        }
+
+        AssistantToolArgumentValidator.TryGetString(root, "intent", required: false, out var intent, out _);
+        var session = _base.CurrentWorkspace
+                      ?? WorkspacePreparer.Prepare(
+                          intent ?? string.Empty,
+                          _base.ListProjects(),
+                          _base.ListApps(),
+                          _base.LoadTodos(),
+                          _base.ListUpcomingEvents(),
+                          _base.Now);
+        _base.CurrentWorkspace = session;
+
+        if (string.IsNullOrWhiteSpace(session.ProjectId) || _creative is null)
+        {
+            return AssistantToolResult.Ok(
+                WorkspacePreparer.FormatCard(session)
+                + Environment.NewLine
+                + Environment.NewLine
+                + "No registered project to open. Register a Creative Project first. Apps were not launched.",
+                activity: "Workspace ready (no project)",
+                activityDomain: AssistantActivityDomains.Workspace);
+        }
+
+        var opened = _creative.Execute(CreativeCommand.OpenCreativeProject(session.ProjectId));
+        if (!opened.Succeeded)
+        {
+            return AssistantToolResult.Fail(
+                opened.ErrorMessage ?? AssistantUserMessages.ProjectsFailed,
+                activityDomain: AssistantActivityDomains.Workspace);
+        }
+
+        var card = WorkspacePreparer.FormatCard(session)
+                   + Environment.NewLine
+                   + Environment.NewLine
+                   + $"Opened project '{opened.Project?.Name ?? session.ProjectName}'. "
+                   + "Registered apps were listed, not auto-launched. Git was not run.";
+        return AssistantToolResult.Ok(
+            card,
+            activity: "Workspace continue",
+            activityDomain: AssistantActivityDomains.Workspace);
+    }
+
+    private AssistantToolResult TodoList()
+    {
+        if (_base is null)
+        {
+            return AssistantToolResult.Fail(
+                AssistantUserMessages.ToolUnavailable,
+                activityDomain: AssistantActivityDomains.Todo);
+        }
+
+        var items = _base.LoadTodos().Items;
+        if (items.Count == 0)
+        {
+            return AssistantToolResult.Ok(
+                "No local todos.",
+                activity: "Todo ✓",
+                activityDomain: AssistantActivityDomains.Todo);
+        }
+
+        var lines = items.Take(20).Select(item =>
+            (item.IsDone ? "[x] " : "[ ] ") + item.Title);
+        return AssistantToolResult.Ok(
+            string.Join(Environment.NewLine, lines),
+            activity: "Todo ✓",
+            activityDomain: AssistantActivityDomains.Todo);
+    }
+
+    private AssistantToolResult TodoAdd(JsonElement root)
+    {
+        if (_base is null)
+        {
+            return AssistantToolResult.Fail(
+                AssistantUserMessages.ToolUnavailable,
+                activityDomain: AssistantActivityDomains.Todo);
+        }
+
+        if (!AssistantToolArgumentValidator.TryGetString(root, "title", required: true, out var title, out var error))
+        {
+            return AssistantToolResult.Fail(error, activityDomain: AssistantActivityDomains.Todo);
+        }
+
+        var list = _base.LoadTodos();
+        list.Items.Add(TodoItem.Create(title));
+        _base.SaveTodos(list);
+        return AssistantToolResult.Ok(
+            $"Added todo: {title}",
+            activity: "Todo ✓",
+            activityDomain: AssistantActivityDomains.Todo);
+    }
+
+    private AssistantToolResult FocusStart(JsonElement root)
+    {
+        if (_base is null)
+        {
+            return AssistantToolResult.Fail(
+                AssistantUserMessages.ToolUnavailable,
+                activityDomain: AssistantActivityDomains.Focus);
+        }
+
+        AssistantToolArgumentValidator.TryGetInt(root, "minutes", 25, 5, 90, out var minutes, out _);
+        AssistantToolArgumentValidator.TryGetString(root, "label", required: false, out var label, out _);
+        var session = _base.Focus.Start(_base.Now, TimeSpan.FromMinutes(minutes), label);
+        return AssistantToolResult.Ok(
+            $"Started {session.Label} for {minutes} minutes. No apps were launched.",
+            activity: "Focus ✓",
+            activityDomain: AssistantActivityDomains.Focus);
+    }
+
+    private AssistantToolResult FilesSuggestCleanup()
+    {
+        if (_base is null)
+        {
+            return AssistantToolResult.Fail(
+                AssistantUserMessages.ToolUnavailable,
+                activityDomain: AssistantActivityDomains.Files);
+        }
+
+        var candidates = FileIntelligence.SuggestCleanup(_base.ListProjects(), _base.Now);
+        return AssistantToolResult.Ok(
+            FileIntelligence.FormatSuggestion(candidates),
+            activity: "Files ✓",
+            activityDomain: AssistantActivityDomains.Files);
     }
 }

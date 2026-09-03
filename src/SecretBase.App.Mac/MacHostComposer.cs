@@ -2,11 +2,15 @@ using SecretBase.Core;
 using SecretBase.Core.Ai;
 using SecretBase.Core.Apps;
 using SecretBase.Core.Assistant;
+using SecretBase.Core.Base;
 using SecretBase.Core.Calendar;
 using SecretBase.Core.Creative;
+using SecretBase.Core.Desktop;
+using SecretBase.Core.Focus;
 using SecretBase.Core.Integration;
 using SecretBase.Core.Music;
 using SecretBase.Core.Time;
+using SecretBase.Core.Todo;
 using SecretBase.Core.Widgets.Ai;
 using SecretBase.Core.Widgets.Calendar;
 using SecretBase.Core.Workspace;
@@ -110,6 +114,26 @@ public static class MacHostComposer
             appCommands,
             creativeCommands,
             calendarCommands);
+        var todoStore = new JsonTodoStore();
+        var focus = new FocusSessionStore();
+        var layoutExisted = new JsonLayoutStore(logger: logger).Exists(RoomId.DefaultRoomId);
+        var baseSettings = new JsonBaseSettingsStore().LoadOrCreate(layoutExisted);
+        var baseExperience = new BaseExperienceServices(
+            todoStore,
+            focus,
+            () =>
+            {
+                var listed = creativeCommands.Execute(CreativeCommand.SearchProjects(null));
+                return listed.Succeeded ? listed.Projects.ToList() : [];
+            },
+            () =>
+            {
+                var listed = appCommands.Execute(AppCommand.ListApps());
+                return listed.Succeeded ? listed.Apps.ToList() : [];
+            },
+            () => calendarCommands.ListLocalEvents(),
+            () => time.GetLocalNow());
+        baseExperience.CurrentWorkspace = baseSettings.LastWorkspace;
         var assistant = new AssistantService(
             assistantRegistry,
             new AssistantToolExecutor(
@@ -122,7 +146,8 @@ public static class MacHostComposer
                 musicCommands,
                 assistantContext,
                 workspaceCommands,
-                integrationMemory),
+                integrationMemory,
+                baseExperience),
             () => assistantProviders.Create(assistantSettings.LoadOrCreate()),
             () => assistantSettings.LoadOrCreate(),
             assistantContext);

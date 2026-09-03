@@ -11,6 +11,7 @@ public sealed class ClockWidgetConfiguration
     public const string StyleMinimal = "minimal";
     public const string StyleAnalog = "analog";
     public const string StyleFocus = "focus";
+    public const string StyleBase = "base";
 
     public string DisplayStyle { get; set; } = StyleDigital;
 

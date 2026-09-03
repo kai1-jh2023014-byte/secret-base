@@ -207,3 +207,9 @@ See [ai-assistant.md](../architecture/ai-assistant.md), [assistant-planning.md](
 ## 2026-09-03 — macOS workspace host (second head)
 
 See [2026-09-03-macos-host.md](2026-09-03-macos-host.md).
+
+## 2026-09-03 — Base Experience (Personal Space)
+
+**Decision:** Evolve Secret Base from a widget collection into one Personal Space: Base AI + explicit context providers/aggregator, Workspace session (prepare vs continue), local Todo/Focus, time-aware suggestions without an LLM loop, File Intelligence as deletion *candidates*, Clock Base style, onboarding that marks existing layouts complete, and design-system tokens (`SurfaceElevated`, `MotionDurationMs`). Reuse Confirmation, MaxSteps, allowlist launch, Single Instance, startup containment, and corrupt JSON recovery. Do **not** auto-launch apps, run git, crawl the disk, or call OS `File.Delete`.
+
+**Why:** The product promise is that the base is already prepared — quietly — not that more widgets appear. Safety lanes stay: Safe Auto / Confirmation / Explicit Confirmation.

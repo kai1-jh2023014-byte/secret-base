@@ -22,11 +22,18 @@ public class AssistantToolRegistryTests
     public void BuiltinRegistry_ListsMvpTools_WithConfirmationPolicy()
     {
         var registry = BuiltinAssistantToolRegistry.Instance;
-        Assert.Equal(22, registry.Tools.Count);
+        Assert.Equal(28, registry.Tools.Count);
         Assert.NotNull(registry.Find(AssistantToolNames.CalendarAddEvent));
         Assert.NotNull(registry.Find(AssistantToolNames.CalendarApplyUsual));
         Assert.NotNull(registry.Find(AssistantToolNames.WorkspaceOpenNamed));
-        Assert.NotNull(registry.Find(AssistantToolNames.FilesDelete));
+        Assert.NotNull(registry.Find(AssistantToolNames.WorkspacePrepare));
+        Assert.NotNull(registry.Find(AssistantToolNames.WorkspaceContinue));
+        Assert.NotNull(registry.Find(AssistantToolNames.FilesSuggestCleanup));
+        Assert.Equal(AssistantToolCapability.SafeAuto, registry.Find(AssistantToolNames.WorkspacePrepare)!.Capability);
+        Assert.Equal(AssistantToolCapability.SafeAuto, registry.Find(AssistantToolNames.FocusStart)!.Capability);
+        Assert.True(AssistantConfirmationPolicy.CanAutoExecute(registry.Find(AssistantToolNames.WorkspacePrepare)!));
+        Assert.True(registry.Find(AssistantToolNames.WorkspaceContinue)!.RequiresConfirmation);
+        Assert.True(registry.Find(AssistantToolNames.TodoAdd)!.RequiresConfirmation);
         Assert.NotNull(registry.Find(AssistantToolNames.AssistantGetContext));
         Assert.NotNull(registry.Find(AssistantToolNames.CalendarGetToday));
         Assert.NotNull(registry.Find("CALENDAR_GET_UPCOMING"));

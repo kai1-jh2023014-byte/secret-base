@@ -3,7 +3,9 @@ namespace SecretBase.Core.Assistant;
 public static class AssistantConfirmationPolicy
 {
     public static bool CanAutoExecute(AssistantToolDefinition tool) =>
-        (tool.Capability is AssistantToolCapability.ReadOnly or AssistantToolCapability.Suggest)
+        (tool.Capability is AssistantToolCapability.ReadOnly
+            or AssistantToolCapability.Suggest
+            or AssistantToolCapability.SafeAuto)
         && !tool.RequiresConfirmation;
 
     public static bool RequiresConfirmation(AssistantToolDefinition tool) =>
@@ -78,6 +80,8 @@ public static class AssistantConfirmationPolicy
             AssistantToolNames.CursorOpenProject => "Open this project in Cursor.",
             AssistantToolNames.IntegrationOpen => "Open this integration.",
             AssistantToolNames.AppsOpen => "Launch this registered app.",
+            AssistantToolNames.WorkspaceContinue => "Continue the prepared workspace (open the matched project).",
+            AssistantToolNames.TodoAdd => "Add this task to Secret Base Todo.",
             _ => "Run this Secret Base action."
         };
     }

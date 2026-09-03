@@ -32,7 +32,9 @@ public static class WidgetSurfaceStyle
         ArgumentNullException.ThrowIfNull(inner);
         ArgumentNullException.ThrowIfNull(theme);
 
-        outer.Background = ThemePainter.Brush(theme.SurfaceSecondary, ThemePainter.EffectiveWidgetOpacity(theme) * 0.55);
+        outer.Background = ThemePainter.Brush(
+            string.IsNullOrWhiteSpace(theme.SurfaceElevated) ? theme.SurfaceSecondary : theme.SurfaceElevated,
+            ThemePainter.EffectiveWidgetOpacity(theme) * 0.55);
         outer.CornerRadius = new CornerRadius(theme.CornerRadius + 2);
         outer.BorderThickness = new Thickness(1);
         outer.BorderBrush = ThemePainter.Brush(theme.Border, 0.28);
@@ -103,10 +105,11 @@ public static class WidgetSurfaceStyle
 
     public static void FadeOpacity(UIElement target, double to, double milliseconds = 180)
     {
+        var duration = milliseconds <= 0 ? 180 : milliseconds;
         var animation = new DoubleAnimation
         {
             To = to,
-            Duration = TimeSpan.FromMilliseconds(milliseconds),
+            Duration = TimeSpan.FromMilliseconds(duration),
             EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
         };
         Storyboard.SetTarget(animation, target);

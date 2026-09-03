@@ -40,6 +40,12 @@ public static class AssistantToolNames
     public const string WorkspaceOpenNamed = "workspace_open_named";
     public const string WorkspaceRemove = "workspace_remove";
     public const string FilesDelete = "files_delete";
+    public const string WorkspacePrepare = "workspace_prepare";
+    public const string WorkspaceContinue = "workspace_continue";
+    public const string TodoList = "todo_list";
+    public const string TodoAdd = "todo_add";
+    public const string FocusStart = "focus_start";
+    public const string FilesSuggestCleanup = "files_suggest_cleanup";
 }
 
 public static class AssistantActivityDomains
@@ -53,6 +59,9 @@ public static class AssistantActivityDomains
     public const string Integration = "Integration";
     public const string Workspace = "Workspace";
     public const string Suggest = "Suggest";
+    public const string Todo = "Todo";
+    public const string Focus = "Focus";
+    public const string Files = "Files";
 }
 
 public static class AssistantUserMessages

@@ -9,14 +9,18 @@ using SecretBase.Core;
 using SecretBase.Core.Ai;
 using SecretBase.Core.Apps;
 using SecretBase.Core.Assistant;
+using SecretBase.Core.Automation;
+using SecretBase.Core.Base;
 using SecretBase.Core.Blocks;
 using SecretBase.Core.Calendar;
 using SecretBase.Core.Creative;
 using SecretBase.Core.Desktop;
+using SecretBase.Core.Focus;
 using SecretBase.Core.Integration;
 using SecretBase.Core.Music;
 using SecretBase.Core.Themes;
 using SecretBase.Core.Time;
+using SecretBase.Core.Todo;
 using SecretBase.Core.Widgets;
 using SecretBase.Core.Widgets.Ai;
 using SecretBase.Core.Widgets.Apps;
@@ -27,6 +31,7 @@ using SecretBase.Core.Widgets.Creative;
 using SecretBase.Core.Widgets.Music;
 using SecretBase.Core.Widgets.Text;
 using SecretBase.Core.Widgets.Web;
+using SecretBase.Core.Widgets.Workspace;
 using SecretBase.Core.Workspace;
 using SecretBase.Infrastructure.Assistant;
 using SecretBase.Infrastructure.Integration;
@@ -47,6 +52,7 @@ using SecretBase.Widgets.Music;
 using SecretBase.Widgets.Text;
 using SecretBase.Widgets.Theming;
 using SecretBase.Widgets.Web;
+using SecretBase.Widgets.Workspace;
 using Windows.Foundation;
 
 namespace SecretBase.App;
@@ -79,6 +85,12 @@ public sealed partial class DesktopPage : Page
     private IntegrationCommandService? _integrationCommands;
     private IAssistantService? _assistant;
     private IAssistantSettingsStore? _assistantSettings;
+    private IBaseSettingsStore? _baseSettingsStore;
+    private BaseSettings? _baseSettings;
+    private ITodoStore? _todoStore;
+    private FocusSessionStore? _focus;
+    private IBaseExperienceServices? _baseExperience;
+    private IReadOnlyList<CalendarEvent> _upcomingEvents = [];
     private IAutoStartService? _autoStart;
     private IAppLaunchSettingsStore? _launchSettingsStore;
     private bool _autoStartToggleSync;
@@ -165,6 +177,11 @@ public sealed partial class DesktopPage : Page
             apps: _appCommands,
             ai: _aiCommands);
         _assistantSettings = new JsonAssistantSettingsStore();
+        _todoStore = new JsonTodoStore();
+        _focus = new FocusSessionStore();
+        var layoutExisted = _layoutStore.Exists(RoomId.DefaultRoomId);
+        _baseSettingsStore = new JsonBaseSettingsStore();
+        _baseSettings = _baseSettingsStore.LoadOrCreate(layoutExisted);
         _autoStart = args.AutoStart ?? new WindowsRegistryAutoStartService();
         _launchSettingsStore = args.LaunchSettingsStore ?? new JsonAppLaunchSettingsStore();
         _assistantProviders = new AssistantProviderFactory(_secretStore);
@@ -189,6 +206,22 @@ public sealed partial class DesktopPage : Page
             _creativeCommands,
             _calendarCommands,
             _workspaceCatalog);
+        _baseExperience = new BaseExperienceServices(
+            _todoStore,
+            _focus,
+            () =>
+            {
+                var listed = _creativeCommands?.Execute(CreativeCommand.SearchProjects(null));
+                return listed is { Succeeded: true } ? listed.Projects.ToList() : [];
+            },
+            () =>
+            {
+                var listed = _appCommands?.Execute(AppCommand.ListApps());
+                return listed is { Succeeded: true } ? listed.Apps.ToList() : [];
+            },
+            () => _upcomingEvents,
+            () => (_timeProvider ?? new SystemTimeProvider()).GetLocalNow());
+        _baseExperience.CurrentWorkspace = _baseSettings.LastWorkspace;
         _assistant = new AssistantService(
             assistantRegistry,
             new AssistantToolExecutor(
@@ -201,7 +234,8 @@ public sealed partial class DesktopPage : Page
                 _musicCommands,
                 assistantContext,
                 workspaceCommands,
-                _integrationMemory),
+                _integrationMemory,
+                _baseExperience),
             () => _assistantProviders.Create(_assistantSettings.LoadOrCreate()),
             () => _assistantSettings.LoadOrCreate(),
             assistantContext);
@@ -218,8 +252,10 @@ public sealed partial class DesktopPage : Page
 
         RenderDesktopObjects();
         InitializeTaskbarAiChat();
+        _ = RefreshUpcomingEventsQuietAsync();
+        DispatcherQueue.TryEnqueue(async () => await MaybeShowOnboardingAsync());
         _logger.Info("desktop", $"Overlay desktop shown for room '{_layout.RoomId}' with {_layout.Widgets.Count} widget(s), {_layout.Blocks.Count} block(s).");
-        _logger.Info("widget", "Widget hosts ready (Clock, Text, Web, Calendar, Music, Creative, AI Workspace, Apps, Secret Base AI).");
+        _logger.Info("widget", "Widget hosts ready (Clock, Text, Calendar, Music, Creative, Workspace, Apps, Base AI).");
         _logger.Info("assistant", "Taskbar AI chat bar ready (Ctrl+Shift+K). Does not replace Windows Search.");
         _logger.Info("block", "Block host ready (use Blk button to add; drop + drag icons inside a Block).");
         _logger.Info("theme", "Theme editor ready (Aa button) — colors apply to all widgets and Blocks.");
@@ -570,7 +606,8 @@ public sealed partial class DesktopPage : Page
                 {
                     instance.Configuration = updated.ToDictionary();
                     PersistLayoutNow();
-                });
+                },
+                statusSource: ComposeClockStatus);
             if (_theme is not null)
             {
                 view.ApplyTheme(_theme);
@@ -771,6 +808,25 @@ public sealed partial class DesktopPage : Page
                 _secretStore,
                 _assistantProviders,
                 TryApplyAssistantLaunch);
+            if (_theme is not null)
+            {
+                view.ApplyTheme(_theme);
+            }
+
+            return view;
+        }
+
+        if (instance.Type == WidgetTypes.Workspace)
+        {
+            var config = WorkspaceWidgetConfiguration.FromDictionary(instance.Configuration);
+            instance.Configuration = config.ToDictionary();
+            if (_baseExperience is null)
+            {
+                return null;
+            }
+
+            var view = new WorkspaceWidgetView();
+            view.Initialize(_baseExperience, PrepareWorkspace, ContinueWorkspaceAsync);
             if (_theme is not null)
             {
                 view.ApplyTheme(_theme);
@@ -1265,6 +1321,8 @@ public sealed partial class DesktopPage : Page
                 _layout.RoomId, 280 + cascade, 80 + cascade),
             WidgetTypes.Assistant => DefaultWidgetFactory.CreateAssistant(
                 _layout.RoomId, 320 + cascade, 60 + cascade),
+            WidgetTypes.Workspace => DefaultWidgetFactory.CreateWorkspace(
+                _layout.RoomId, 360 + cascade, 80 + cascade),
             _ => null
         };
 
@@ -1313,6 +1371,199 @@ public sealed partial class DesktopPage : Page
         }
 
         SyncInteractiveInputRegions();
+    }
+
+    private ClockBaseStatus? ComposeClockStatus()
+    {
+        var now = (_timeProvider ?? new SystemTimeProvider()).GetLocalNow();
+        var suggestion = TimeAwareAdvisor.Suggest(
+            now,
+            _upcomingEvents,
+            _focus?.Current,
+            _baseExperience?.CurrentWorkspace);
+        return ClockBaseStatusComposer.Compose(
+            now,
+            _upcomingEvents,
+            _baseExperience?.CurrentWorkspace,
+            _focus?.Current,
+            _assistant?.ProviderStatus,
+            suggestion);
+    }
+
+    private WorkspaceSession PrepareWorkspace(string intent)
+    {
+        var session = WorkspacePreparer.Prepare(
+            intent,
+            _baseExperience?.ListProjects() ?? [],
+            _baseExperience?.ListApps() ?? [],
+            _todoStore?.LoadOrCreate() ?? new TodoList(),
+            _upcomingEvents,
+            (_timeProvider ?? new SystemTimeProvider()).GetLocalNow());
+        if (_baseExperience is not null)
+        {
+            _baseExperience.CurrentWorkspace = session;
+        }
+
+        if (_baseSettings is not null && _baseSettingsStore is not null)
+        {
+            _baseSettings.LastWorkspace = session;
+            _baseSettingsStore.Save(_baseSettings);
+        }
+
+        ShowHostStatus("Workspace prepared. Apps were not launched.");
+        return session;
+    }
+
+    private async Task ContinueWorkspaceAsync(WorkspaceSession session)
+    {
+        var dialog = new ContentDialog
+        {
+            Title = "Continue workspace",
+            Content = string.IsNullOrWhiteSpace(session.ProjectName)
+                ? "No registered project to open. Secret Base will not launch apps."
+                : $"Open project '{session.ProjectName}' in Secret Base?\nRegistered apps will not auto-launch.\nGit will not run.",
+            PrimaryButtonText = string.IsNullOrWhiteSpace(session.ProjectName) ? "OK" : "Run",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = XamlRoot
+        };
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary
+            || string.IsNullOrWhiteSpace(session.ProjectId)
+            || _creativeCommands is null)
+        {
+            return;
+        }
+
+        var opened = _creativeCommands.Execute(CreativeCommand.OpenCreativeProject(session.ProjectId));
+        ShowHostStatus(opened.Succeeded
+            ? $"Opened {opened.Project?.Name ?? session.ProjectName}."
+            : opened.ErrorMessage ?? "Could not open project.");
+    }
+
+    private async Task RefreshUpcomingEventsQuietAsync()
+    {
+        if (_calendarCommands is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var result = await _calendarCommands.ExecuteAsync(CalendarCommand.GetUpcoming(7));
+            if (result.Succeeded)
+            {
+                _upcomingEvents = result.Events.ToList();
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger?.Warn("calendar", "Upcoming events refresh skipped: " + ex.Message);
+        }
+    }
+
+    private async Task MaybeShowOnboardingAsync()
+    {
+        if (_baseSettings is { OnboardingCompleted: true } || _layout is null || _theme is null)
+        {
+            return;
+        }
+
+        var ai = new CheckBox { Content = "AI", IsChecked = true };
+        var clock = new CheckBox { Content = "Clock", IsChecked = true };
+        var calendar = new CheckBox { Content = "Calendar", IsChecked = true };
+        var music = new CheckBox { Content = "Music", IsChecked = false };
+        var projects = new CheckBox { Content = "Projects", IsChecked = true };
+        var todo = new CheckBox { Content = "Todo / Workspace", IsChecked = true };
+        var atmosphere = new ComboBox
+        {
+            Header = "Atmosphere",
+            ItemsSource = BaseAtmosphere.All.ToList(),
+            SelectedItem = BaseAtmosphere.Calm,
+            HorizontalAlignment = HorizontalAlignment.Stretch
+        };
+        var intro = new TextBlock
+        {
+            Text = "This is your personal computing space.\nChoose what you want in your base.",
+            TextWrapping = TextWrapping.WrapWholeWords
+        };
+        var panel = new StackPanel { Spacing = 8 };
+        panel.Children.Add(intro);
+        panel.Children.Add(ai);
+        panel.Children.Add(clock);
+        panel.Children.Add(calendar);
+        panel.Children.Add(music);
+        panel.Children.Add(projects);
+        panel.Children.Add(todo);
+        panel.Children.Add(atmosphere);
+
+        var dialog = new ContentDialog
+        {
+            Title = "Welcome to your Base",
+            Content = panel,
+            PrimaryButtonText = "Enter",
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = XamlRoot
+        };
+        await dialog.ShowAsync();
+
+        var modules = new List<string>();
+        if (ai.IsChecked == true)
+        {
+            modules.Add(BaseModules.Ai);
+            await EnsureWidgetAsync(WidgetTypes.Assistant);
+        }
+
+        if (clock.IsChecked == true)
+        {
+            modules.Add(BaseModules.Clock);
+        }
+
+        if (calendar.IsChecked == true)
+        {
+            modules.Add(BaseModules.Calendar);
+            await EnsureWidgetAsync(WidgetTypes.Calendar);
+        }
+
+        if (music.IsChecked == true)
+        {
+            modules.Add(BaseModules.Music);
+            await EnsureWidgetAsync(WidgetTypes.Music);
+        }
+
+        if (projects.IsChecked == true)
+        {
+            modules.Add(BaseModules.Projects);
+            await EnsureWidgetAsync(WidgetTypes.Creative);
+        }
+
+        if (todo.IsChecked == true)
+        {
+            modules.Add(BaseModules.Todo);
+            await EnsureWidgetAsync(WidgetTypes.Workspace);
+        }
+
+        var chosen = atmosphere.SelectedItem as string ?? BaseAtmosphere.Calm;
+        ThemePresets.ApplyPreset(_theme, BaseAtmosphere.ToThemePreset(chosen));
+        _themeStore?.Save(_theme);
+        ApplyDesktopTheme(_theme);
+        RenderDesktopObjects();
+
+        _baseSettings.OnboardingCompleted = true;
+        _baseSettings.OnboardingCompletedAt = DateTimeOffset.UtcNow;
+        _baseSettings.Atmosphere = chosen;
+        _baseSettings.SelectedModules = modules;
+        _baseSettingsStore?.Save(_baseSettings);
+        ShowHostStatus("Your base is ready.");
+    }
+
+    private Task EnsureWidgetAsync(string type)
+    {
+        if (_layout is null || _layout.Widgets.Any(w => string.Equals(w.Type, type, StringComparison.OrdinalIgnoreCase)))
+        {
+            return Task.CompletedTask;
+        }
+
+        return AddWidgetByTypeAsync(type);
     }
 
     private async Task ShowAddBlockDialogAsync()

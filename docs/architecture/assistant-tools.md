@@ -10,6 +10,7 @@ OpenAI function names use underscores (no `.`).
 |------------|----------|
 | **ReadOnly** | Auto-run. Observation only. |
 | **Suggest** | Auto-run. Recommendation text only — never launches Host. |
+| **SafeAuto** | Auto-run. Display, context, timer, `workspace_prepare`. Never launches OS. |
 | **RequiresConfirmation** | Pause → Cancel / Run → Command → Host if needed. |
 | **HostAction** | Platform-only. **Never** LLM-callable. |
 
@@ -37,6 +38,14 @@ RequiresConfirmation
 | `apps_list` | `AppCommand.ListApps` |
 | `music_search` | `MusicCommand.SearchTrack` (if Search capability) |
 | `music_get_state` | Context / MusicService state |
+| `todo_list` | Local todos |
+
+### SafeAuto
+
+| Tool | Behavior |
+|------|----------|
+| `workspace_prepare` | Build a workspace card from registered data. No launch. |
+| `focus_start` | Local Pomodoro. No launch. |
 
 ### Suggest
 
@@ -45,6 +54,7 @@ RequiresConfirmation
 | `project_recommend` | Candidate project from favorites/recent |
 | `schedule_recommend` | Calendar + projects candidates (not life assertions) |
 | `music_recommend` | Catalog candidate; demo-catalog honesty |
+| `files_suggest_cleanup` | Unused **registered** files. Never deletes. |
 
 ### RequiresConfirmation
 
@@ -59,6 +69,8 @@ RequiresConfirmation
 | `apps_open` | `AppCommand.OpenApp` → Host |
 | `music_play` | `track_id` or `query` → Music widget (Spotify if connected) |
 | `workspace_open_named` | Open Block item / My App / Creative Project by **name** |
+| `workspace_continue` | Open the prepared workspace's registered project. Apps are listed, not auto-launched. |
+| `todo_add` | Local todo. Not Google Tasks. |
 | `workspace_remove` / `files_delete` | Return Block item to Desktop or unregister. **Never OS `File.Delete`.** |
 
 ## Argument validation

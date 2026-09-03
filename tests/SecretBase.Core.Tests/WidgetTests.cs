@@ -43,7 +43,7 @@ public class WidgetInstanceTests
         Assert.Equal(48, clock.Position.X);
         Assert.Equal(48, clock.Position.Y);
         Assert.Equal(280, clock.Size.Width);
-        Assert.Equal(160, clock.Size.Height);
+        Assert.Equal(200, clock.Size.Height);
         Assert.Contains(nameof(ClockWidgetConfiguration.Use24HourFormat), clock.Configuration.Keys);
     }
 

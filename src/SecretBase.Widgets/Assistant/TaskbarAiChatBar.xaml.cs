@@ -65,14 +65,11 @@ public sealed partial class TaskbarAiChatBar : UserControl
         var status = _assistant?.ProviderStatus;
         if (status is null)
         {
-            ProviderText.Text = "AI";
+            ProviderText.Text = BaseAiStatusFormatter.FormatShort(null);
             return;
         }
 
-        var mark = status.IsConfigured ? "●" : "○";
-        ProviderText.Text = string.IsNullOrWhiteSpace(status.FallbackNote)
-            ? $"{mark} {status.DisplayName}"
-            : $"{mark} {status.DisplayName} · Local fallback";
+        ProviderText.Text = BaseAiStatusFormatter.FormatShort(status);
     }
 
     private void InputBox_KeyDown(object sender, KeyRoutedEventArgs e)

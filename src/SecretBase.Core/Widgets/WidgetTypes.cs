@@ -28,4 +28,7 @@ public static class WidgetTypes
 
     /// <summary>Secret Base AI chat — tools over existing Commands. Not the Cursor/ChatGPT launcher.</summary>
     public const string Assistant = "assistant";
+
+    /// <summary>Prepared work mode: project, registered apps/files, next task, focus.</summary>
+    public const string Workspace = "workspace";
 }

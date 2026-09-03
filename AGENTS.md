@@ -128,6 +128,14 @@ Prefer Core / Infrastructure / Platform.Mac unit tests for new domain logic. Win
 
 ---
 
+## Current status (v0.6 Base Experience)
+
+Working: overlay desktop, Clock (Base status style), Calendar, Music (IMusicProvider + Spotify OAuth), Creative Projects, My Apps allowlist, Workspace block, Base AI (context → plan → confirm → action, remote→local fallback), local Todo/Focus, time-aware workspace suggestions, file cleanup suggestions, first-run onboarding that does not wipe existing users.
+
+Not built: Rooms UI, plugins, marketplace, YouTube Music official API (open-web only), Google Tasks write, unrestricted filesystem/shell.
+
+---
+
 ## Git Rules
 
 - Prefer small, descriptive commits on feature branches.

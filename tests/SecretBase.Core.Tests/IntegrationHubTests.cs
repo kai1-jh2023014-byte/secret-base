@@ -293,7 +293,7 @@ public class WidgetCatalogTests
         Assert.Contains(WidgetCatalog.Entries, e =>
             e.Group == WidgetCatalogGroups.Ai
             && e.WidgetType == WidgetTypes.Assistant
-            && e.Label == "Secret Base AI");
+            && e.Label == "Base AI");
         Assert.Contains(WidgetCatalog.Entries, e =>
             e.Group == WidgetCatalogGroups.Ai && e.WidgetType == WidgetTypes.Ai);
     }

@@ -29,6 +29,9 @@ public sealed class ThemeDefinition
 
     public string SurfaceSecondary { get; set; } = "#40151A24";
 
+    /// <summary>Raised glass over <see cref="WidgetBackground"/>.</summary>
+    public string SurfaceElevated { get; set; } = "#E01E2530";
+
     public string Border { get; set; } = "#3DFFFFFF";
 
     public double ShadowOpacity { get; set; } = 0.22;
@@ -36,6 +39,9 @@ public sealed class ThemeDefinition
     public double BlurAmount { get; set; } = 0;
 
     public double Spacing { get; set; } = 10;
+
+    /// <summary>Shared fade / emphasis duration in milliseconds.</summary>
+    public double MotionDurationMs { get; set; } = 180;
 
     public string FontFamily { get; set; } = "Segoe UI Variable Display";
 
