@@ -5,7 +5,7 @@ using SecretBase.Core.Calendar;
 
 namespace SecretBase.Core.Connectors;
 
-public sealed class ExternalIntegrationEvent
+public sealed record ExternalIntegrationEvent
 {
     public string Source { get; init; } = "connector";
 
@@ -114,7 +114,7 @@ public static class IntegrationEventNormalizer
     };
 }
 
-public sealed class WebhookIngestor
+public sealed class WebhookIngestor : IIntegrationEventSource
 {
     public static readonly TimeSpan ReplayWindow = TimeSpan.FromMinutes(5);
     private readonly IIntegrationRegistry _registry;
@@ -245,17 +245,7 @@ public static class IntegrationAutomation
     {
         if (rule is null || !rule.Enabled)
         {
-            return new AutomationSuggestion
-            {
-                Intent = SecretBase.Core.Intent.DetectedIntentKind.Unknown,
-                Title = evt.Source + " reported " + evt.EventType,
-                Detail = evt.SafePayload,
-                Confidence = 0.55,
-                RequiresConfirmation = true,
-                Safety = AutomationSafetyLevel.ConfirmationRequired,
-                ProjectName = evt.Source,
-                Evidence = ["integration-event", evt.IntegrationId, evt.EventType]
-            };
+            return null;
         }
 
         if (rule.Intervention is InterventionMode.Silent or InterventionMode.Passive)

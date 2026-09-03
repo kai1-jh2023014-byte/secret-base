@@ -356,11 +356,19 @@ public sealed partial class DesktopPage
             TextWrapping = TextWrapping.WrapWholeWords
         });
         panel.Children.Add(list);
+        var paste = new TextBox
+        {
+            Header = "Register a manifest (paste secretbase.integration.json)",
+            AcceptsReturn = true,
+            Height = 88,
+            PlaceholderText = "{ \"id\": \"my-app\", ... }"
+        };
+        panel.Children.Add(paste);
         var dialog = new ContentDialog
         {
             Title = "My Integrations",
             Content = new ScrollViewer { MaxHeight = 360, Content = panel },
-            PrimaryButtonText = "Enable example apps",
+            PrimaryButtonText = "Register pasted",
             SecondaryButtonText = "Permissions",
             CloseButtonText = "Close",
             XamlRoot = XamlRoot
@@ -368,8 +376,23 @@ public sealed partial class DesktopPage
         var result = await dialog.ShowAsync();
         if (result == ContentDialogResult.Primary && _integrationHost is not null)
         {
-            DemoManifests.TryRegisterKnown(_integrationHost.Registry, approveDemos: true);
-            ShowHostStatus("Example integrations are available.");
+            var json = paste.Text;
+            if (!string.IsNullOrWhiteSpace(json))
+            {
+                if (IntegrationDiscovery.TryRegisterJson(_integrationHost.Registry, json, approved: true, out var error))
+                {
+                    ShowHostStatus("Integration registered. Review permissions.");
+                }
+                else
+                {
+                    ShowHostStatus(error);
+                }
+            }
+            else
+            {
+                DemoManifests.TryRegisterKnown(_integrationHost.Registry, approveDemos: true);
+                ShowHostStatus("Example integrations are available.");
+            }
         }
         else if (result == ContentDialogResult.Secondary)
         {
@@ -392,20 +415,38 @@ public sealed partial class DesktopPage
             return;
         }
 
-        var selected = items[0];
-        var rows = IntegrationPermissionGate.Matrix(selected.Manifest, selected.Permissions);
-        var checks = rows.Select(row => new CheckBox
+        var picker = new ComboBox
         {
-            Content = row.Label,
-            IsChecked = row.Granted,
-            Tag = row.Flag
-        }).ToList();
-        var panel = new StackPanel { Spacing = 6 };
-        panel.Children.Add(new TextBlock { Text = selected.DisplayName });
-        foreach (var check in checks)
+            Header = "Integration",
+            ItemsSource = items.Select(item => item.DisplayName).ToList(),
+            SelectedIndex = 0
+        };
+        var checksHost = new StackPanel { Spacing = 6 };
+        void RenderChecks(int index)
         {
-            panel.Children.Add(check);
+            checksHost.Children.Clear();
+            if (index < 0 || index >= items.Count)
+            {
+                return;
+            }
+
+            var rows = IntegrationPermissionGate.Matrix(items[index].Manifest, items[index].Permissions);
+            foreach (var row in rows)
+            {
+                checksHost.Children.Add(new CheckBox
+                {
+                    Content = row.Label,
+                    IsChecked = row.Granted,
+                    Tag = row.Flag
+                });
+            }
         }
+
+        picker.SelectionChanged += (_, _) => RenderChecks(picker.SelectedIndex);
+        RenderChecks(0);
+        var panel = new StackPanel { Spacing = 8 };
+        panel.Children.Add(picker);
+        panel.Children.Add(checksHost);
 
         var dialog = new ContentDialog
         {
@@ -421,15 +462,21 @@ public sealed partial class DesktopPage
         }
 
         var granted = IntegrationPermissionKind.None;
-        foreach (var check in checks)
+        foreach (var child in checksHost.Children)
         {
-            if (check.IsChecked == true && check.Tag is IntegrationPermissionKind flag)
+            if (child is CheckBox check && check.IsChecked == true && check.Tag is IntegrationPermissionKind flag)
             {
                 granted |= flag;
             }
         }
 
-        _integrationHost.Registry.SetPermissions(selected.Id, granted);
+        var index = picker.SelectedIndex;
+        if (index < 0 || index >= items.Count)
+        {
+            return;
+        }
+
+        _integrationHost.Registry.SetPermissions(items[index].Id, granted);
         ShowHostStatus("Permissions saved.");
     }
 

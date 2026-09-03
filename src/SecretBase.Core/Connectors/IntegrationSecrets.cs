@@ -34,8 +34,11 @@ public static class CredentialReference
                || value.Contains("Bearer ", StringComparison.Ordinal)
                || value.Contains("apiKey", StringComparison.OrdinalIgnoreCase)
                || value.Contains("client_secret", StringComparison.OrdinalIgnoreCase)
-               || (value.Length > 24 && !value.StartsWith(Prefix, StringComparison.OrdinalIgnoreCase)
-                                     && !value.Contains(' ', StringComparison.Ordinal));
+               || (value.Length > 24
+                   && !value.StartsWith(Prefix, StringComparison.OrdinalIgnoreCase)
+                   && !value.Contains(' ', StringComparison.Ordinal)
+                   && !value.Contains('{', StringComparison.Ordinal)
+                   && !value.Contains('"', StringComparison.Ordinal));
     }
 }
 

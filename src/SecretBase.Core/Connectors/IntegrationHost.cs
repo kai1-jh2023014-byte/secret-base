@@ -97,13 +97,14 @@ public sealed class ConnectorOutcome
 /// Integration Host: Registry → Capability → Permission → Safety → Transport → Normalized result.
 /// One connector failure never throws out of the host.
 /// </summary>
-public sealed class IntegrationHost
+public sealed class IntegrationHost : IIntegrationActionExecutor, IIntegrationHealthMonitor
 {
     public static readonly TimeSpan ReadTtl = TimeSpan.FromSeconds(30);
 
     private readonly IIntegrationRegistry _registry;
     private readonly IIntegrationTransport _transport;
     private readonly IIntegrationSecretResolver _secrets;
+    private readonly IIntegrationAuthenticator _authenticator;
     private readonly IntegrationRateLimiter _rate = new();
     private readonly IntegrationReadCache _cache = new();
     private readonly WebhookIngestor _webhooks;
@@ -128,6 +129,7 @@ public sealed class IntegrationHost
         _registry = registry ?? throw new ArgumentNullException(nameof(registry));
         _transport = transport ?? new LoopbackIntegrationTransport();
         _secrets = secrets ?? new NullIntegrationSecretResolver();
+        _authenticator = new IntegrationAuthenticator(_secrets);
         _webhooks = new WebhookIngestor(_registry, _secrets);
         _calendar = new BuiltInCalendarConnector(calendar);
         _apps = apps;
@@ -138,7 +140,33 @@ public sealed class IntegrationHost
 
     public IIntegrationRegistry Registry => _registry;
 
+    public IIntegrationEventSource Events => _webhooks;
+
     public WebhookIngestor Webhooks => _webhooks;
+
+    public IReadOnlyList<IIntegrationConnector> Connectors() =>
+        _registry.List().Select(item => (IIntegrationConnector)new RegisteredConnector(item)).ToList();
+
+    public IntegrationHealthStatus Get(string integrationId)
+    {
+        var item = _registry.Find(integrationId);
+        if (item is null)
+        {
+            return IntegrationHealthStatus.Unavailable;
+        }
+
+        return item.Enabled ? item.Health : IntegrationHealthStatus.Disabled;
+    }
+
+    public IReadOnlyList<IntegrationHealthRecord> Snapshot() =>
+        _registry.List()
+            .Select(item => new IntegrationHealthRecord(
+                item.Id,
+                item.DisplayName,
+                item.Enabled ? item.Health : IntegrationHealthStatus.Disabled,
+                item.HealthDetail,
+                item.LastUsedAt))
+            .ToList();
 
     public IReadOnlyList<IntegrationLogEntry> Logs
     {
@@ -440,6 +468,7 @@ public sealed class IntegrationHost
             var cached = _cache.Get(cacheKey, now, ReadTtl);
             if (cached.Freshness == IntegrationFreshness.Fresh && cached.Value is not null)
             {
+                RememberIfRequested(invocation, registration, cached.Value, now);
                 return ConnectorOutcome.Ok(
                     registration,
                     lane,
@@ -460,25 +489,15 @@ public sealed class IntegrationHost
         }
 
         var headers = new Dictionary<string, string>(request.Headers, StringComparer.OrdinalIgnoreCase);
-        if (registration.Manifest.Authentication.Kind != IntegrationAuthKind.None)
+        if (!_authenticator.TryApply(registration, headers, out var authCategory))
         {
-            if (string.IsNullOrWhiteSpace(registration.CredentialReference)
-                || !_secrets.TryResolveHeader(
-                    registration.CredentialReference,
-                    registration.Manifest.Authentication.HeaderName,
-                    out var headerValue)
-                || string.IsNullOrWhiteSpace(headerValue))
-            {
-                _registry.Touch(registration.Id, now, IntegrationHealthStatus.AuthenticationRequired);
-                return ConnectorOutcome.Fail(
-                    registration,
-                    "Authentication is required.",
-                    "auth",
-                    IntegrationHealthStatus.AuthenticationRequired,
-                    lane);
-            }
-
-            headers[registration.Manifest.Authentication.HeaderName ?? "Authorization"] = headerValue;
+            _registry.Touch(registration.Id, now, IntegrationHealthStatus.AuthenticationRequired);
+            return ConnectorOutcome.Fail(
+                registration,
+                "Authentication is required.",
+                authCategory ?? "auth",
+                IntegrationHealthStatus.AuthenticationRequired,
+                lane);
         }
 
         TransportResponse response;

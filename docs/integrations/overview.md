@@ -29,9 +29,9 @@ Context / Activity / Search / Automation / Base AI
 1. Build your app (any language) with a small HTTP API or events.
 2. Copy [`examples/integrations/secretbase.integration.json`](../../examples/integrations/secretbase.integration.json) and rename the `id`.
 3. Declare **capabilities**, **endpoints**, **events**, and **authentication**.
-4. In Secret Base: **My Integrations → Enable example apps** (or import your JSON).
+4. In Secret Base: **My Integrations** — paste your JSON (Register pasted) or leave the box empty to enable the example apps.
 5. Grant permissions. Reads can run; writes and `app.open` confirm.
-6. Ask Base AI: “Show my app state.”
+6. Ask Base AI: "Show my app state."
 
 Details: [manifest](manifest.md) · [capabilities](capabilities.md) · [security](security.md) · [authentication](authentication.md) · [events](events.md) · [example](example.md)
 

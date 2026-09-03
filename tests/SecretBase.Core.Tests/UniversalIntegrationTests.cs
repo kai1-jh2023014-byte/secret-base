@@ -406,6 +406,16 @@ public class UniversalIntegrationTests
         Assert.Equal(CommandKind.Integrations, dispatch.Kind);
         Assert.True(dispatch.HandledWithoutLlm);
 
+        baseExperience.Rules.Save(new AutomationRule
+        {
+            Name = "When Tetris finishes",
+            Trigger = AutomationTriggerKind.IntegrationEvent,
+            IntegrationId = IntegrationIds.UserApp,
+            IntegrationEventType = "game.finished",
+            Intervention = InterventionMode.Suggest,
+            RequiresConfirmation = true,
+            CooldownMinutes = 5
+        });
         Assert.True(IntegrationEventNormalizer.TryNormalize(
             registry.Find(IntegrationIds.UserApp)!,
             "game.finished",
@@ -538,6 +548,156 @@ public class UniversalIntegrationTests
         baseExperience.Integrations = host;
         Assert.Contains("Keep going", baseExperience.LoadTodos().Items[0].Title);
         Assert.NotNull(baseExperience.Briefing());
+    }
+
+    [Fact]
+    public void Contracts_ExposeConnectorCapabilityHealthAndDiscovery()
+    {
+        IIntegrationActionExecutor host = CreateHost(out var registry);
+        DemoManifests.TryRegisterKnown(registry, approveDemos: true);
+        var typed = (IntegrationHost)host;
+        IIntegrationHealthMonitor health = typed;
+        Assert.NotEmpty(typed.Connectors());
+        Assert.Contains(typed.Connectors(), item => item.Capabilities.Any(c => c.Id == IntegrationCapabilityIds.StateRead));
+        Assert.Equal(IntegrationHealthStatus.Disconnected, health.Get(IntegrationIds.UserApp));
+        Assert.Contains(health.Snapshot(), item => item.IntegrationId == IntegrationIds.Calendar);
+        Assert.True(IntegrationDiscovery.TryRegisterJson(
+            new IntegrationRegistry(),
+            DemoManifests.GenericRestJson,
+            approved: true,
+            out _));
+    }
+
+    [Fact]
+    public void Http_DeniedMethod_IsNotCallerSelectable()
+    {
+        var endpoint = new IntegrationEndpointDeclaration { Id = "state", Method = "GET", Path = "/state" };
+        Assert.False(HttpEndpointPolicy.IsMethodAllowed(endpoint, "DELETE"));
+        Assert.True(HttpEndpointPolicy.IsMethodAllowed(endpoint, "GET"));
+        Assert.True(HttpEndpointPolicy.HasForbiddenCallerOverride(
+            JsonDocument.Parse("""{"method":"DELETE"}""").RootElement));
+    }
+
+    [Fact]
+    public void Webhook_RateLimit_Isolated()
+    {
+        var registry = new IntegrationRegistry();
+        DemoManifests.TryRegisterKnown(registry, approveDemos: true);
+        var secrets = new MemoryIntegrationSecretResolver();
+        var reference = CredentialReference.For(IntegrationIds.UserApp, "webhook");
+        secrets.Set(reference, "whsec-test");
+        registry.SetCredentialReference(IntegrationIds.UserApp, reference);
+        IIntegrationEventSource ingestor = new WebhookIngestor(
+            registry,
+            secrets,
+            new IntegrationRateLimiter(1, TimeSpan.FromMinutes(1)));
+        var now = DateTimeOffset.UtcNow;
+        var ts = now.ToUnixTimeSeconds().ToString();
+        var body = """{"summary":"one"}""";
+        var first = new WebhookEnvelope
+        {
+            IntegrationId = IntegrationIds.UserApp,
+            EventType = "game.finished",
+            Timestamp = ts,
+            Nonce = "n-a",
+            Signature = IntegrationHmac.Sign("whsec-test", ts, "n-a", body),
+            PayloadJson = body
+        };
+        Assert.True(ingestor.TryIngest(first, now, out _, out _));
+        var second = first with
+        {
+            Nonce = "n-b",
+            Signature = IntegrationHmac.Sign("whsec-test", ts, "n-b", body)
+        };
+        Assert.False(ingestor.TryIngest(second, now, out _, out var error));
+        Assert.Contains("Rate", error, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Memory_DoesNotStoreExternalUnlessAsked()
+    {
+        var memory = new MemoryStore();
+        var registry = new IntegrationRegistry();
+        DemoManifests.TryRegisterKnown(registry, approveDemos: true);
+        var host = new IntegrationHost(registry, new LoopbackIntegrationTransport(), memory: memory);
+        var now = DateTimeOffset.UtcNow;
+        await host.InvokeAsync(new ConnectorInvocation
+        {
+            IntegrationId = IntegrationIds.UserApp,
+            CapabilityId = IntegrationCapabilityIds.StateRead
+        }, now);
+        Assert.Empty(memory.Recall(now));
+        await host.InvokeAsync(new ConnectorInvocation
+        {
+            IntegrationId = IntegrationIds.UserApp,
+            CapabilityId = IntegrationCapabilityIds.StateRead,
+            RememberResult = true
+        }, now);
+        Assert.NotEmpty(memory.Recall(now));
+        Assert.DoesNotContain(
+            memory.Recall(now),
+            item => CredentialReference.LooksLikeSecret(item.Summary) || CredentialReference.LooksLikeSecret(item.Detail));
+    }
+
+    [Fact]
+    public void Cache_StaleIsNotCurrent()
+    {
+        var cache = new IntegrationReadCache();
+        var now = DateTimeOffset.UtcNow;
+        cache.Set("k", "old", now);
+        var fresh = cache.Get("k", now, TimeSpan.FromSeconds(30));
+        Assert.Equal(IntegrationFreshness.Fresh, fresh.Freshness);
+        var stale = cache.Get("k", now.AddMinutes(5), TimeSpan.FromSeconds(30));
+        Assert.Equal(IntegrationFreshness.Stale, stale.Freshness);
+        Assert.Equal("old", stale.Value);
+        Assert.Equal(IntegrationFreshness.Unavailable, cache.Get("missing", now, TimeSpan.FromSeconds(30)).Freshness);
+    }
+
+    [Fact]
+    public void Automation_Cooldown_DoesNotRetrigger()
+    {
+        var registry = new IntegrationRegistry();
+        DemoManifests.TryRegisterKnown(registry, approveDemos: true);
+        var rules = new AutomationRuleStore([]);
+        rules.Save(new AutomationRule
+        {
+            Name = "When Tetris finishes",
+            Trigger = AutomationTriggerKind.IntegrationEvent,
+            IntegrationId = IntegrationIds.UserApp,
+            IntegrationEventType = "game.finished",
+            Intervention = InterventionMode.Suggest,
+            RequiresConfirmation = true,
+            CooldownMinutes = 30
+        });
+        var host = new IntegrationHost(registry, rules: rules);
+        Assert.True(IntegrationEventNormalizer.TryNormalize(
+            registry.Find(IntegrationIds.UserApp)!,
+            "game.finished",
+            DateTimeOffset.UtcNow,
+            """{"summary":"a"}""",
+            "c-a",
+            out var evt,
+            out _));
+        var now = DateTimeOffset.UtcNow;
+        Assert.NotNull(host.IngestEvent(evt!, now));
+        Assert.Null(host.IngestEvent(evt! with { CorrelationId = "c-b" }, now.AddMinutes(1)));
+    }
+
+    [Fact]
+    public async Task Permission_ExecuteDenied()
+    {
+        var registry = new IntegrationRegistry();
+        DemoManifests.TryRegisterKnown(registry, approveDemos: true);
+        registry.SetPermissions(IntegrationIds.UserApp, IntegrationPermissionKind.Read);
+        var host = new IntegrationHost(registry);
+        var outcome = await host.InvokeAsync(new ConnectorInvocation
+        {
+            IntegrationId = IntegrationIds.UserApp,
+            CapabilityId = IntegrationCapabilityIds.AppOpen,
+            UserConfirmed = true
+        }, DateTimeOffset.UtcNow);
+        Assert.False(outcome.Succeeded);
+        Assert.Equal("permission", outcome.ErrorCategory);
     }
 
     private static IntegrationHost CreateHost(out IntegrationRegistry registry)
