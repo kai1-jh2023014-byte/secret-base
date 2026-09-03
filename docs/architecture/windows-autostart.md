@@ -54,3 +54,5 @@ When launched with `--autostart`, startup failures are **logged only** (no block
 ## Uninstall / stale entries
 
 Disabling auto-start in Secret Base or Windows removes the `SecretBase` Run value. Deleting the executable without disabling may leave a broken Startup entry (standard Windows behavior); reinstalling or re-enabling overwrites the path.
+
+macOS uses a LaunchAgent instead of HKCU Run — see [macos.md](macos.md).

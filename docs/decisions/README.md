@@ -203,3 +203,7 @@ See [assistant-context.md](../architecture/assistant-context.md) and [assistant-
 **Why:** Deliver a reproducible Context → Plan → Confirmation → Action → Result loop over existing Commands so Secret Base AI is a Personal AI Workspace, not a ChatGPT clone — then pause AI feature expansion.
 
 See [ai-assistant.md](../architecture/ai-assistant.md), [assistant-planning.md](../architecture/assistant-planning.md), and [assistant-security.md](../architecture/assistant-security.md).
+
+## 2026-09-03 — macOS workspace host (second head)
+
+See [2026-09-03-macos-host.md](2026-09-03-macos-host.md).

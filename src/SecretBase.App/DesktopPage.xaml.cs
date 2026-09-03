@@ -32,6 +32,7 @@ using SecretBase.Infrastructure.Music;
 using SecretBase.Infrastructure.Calendar;
 using SecretBase.Infrastructure.Logging;
 using SecretBase.Infrastructure.Persistence;
+using SecretBase.Infrastructure.Startup;
 using SecretBase.Platform.Abstractions;
 using SecretBase.Platform.Windows;
 using SecretBase.Widgets.Ai;

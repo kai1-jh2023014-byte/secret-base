@@ -7,6 +7,7 @@ using SecretBase.Core.Time;
 using SecretBase.Core.Widgets.Ai;
 using SecretBase.Infrastructure.Logging;
 using SecretBase.Infrastructure.Persistence;
+using SecretBase.Infrastructure.Startup;
 using SecretBase.Infrastructure.Storage;
 using SecretBase.Platform.Abstractions;
 using SecretBase.Platform.Windows;

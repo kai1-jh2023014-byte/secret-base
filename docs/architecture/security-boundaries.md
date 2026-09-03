@@ -4,7 +4,7 @@
 
 | Zone | Code | Trust | May access |
 |------|------|-------|------------|
-| Trusted Host | App, Core, Infrastructure, Platform | Trusted | Internal services only; Platform still avoids destructive OS APIs |
+| Trusted Host | App / App.Mac, Core, Infrastructure, Platform.Windows / Platform.Mac | Trusted | Internal services only; Platform still avoids destructive OS APIs |
 | Built-in Widget | `SecretBase.Widgets` (Clock, Text, Web chrome, Calendar, Music, Creative, AI Workspace, Secret Base AI, Apps) | Semi-trusted | Own settings/UI; Platform APIs only through approved host services |
 | Web Content | Documents inside WebView2 (`WidgetTypes.Web`, Music browse mode) | **Untrusted** | Network rendering only; **no** host object injection to Secret Base APIs |
 | Plugin (future) | Marketplace packages | Untrusted | Sandboxed Plugin API only — never Core internals |
@@ -35,7 +35,7 @@ Forbidden (v0.1 and forward until redesign):
 
 - Injecting Core / Platform objects into the page
 - JavaScript → Secret Base arbitrary code / settings
-- JavaScript → Win32 / filesystem / process / PowerShell / ShellExecute
+- JavaScript → Win32 / AppKit / filesystem / process / PowerShell / ShellExecute / `/bin/sh`
 - Reading arbitrary local files via `file://` (scheme blocked in Core `WebUrlValidator`)
 - Injecting secrets into the page
 

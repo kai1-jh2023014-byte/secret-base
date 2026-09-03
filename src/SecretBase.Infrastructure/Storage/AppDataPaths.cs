@@ -9,6 +9,8 @@ public static class AppDataPaths
     {
         get
         {
+            // Windows: %LocalAppData%\SecretBase
+            // macOS: ~/Library/Application Support/SecretBase
             var root = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                 "SecretBase");

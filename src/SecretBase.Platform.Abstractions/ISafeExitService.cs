@@ -1,13 +1,13 @@
 namespace SecretBase.Platform.Abstractions;
 
 /// <summary>
-/// Safe application lifecycle operations that return the user to the normal Windows desktop.
-/// Closing Secret Base must never modify Explorer, Taskbar, or OS shell state.
+/// Safe application lifecycle operations that end the Secret Base process only.
+/// Closing Secret Base must never modify Explorer, Dock, Taskbar, Finder, or OS shell state.
 /// </summary>
 public interface ISafeExitService
 {
     /// <summary>
-    /// Requests a normal process shutdown. Windows itself is left untouched.
+    /// Requests a normal process shutdown. The host OS shell is left untouched.
     /// </summary>
     void RequestExit();
 }

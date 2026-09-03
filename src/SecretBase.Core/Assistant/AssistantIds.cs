@@ -8,7 +8,7 @@ public static class AssistantProviderIds
     public const string Local = "local";
 }
 
-/// <summary>Credential Manager key (prefixed with SecretBase/ by the Windows store).</summary>
+/// <summary>OS secret-store key (Credential Manager / Keychain; implementations add their own prefix).</summary>
 public static class AssistantSecretKeys
 {
     public const string OpenAiApiKey = "Assistant/OpenAI/ApiKey";

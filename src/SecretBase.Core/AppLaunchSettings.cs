@@ -10,7 +10,8 @@ public sealed class AppLaunchSettings
     public int SchemaVersion { get; set; } = CurrentSchemaVersion;
 
     /// <summary>
-    /// When true, Secret Base should be registered in the current user's Windows startup list.
+    /// When true, Secret Base should be registered for the current user's login session
+    /// (Windows Startup apps / macOS LaunchAgent). Property name is kept for JSON compatibility.
     /// </summary>
     public bool LaunchAtWindowsLogin { get; set; }
 

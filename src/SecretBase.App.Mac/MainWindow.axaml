@@ -1,0 +1,71 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="SecretBase.App.Mac.MainWindow"
+        Title="Secret Base"
+        Width="1100"
+        Height="720"
+        MinWidth="860"
+        MinHeight="560"
+        WindowStartupLocation="CenterScreen"
+        Background="#FF0E1218">
+    <Grid RowDefinitions="Auto,*,Auto" Margin="28">
+        <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
+            <StackPanel Spacing="4">
+                <TextBlock x:Name="BrandText" Text="SECRET BASE" FontSize="12" LetterSpacing="3" Foreground="#FF7A9E86" />
+                <TextBlock x:Name="TitleText" Text="Atelier" FontSize="28" FontWeight="SemiBold" Foreground="#FFF3EFE6" />
+                <TextBlock x:Name="SubtitleText" Text="macOS workspace — Finder and Dock stay yours." FontSize="13" Foreground="#FF8B93A0" />
+            </StackPanel>
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10" VerticalAlignment="Top">
+                <ToggleSwitch x:Name="AutoStartToggle" OffContent="Login" OnContent="Login" />
+                <Button x:Name="ExitButton" Content="Safe Exit" Click="ExitButton_OnClick" />
+            </StackPanel>
+        </Grid>
+
+        <Grid Grid.Row="1" ColumnDefinitions="280,*" Margin="0,24,0,16">
+            <Border x:Name="ClockCard" Background="#D9181E28" CornerRadius="18" Padding="22" Margin="0,0,18,0">
+                <StackPanel Spacing="8" VerticalAlignment="Center">
+                    <TextBlock Text="CLOCK" FontSize="11" LetterSpacing="2" Foreground="#FF8B93A0" />
+                    <TextBlock x:Name="ClockTimeText" Text="--" FontSize="42" FontWeight="Light" Foreground="#FFF3EFE6" />
+                    <TextBlock x:Name="ClockDateText" Text="" FontSize="16" Foreground="#FF8B93A0" TextWrapping="Wrap" />
+                </StackPanel>
+            </Border>
+
+            <Border Grid.Column="1" x:Name="ChatCard" Background="#D9181E28" CornerRadius="18" Padding="20">
+                <Grid RowDefinitions="Auto,*,Auto,Auto">
+                    <Grid ColumnDefinitions="*,Auto">
+                        <TextBlock Text="SECRET BASE AI" FontSize="11" LetterSpacing="2" Foreground="#FF8B93A0" VerticalAlignment="Center" />
+                        <TextBlock Grid.Column="1" x:Name="ProviderText" Text="" FontSize="12" Foreground="#FF7A9E86" />
+                    </Grid>
+
+                    <ScrollViewer Grid.Row="1" Margin="0,12,0,12" x:Name="HistoryScroll">
+                        <TextBlock x:Name="HistoryText" TextWrapping="Wrap" Foreground="#FFF3EFE6" FontSize="14" />
+                    </ScrollViewer>
+
+                    <StackPanel Grid.Row="2" x:Name="ConfirmPanel" IsVisible="False" Spacing="8" Margin="0,0,0,12">
+                        <TextBlock x:Name="ConfirmText" TextWrapping="Wrap" Foreground="#FFF3EFE6" />
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <Button x:Name="ConfirmButton" Content="Run" Click="ConfirmButton_OnClick" />
+                            <Button x:Name="CancelButton" Content="Cancel" Click="CancelButton_OnClick" />
+                        </StackPanel>
+                    </StackPanel>
+
+                    <Grid Grid.Row="3" ColumnDefinitions="*,Auto" Margin="0,0,0,0">
+                        <TextBox x:Name="InputBox" Watermark="Ask Secret Base AI…" KeyDown="InputBox_OnKeyDown" />
+                        <Button Grid.Column="1" x:Name="SendButton" Content="Send" Margin="10,0,0,0" Click="SendButton_OnClick" />
+                    </Grid>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <Border Grid.Row="2" Background="#40151A24" CornerRadius="14" Padding="16">
+            <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto">
+                <TextBlock Text="OpenAI API key (Keychain on macOS; never logged)" FontSize="12" Foreground="#FF8B93A0" />
+                <TextBlock Grid.Row="1" x:Name="StatusText" Text="" FontSize="12" Foreground="#FF8B93A0" Margin="0,6,0,0" TextWrapping="Wrap" />
+                <StackPanel Grid.Column="1" Grid.RowSpan="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                    <TextBox x:Name="ApiKeyBox" Width="280" PasswordChar="•" Watermark="sk-…" />
+                    <Button x:Name="SaveKeyButton" Content="Save key" Click="SaveKeyButton_OnClick" />
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

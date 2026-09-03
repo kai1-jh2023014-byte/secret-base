@@ -28,12 +28,24 @@ public static class CreativePathValidator
             return false;
         }
 
-        // Soft-normalize separators for stable duplicate detection.
-        normalized = normalized.Replace('/', '\\').TrimEnd('\\');
-        if (normalized.Length == 2 && normalized[1] == ':')
+        // Soft-normalize separators for stable duplicate detection (Windows vs POSIX).
+        normalized = HostPath.NormalizeSeparators(normalized);
+        if (HostPath.IsPosixAbsolute(normalized))
         {
-            // Drive root — keep trailing slash semantically as "C:"
-            normalized += "\\";
+            normalized = normalized.TrimEnd('/');
+            if (normalized.Length == 0)
+            {
+                normalized = "/";
+            }
+        }
+        else
+        {
+            normalized = normalized.TrimEnd('\\');
+            if (normalized.Length == 2 && normalized[1] == ':')
+            {
+                // Drive root — keep trailing slash semantically as "C:"
+                normalized += "\\";
+            }
         }
 
         return true;
@@ -52,13 +64,12 @@ public static class CreativePathValidator
             return "folder";
         }
 
-        var name = absolutePath.Replace('/', '\\');
-        var idx = name.LastIndexOf('.');
-        if (idx < 0 || idx == name.Length - 1)
+        var ext = HostPath.GetExtension(absolutePath);
+        if (string.IsNullOrEmpty(ext) || ext.Length == 1)
         {
             return "file";
         }
 
-        return name[idx..].TrimStart('.').ToLowerInvariant();
+        return ext.TrimStart('.').ToLowerInvariant();
     }
 }
