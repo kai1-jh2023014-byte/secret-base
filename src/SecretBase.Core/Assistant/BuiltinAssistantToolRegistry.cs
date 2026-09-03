@@ -643,6 +643,64 @@ public sealed class BuiltinAssistantToolRegistry : IAiToolRegistry
         },
         new()
         {
+            Name = AssistantToolNames.IntegrationsList,
+            Description =
+                "List registered integrations, health, and named capabilities. Read-only. Does not call external APIs.",
+            RiskLevel = ActionPrivilege.Observation,
+            Capability = AssistantToolCapability.ReadOnly
+        },
+        new()
+        {
+            Name = AssistantToolNames.IntegrationQuery,
+            Description =
+                "Read a declared integration capability (e.g. state.read). integration_id and capability only — never a URL or HTTP method. Read-only.",
+            Parameters =
+            [
+                new AssistantToolParameter
+                {
+                    Name = "integration_id",
+                    Type = "string",
+                    Description = "Registered integration id, e.g. demo.user-app.",
+                    Required = true
+                },
+                new AssistantToolParameter
+                {
+                    Name = "capability",
+                    Type = "string",
+                    Description = "Declared capability id such as state.read or stats.read.",
+                    Required = true
+                }
+            ],
+            RiskLevel = ActionPrivilege.Observation,
+            Capability = AssistantToolCapability.ReadOnly
+        },
+        new()
+        {
+            Name = AssistantToolNames.IntegrationInvoke,
+            Description =
+                "Invoke a declared write/execute capability after confirmation. Named capability only — never invent endpoints.",
+            Parameters =
+            [
+                new AssistantToolParameter
+                {
+                    Name = "integration_id",
+                    Type = "string",
+                    Description = "Registered integration id.",
+                    Required = true
+                },
+                new AssistantToolParameter
+                {
+                    Name = "capability",
+                    Type = "string",
+                    Description = "Declared capability such as app.open.",
+                    Required = true
+                }
+            ],
+            RiskLevel = ActionPrivilege.UserConfirmationRequired,
+            Capability = AssistantToolCapability.RequiresConfirmation
+        },
+        new()
+        {
             Name = AssistantToolNames.AutomationFeedback,
             Description =
                 "Record whether the user accepted or dismissed the last quiet suggestion. Safe Auto. Does not raise safety.",

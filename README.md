@@ -2,7 +2,7 @@
 
 > Make your PC feel like *your* secret base — a Personal Creative Desktop Environment for Windows and macOS.
 
-**v1.0** is a Personal AI OS: observe, understand, remember, search, predict, prepare, suggest, confirm, act, and learn — still without replacing Explorer or the Taskbar.
+**v1.1** is a Universal Integration Platform on top of the Personal AI OS: you connect homemade apps, Windows apps, and APIs through a manifest — Secret Base does not take a dependency on each vendor SDK.
 
 ## What you can do
 
@@ -13,7 +13,8 @@
 | **Projects** | Create a Project → Dashboard → Open Folder / Cursor / ChatGPT |
 | **Apps** | Register your own exe / folder / https URL and launch it (no Shell, no admin) |
 | **Classroom** | Opens official Google Classroom in the **existing Web Widget** (no new Classroom UI) |
-| **AI** | **Base AI** is the intelligence layer (Command Center, not a chatbot). Briefing, search, focus, and continue work without an LLM. Remote AI falls back to Local. Continue still confirms. |
+| **AI** | **Base AI** is the intelligence layer (Command Center, not a chatbot). Briefing, search, focus, and continue work without an LLM. Remote AI falls back to Local. Continue still confirms. Integrations are named capabilities only — never arbitrary HTTP. |
+| **Integrations** | Manifest + registry + permissions + Safety. Connect Tetris AI / DTM AI / a REST API without forking Core. [Guide](docs/integrations/overview.md) |
 | **Theme** | Shared colors, fonts, corner radius, transparency |
 | **Safe Exit** | **Ctrl+Shift+Q** — process end only; Windows / macOS shell untouched |
 
@@ -80,12 +81,21 @@ macOS:   ~/Library/Application Support/SecretBase\
   layouts\
   themes\
   logs\
-  settings\     # assistant.json, base.json, todos.json, memory.json, activity.json, automation-feedback.json, sessions.json
+  settings\     # assistant.json, base.json, todos.json, memory.json, activity.json, automation-feedback.json, sessions.json, integrations.json
 ```
 
 ## Base AI in one paragraph
 
-Base AI is Secret Base's quiet intelligence — not a ChatGPT clone. It observes local context (calendar, projects, todos, registered files/apps, music, focus, sanitized foreground activity, memory, sessions), can **prepare a workspace** without launching anything, and asks for confirmation before opening a project or app. File cleanup is suggestion-only. `files_delete` never calls OS `File.Delete`. Missing API keys fall back to Local AI. Learning never turns confirmation into auto-launch.
+Base AI is Secret Base's quiet intelligence — not a ChatGPT clone. It observes local context (calendar, projects, todos, registered files/apps, music, focus, sanitized foreground activity, memory, sessions), can **prepare a workspace** without launching anything, and asks for confirmation before opening a project or app. File cleanup is suggestion-only. `files_delete` never calls OS `File.Delete`. Missing API keys fall back to Local AI. Learning never turns confirmation into auto-launch. External connector data is untrusted and never treated as a system prompt.
+
+## Connect your own app
+
+1. Ship a small API or events from your app.
+2. Copy [`examples/integrations/secretbase.integration.json`](examples/integrations/secretbase.integration.json).
+3. Register it in **My Integrations** and grant permissions.
+4. Ask Base AI to read a **named** capability (`state.read`). Writes and launches still confirm.
+
+Walkthrough: [docs/integrations/overview.md](docs/integrations/overview.md)
 
 ## Provider setup
 
@@ -112,6 +122,7 @@ Remote (OpenAI / Gemini) is optional. With no API key, Base AI uses **Local** (O
 - [AI Workspace](docs/architecture/ai-workspace.md)
 - [Secret Base AI](docs/architecture/ai-assistant.md)
 - [Personal AI OS](docs/architecture/personal-ai-os.md)
+- [Integrations](docs/integrations/overview.md)
 - [Privacy](docs/architecture/privacy.md)
 - [Assistant Context](docs/architecture/assistant-context.md)
 - [Assistant Tools](docs/architecture/assistant-tools.md)

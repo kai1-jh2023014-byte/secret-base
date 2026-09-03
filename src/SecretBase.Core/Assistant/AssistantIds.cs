@@ -61,6 +61,9 @@ public static class AssistantToolNames
     public const string ActivityTimeline = "activity_timeline";
     public const string PrivacyManifest = "privacy_manifest";
     public const string AttentionNow = "attention_now";
+    public const string IntegrationsList = "integrations_list";
+    public const string IntegrationQuery = "integration_query";
+    public const string IntegrationInvoke = "integration_invoke";
 }
 
 public static class AssistantActivityDomains

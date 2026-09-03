@@ -1,3 +1,5 @@
+using SecretBase.Core.Connectors;
+
 namespace SecretBase.Core.Privacy;
 
 /// <summary>User-facing catalog of what Secret Base observes, remembers, and never collects.</summary>
@@ -25,7 +27,10 @@ public static class PrivacyManifest
 
     public const string NeverAutomatic =
         "Arbitrary shell, PowerShell, arbitrary executables, OS file delete, silent app launch, "
-        + "learning that turns Confirmation into Auto Action.";
+        + "learning that turns Confirmation into Auto Action, arbitrary HTTP, silent integration writes.";
+
+    public const string Integrations =
+        "Registered connectors only. Named capabilities. External data is untrusted. Secrets never reach AI.";
 
     public static string Format() =>
         string.Join(
@@ -47,6 +52,21 @@ public static class PrivacyManifest
                 NeverCollected,
                 string.Empty,
                 "Never automatic",
-                NeverAutomatic
+                NeverAutomatic,
+                string.Empty,
+                "Integrations",
+                Integrations,
+                string.Empty,
+                "Observed (integrations)",
+                IntegrationPrivacy.Observed,
+                string.Empty,
+                "Shared",
+                IntegrationPrivacy.Shared,
+                string.Empty,
+                "Remembered (integrations)",
+                IntegrationPrivacy.Remembered,
+                string.Empty,
+                "Permissions",
+                IntegrationPrivacy.Permissions
             ]);
 }

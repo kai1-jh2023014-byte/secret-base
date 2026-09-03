@@ -7,6 +7,7 @@ using SecretBase.Core.Briefing;
 using SecretBase.Core.Calendar;
 using SecretBase.Core.Capture;
 using SecretBase.Core.Commands;
+using SecretBase.Core.Connectors;
 using SecretBase.Core.Creative;
 using SecretBase.Core.Explain;
 using SecretBase.Core.Files;
@@ -114,6 +115,8 @@ public interface IBaseExperienceServices
     void RecordOpened();
 
     string MemoryCatalog(string? query = null);
+
+    IntegrationHost? Integrations { get; set; }
 }
 
 public sealed class BaseExperienceServices : IBaseExperienceServices, ICommandContext
@@ -163,6 +166,8 @@ public sealed class BaseExperienceServices : IBaseExperienceServices, ICommandCo
     public IWorkSessionStore Sessions { get; }
 
     public IAutomationRuleStore Rules { get; }
+
+    public IntegrationHost? Integrations { get; set; }
 
     public BaseSettings? Preferences { get; set; }
 
@@ -301,6 +306,10 @@ public sealed class BaseExperienceServices : IBaseExperienceServices, ICommandCo
         SearchHit[] extra = suggestion is null
             ? []
             : [new SearchHit("suggestion", suggestion.Title, suggestion.Detail, 0.7, Now, "automation")];
+        if (Integrations is not null)
+        {
+            extra = extra.Concat(Integrations.SearchHits(query)).ToArray();
+        }
         return new KeywordSearchRanker().Rank(
             BaseSearch.Query(
                 query,
@@ -382,7 +391,74 @@ public sealed class BaseExperienceServices : IBaseExperienceServices, ICommandCo
 
     public string ExplainIntent() => IntentExplainer.Explain(DetectIntent(), ComposeSituation());
 
-    public string Privacy() => PrivacyManifest.Format();
+    public string Privacy() =>
+        PrivacyManifest.Format()
+        + (Integrations is null
+            ? string.Empty
+            : Environment.NewLine + Environment.NewLine + Integrations.PermissionText());
+
+    public string IntegrationsCatalog() => PersonalSpaceCatalog.Integrations(Integrations);
+
+    public string IntegrationPermissions() =>
+        Integrations?.PermissionText() ?? IntegrationPrivacy.Format(null);
+
+    public ConnectorOutcome? TryIntegrationRead(string utterance)
+    {
+        if (Integrations is null)
+        {
+            return null;
+        }
+
+        var text = utterance ?? string.Empty;
+        var match = Integrations.Registry.List()
+            .FirstOrDefault(item =>
+                text.Contains(item.Id, StringComparison.OrdinalIgnoreCase)
+                || text.Contains(item.DisplayName, StringComparison.OrdinalIgnoreCase)
+                || text.Contains("tetris", StringComparison.OrdinalIgnoreCase) && item.Id == IntegrationIds.UserApp
+                || text.Contains("my app", StringComparison.OrdinalIgnoreCase) && item.Id == IntegrationIds.UserApp);
+        if (LooksOpen(text))
+        {
+            var id = match?.Id ?? IntegrationIds.UserApp;
+            return Integrations.InvokeAsync(
+                new ConnectorInvocation
+                {
+                    IntegrationId = id,
+                    CapabilityId = IntegrationCapabilityIds.AppOpen,
+                    UserConfirmed = false
+                },
+                Now).GetAwaiter().GetResult();
+        }
+
+        if (match is null && !LooksState(text))
+        {
+            return null;
+        }
+
+        var integrationId = match?.Id ?? IntegrationIds.UserApp;
+        var capability = text.Contains("stats", StringComparison.OrdinalIgnoreCase)
+                         || text.Contains("成績", StringComparison.OrdinalIgnoreCase)
+            ? IntegrationCapabilityIds.StatsRead
+            : IntegrationCapabilityIds.StateRead;
+        return Integrations.InvokeAsync(
+            new ConnectorInvocation
+            {
+                IntegrationId = integrationId,
+                CapabilityId = capability,
+                UserConfirmed = false
+            },
+            Now).GetAwaiter().GetResult();
+    }
+
+    private static bool LooksOpen(string text) =>
+        text.Contains("起動", StringComparison.OrdinalIgnoreCase)
+        || text.Contains("open my app", StringComparison.OrdinalIgnoreCase)
+        || text.Contains("open tetris", StringComparison.OrdinalIgnoreCase);
+
+    private static bool LooksState(string text) =>
+        text.Contains("state", StringComparison.OrdinalIgnoreCase)
+        || text.Contains("状態", StringComparison.OrdinalIgnoreCase)
+        || text.Contains("stats", StringComparison.OrdinalIgnoreCase)
+        || text.Contains("成績", StringComparison.OrdinalIgnoreCase);
 
     public IReadOnlyList<AttentionItem> Attention()
     {

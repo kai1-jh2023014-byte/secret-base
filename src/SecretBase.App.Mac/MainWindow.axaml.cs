@@ -9,6 +9,7 @@ using SecretBase.Core.Automation;
 using SecretBase.Core.Base;
 using SecretBase.Core.Capture;
 using SecretBase.Core.Commands;
+using SecretBase.Core.Connectors;
 using SecretBase.Core.Memory;
 using SecretBase.Core.Workspace;
 using SecretBase.Core.Blocks;
@@ -423,6 +424,8 @@ public partial class MainWindow : Window
 
     private async void PrivacyButton_OnClick(object? sender, RoutedEventArgs e) => await ShowPrivacyAsync();
 
+    private async void IntegrationsButton_OnClick(object? sender, RoutedEventArgs e) => await ShowIntegrationsAsync();
+
     private async Task ShowPaletteAsync()
     {
         var items = _session.Base.Palette(string.Empty);
@@ -486,6 +489,16 @@ public partial class MainWindow : Window
                    + Environment.NewLine
                    + PersonalSpaceCatalog.Rules(_session.Base.Rules);
         await ShowInfoAsync("Privacy & automation", body);
+    }
+
+    private async Task ShowIntegrationsAsync()
+    {
+        DemoManifests.TryRegisterKnown(_session.Integrations.Registry, approveDemos: true);
+        var body = _session.Integrations.CatalogText()
+                   + Environment.NewLine
+                   + Environment.NewLine
+                   + _session.Integrations.PermissionText();
+        await ShowInfoAsync("My Integrations", body);
     }
 
     private async Task ShowInfoAsync(string title, string body)

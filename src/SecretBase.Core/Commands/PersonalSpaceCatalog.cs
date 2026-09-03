@@ -1,4 +1,5 @@
 using SecretBase.Core.Automation;
+using SecretBase.Core.Connectors;
 using SecretBase.Core.Memory;
 
 namespace SecretBase.Core.Commands;
@@ -48,6 +49,11 @@ public static class PersonalSpaceCatalog
                 + "id " + rule.Id));
     }
 
+    public static string Integrations(IntegrationHost? host) =>
+        host is null
+            ? "No integrations registered."
+            : host.CatalogText();
+
     public static string UtteranceFor(PaletteItem item) =>
         item.Action switch
         {
@@ -56,6 +62,7 @@ public static class PersonalSpaceCatalog
             "focus" => "30分集中したい",
             "capture" => "capture",
             "memory" => "what does secret base remember",
+            "integrations" => "my integrations",
             "timeline" => "今日何してた",
             "explain" => "なぜそう判断したの",
             "cleanup" => "使ってないものを整理したい",

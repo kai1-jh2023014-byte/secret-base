@@ -269,7 +269,7 @@ public class PersonalAiOsV10Tests
     public void Safety_RegistryStillBlocksShellAndRequiresDeleteConfirm()
     {
         var registry = BuiltinAssistantToolRegistry.Instance;
-        Assert.Equal(43, registry.Tools.Count);
+        Assert.Equal(46, registry.Tools.Count);
         Assert.Null(registry.Find("shell.run"));
         Assert.True(registry.Find(AssistantToolNames.FilesDelete)!.RequiresConfirmation);
         Assert.Equal(ActionPrivilege.UserConfirmationRequired, registry.Find(AssistantToolNames.FilesDelete)!.RiskLevel);

@@ -3,6 +3,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using SecretBase.Core.Capture;
 using SecretBase.Core.Commands;
+using SecretBase.Core.Connectors;
 using SecretBase.Core.Memory;
 
 namespace SecretBase.App;
@@ -139,6 +140,12 @@ public sealed partial class DesktopPage
             return;
         }
 
+        if (item.Action == "integrations")
+        {
+            await ShowIntegrationsDialogAsync();
+            return;
+        }
+
         var dispatch = _baseExperience.Dispatch(PersonalSpaceCatalog.UtteranceFor(item));
         if (dispatch.Kind == CommandKind.Focus)
         {
@@ -162,6 +169,12 @@ public sealed partial class DesktopPage
         if (dispatch.Kind == CommandKind.Privacy)
         {
             await ShowPrivacyDialogAsync();
+            return;
+        }
+
+        if (dispatch.Kind == CommandKind.Integrations)
+        {
+            await ShowIntegrationsDialogAsync();
             return;
         }
 
@@ -320,6 +333,104 @@ public sealed partial class DesktopPage
         {
             await ShowAutomationRulesDialogAsync();
         }
+    }
+
+    private async Task ShowIntegrationsDialogAsync()
+    {
+        if (_baseExperience is null)
+        {
+            return;
+        }
+
+        AllowFullWindowInput();
+        var items = _integrationHost?.Registry.List() ?? [];
+        var list = new ListBox
+        {
+            Height = 220,
+            ItemsSource = items.Select(IntegrationHost.FormatRegistration).ToList()
+        };
+        var panel = new StackPanel { Spacing = 8 };
+        panel.Children.Add(new TextBlock
+        {
+            Text = _baseExperience.IntegrationPermissions(),
+            TextWrapping = TextWrapping.WrapWholeWords
+        });
+        panel.Children.Add(list);
+        var dialog = new ContentDialog
+        {
+            Title = "My Integrations",
+            Content = new ScrollViewer { MaxHeight = 360, Content = panel },
+            PrimaryButtonText = "Enable example apps",
+            SecondaryButtonText = "Permissions",
+            CloseButtonText = "Close",
+            XamlRoot = XamlRoot
+        };
+        var result = await dialog.ShowAsync();
+        if (result == ContentDialogResult.Primary && _integrationHost is not null)
+        {
+            DemoManifests.TryRegisterKnown(_integrationHost.Registry, approveDemos: true);
+            ShowHostStatus("Example integrations are available.");
+        }
+        else if (result == ContentDialogResult.Secondary)
+        {
+            await ShowIntegrationPermissionsDialogAsync();
+        }
+    }
+
+    private async Task ShowIntegrationPermissionsDialogAsync()
+    {
+        if (_integrationHost is null)
+        {
+            return;
+        }
+
+        AllowFullWindowInput();
+        var items = _integrationHost.Registry.List().Where(item => item.Approved).ToList();
+        if (items.Count == 0)
+        {
+            await ShowTextDialogAsync("Permissions", _baseExperience?.IntegrationPermissions() ?? "No integrations.");
+            return;
+        }
+
+        var selected = items[0];
+        var rows = IntegrationPermissionGate.Matrix(selected.Manifest, selected.Permissions);
+        var checks = rows.Select(row => new CheckBox
+        {
+            Content = row.Label,
+            IsChecked = row.Granted,
+            Tag = row.Flag
+        }).ToList();
+        var panel = new StackPanel { Spacing = 6 };
+        panel.Children.Add(new TextBlock { Text = selected.DisplayName });
+        foreach (var check in checks)
+        {
+            panel.Children.Add(check);
+        }
+
+        var dialog = new ContentDialog
+        {
+            Title = "Integration permissions",
+            Content = panel,
+            PrimaryButtonText = "Save",
+            CloseButtonText = "Close",
+            XamlRoot = XamlRoot
+        };
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary)
+        {
+            return;
+        }
+
+        var granted = IntegrationPermissionKind.None;
+        foreach (var check in checks)
+        {
+            if (check.IsChecked == true && check.Tag is IntegrationPermissionKind flag)
+            {
+                granted |= flag;
+            }
+        }
+
+        _integrationHost.Registry.SetPermissions(selected.Id, granted);
+        ShowHostStatus("Permissions saved.");
     }
 
     private async Task ShowAutomationRulesDialogAsync()

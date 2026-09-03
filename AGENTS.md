@@ -162,6 +162,7 @@ Unless the human explicitly requests otherwise:
 - [README.md](README.md)
 - [Architecture overview](docs/architecture/overview.md)
 - [Personal AI OS](docs/architecture/personal-ai-os.md)
+- [Integrations](docs/integrations/overview.md)
 - [Windows manual QA (v0.8)](docs/guides/windows-manual-qa-v08.md)
 - [macOS host](docs/architecture/macos.md)
 - [Tech stack](docs/architecture/tech-stack.md)

@@ -9,6 +9,7 @@ using SecretBase.Core.Capture;
 using SecretBase.Core.Commands;
 using SecretBase.Core.Files;
 using SecretBase.Core.Focus;
+using SecretBase.Core.Connectors;
 using SecretBase.Core.Integration;
 using SecretBase.Core.Memory;
 using SecretBase.Core.Music;
@@ -38,6 +39,7 @@ public sealed class AssistantToolExecutor : IAiToolExecutor
     private readonly WorkspaceCommandService? _workspace;
     private readonly IIntegrationMemory? _integrations;
     private readonly IBaseExperienceServices? _base;
+    private readonly IntegrationHost? _connectorHost;
 
     public AssistantToolExecutor(
         IAiToolRegistry registry,
@@ -50,7 +52,8 @@ public sealed class AssistantToolExecutor : IAiToolExecutor
         IAssistantContextService? context = null,
         WorkspaceCommandService? workspace = null,
         IIntegrationMemory? integrations = null,
-        IBaseExperienceServices? baseExperience = null)
+        IBaseExperienceServices? baseExperience = null,
+        IntegrationHost? connectorHost = null)
     {
         _registry = registry ?? throw new ArgumentNullException(nameof(registry));
         _calendar = calendar;
@@ -63,6 +66,7 @@ public sealed class AssistantToolExecutor : IAiToolExecutor
         _workspace = workspace;
         _integrations = integrations;
         _base = baseExperience;
+        _connectorHost = connectorHost;
     }
 
     public async Task<AssistantToolResult> ExecuteAsync(
@@ -130,6 +134,9 @@ public sealed class AssistantToolExecutor : IAiToolExecutor
             AssistantToolNames.ActivityTimeline => ActivityTimelineNow(),
             AssistantToolNames.PrivacyManifest => PrivacyNow(),
             AssistantToolNames.AttentionNow => AttentionNow(),
+            AssistantToolNames.IntegrationsList => IntegrationsListNow(),
+            AssistantToolNames.IntegrationQuery => await IntegrationQueryAsync(root, cancellationToken).ConfigureAwait(false),
+            AssistantToolNames.IntegrationInvoke => await IntegrationInvokeAsync(root, confirmed: true, cancellationToken).ConfigureAwait(false),
             AssistantToolNames.AutomationFeedback => AutomationFeedback(root),
             _ => AssistantToolResult.Fail(AssistantUserMessages.ToolUnavailable)
         };
@@ -1490,4 +1497,119 @@ public sealed class AssistantToolExecutor : IAiToolExecutor
                 AttentionCenter.Format(_base.Attention()),
                 activity: "Attention ✓",
                 activityDomain: AssistantActivityDomains.State);
+
+    private AssistantToolResult IntegrationsListNow()
+    {
+        if (_connectorHost is null)
+        {
+            return AssistantToolResult.Ok(
+                "No integration host.",
+                activity: "Integrations ✓",
+                activityDomain: AssistantActivityDomains.Integration);
+        }
+
+        return AssistantToolResult.Ok(
+            _connectorHost.DescribeForAi(),
+            activity: "Integrations ✓",
+            activityDomain: AssistantActivityDomains.Integration);
+    }
+
+    private Task<AssistantToolResult> IntegrationQueryAsync(JsonElement root, CancellationToken cancellationToken) =>
+        RunConnectorAsync(root, confirmed: false, readOnly: true, cancellationToken);
+
+    private Task<AssistantToolResult> IntegrationInvokeAsync(JsonElement root, bool confirmed, CancellationToken cancellationToken) =>
+        RunConnectorAsync(root, confirmed, readOnly: false, cancellationToken);
+
+    private async Task<AssistantToolResult> RunConnectorAsync(
+        JsonElement root,
+        bool confirmed,
+        bool readOnly,
+        CancellationToken cancellationToken)
+    {
+        if (_connectorHost is null)
+        {
+            return AssistantToolResult.Fail(
+                AssistantUserMessages.IntegrationFailed,
+                activityDomain: AssistantActivityDomains.Integration);
+        }
+
+        if (!AssistantToolArgumentValidator.TryGetString(root, "integration_id", required: true, out var id, out var error)
+            || !AssistantToolArgumentValidator.TryGetString(root, "capability", required: true, out var capability, out error))
+        {
+            return AssistantToolResult.Fail(error, activityDomain: AssistantActivityDomains.Integration);
+        }
+
+        var outcome = await _connectorHost.InvokeAsync(
+            new ConnectorInvocation
+            {
+                IntegrationId = id,
+                CapabilityId = capability,
+                ArgumentsJson = FilterConnectorArguments(root),
+                UserConfirmed = confirmed
+            },
+            DateTimeOffset.UtcNow,
+            cancellationToken).ConfigureAwait(false);
+
+        if (readOnly && outcome.Lane != IntegrationActionLane.Read && !outcome.Succeeded)
+        {
+            return AssistantToolResult.Fail(
+                outcome.NeedsConfirmation
+                    ? "That capability requires confirmation. Use integration_invoke."
+                    : (outcome.Message.Length == 0 ? AssistantUserMessages.IntegrationFailed : outcome.Message),
+                activityDomain: AssistantActivityDomains.Integration);
+        }
+
+        if (outcome.NeedsConfirmation)
+        {
+            return AssistantToolResult.Fail(
+                outcome.Message,
+                activityDomain: AssistantActivityDomains.Integration);
+        }
+
+        if (!outcome.Succeeded)
+        {
+            return AssistantToolResult.Fail(
+                outcome.Message,
+                activity: "Integrations ✗",
+                activityDomain: AssistantActivityDomains.Integration);
+        }
+
+        var freshness = outcome.Freshness == IntegrationFreshness.Stale
+            ? Environment.NewLine + "(cached — may be stale, not asserted as current)"
+            : string.Empty;
+        return AssistantToolResult.Ok(
+            outcome.Message + freshness,
+            activity: "Integrations ✓",
+            activityDomain: AssistantActivityDomains.Integration,
+            shouldLaunch: outcome.ShouldLaunch,
+            launchTarget: outcome.LaunchTarget,
+            launchIsExternalLink: outcome.LaunchIsExternalLink);
+    }
+
+    private static string FilterConnectorArguments(JsonElement root)
+    {
+        if (root.ValueKind != JsonValueKind.Object)
+        {
+            return "{}";
+        }
+
+        using var stream = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(stream))
+        {
+            writer.WriteStartObject();
+            foreach (var property in root.EnumerateObject())
+            {
+                if (property.NameEquals("integration_id") || property.NameEquals("capability"))
+                {
+                    continue;
+                }
+
+                property.WriteTo(writer);
+            }
+
+            writer.WriteEndObject();
+        }
+
+        return System.Text.Encoding.UTF8.GetString(stream.ToArray());
+    }
 }

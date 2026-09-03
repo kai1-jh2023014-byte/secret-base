@@ -1,5 +1,6 @@
 using SecretBase.Core.Apps;
 using SecretBase.Core.Calendar;
+using SecretBase.Core.Connectors;
 using SecretBase.Core.Creative;
 using SecretBase.Core.Integration;
 using SecretBase.Core.Music;
@@ -25,6 +26,7 @@ public sealed class AssistantContextService : IAssistantContextService
     private readonly Func<bool> _isOpenAiKeyConfigured;
     private readonly Func<bool>? _isGeminiKeyConfigured;
     private readonly IIntegrationMemory? _integrations;
+    private readonly IntegrationHost? _connectorHost;
 
     public AssistantContextService(
         CalendarCommandService? calendar = null,
@@ -35,7 +37,8 @@ public sealed class AssistantContextService : IAssistantContextService
         Func<AssistantSettings>? settings = null,
         Func<bool>? isOpenAiKeyConfigured = null,
         Func<bool>? isGeminiKeyConfigured = null,
-        IIntegrationMemory? integrations = null)
+        IIntegrationMemory? integrations = null,
+        IntegrationHost? connectorHost = null)
     {
         _calendar = calendar;
         _creative = creative;
@@ -46,6 +49,7 @@ public sealed class AssistantContextService : IAssistantContextService
         _isOpenAiKeyConfigured = isOpenAiKeyConfigured ?? (() => false);
         _isGeminiKeyConfigured = isGeminiKeyConfigured;
         _integrations = integrations;
+        _connectorHost = connectorHost;
     }
 
     public Task<AssistantContextSnapshot> GetSnapshotAsync(CancellationToken cancellationToken = default) =>
@@ -287,6 +291,17 @@ public sealed class AssistantContextService : IAssistantContextService
             {
                 labels.Add(entry.ToContextLabel());
                 seen.Add(entry.Id);
+            }
+        }
+
+        if (_connectorHost is not null)
+        {
+            foreach (var fact in _connectorHost.ContextFacts())
+            {
+                if (seen.Add(fact))
+                {
+                    labels.Add(fact);
+                }
             }
         }
 
