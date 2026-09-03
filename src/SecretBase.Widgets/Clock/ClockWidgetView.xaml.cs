@@ -1,5 +1,7 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Shapes;
 using SecretBase.Core.Themes;
 using SecretBase.Core.Time;
 using SecretBase.Core.Widgets.Clock;
@@ -7,14 +9,14 @@ using SecretBase.Widgets.Theming;
 
 namespace SecretBase.Widgets.Clock;
 
-/// <summary>
-/// Reference widget view: local-only clock. No network/file/process access.
-/// </summary>
+/// <summary>Atelier Clock — editorial digital / analog / focus / minimal styles.</summary>
 public sealed partial class ClockWidgetView : UserControl, IDisposable
 {
     private readonly DispatcherTimer _timer;
     private ITimeProvider _timeProvider = new SystemTimeProvider();
     private ClockWidgetConfiguration _configuration = ClockWidgetConfiguration.CreateDefault();
+    private Action<ClockWidgetConfiguration>? _onConfigurationChanged;
+    private ThemeDefinition? _theme;
     private bool _disposed;
 
     public ClockWidgetView()
@@ -26,23 +28,34 @@ public sealed partial class ClockWidgetView : UserControl, IDisposable
         Unloaded += OnUnloaded;
     }
 
-    public void Initialize(ClockWidgetConfiguration configuration, ITimeProvider? timeProvider = null)
+    public void Initialize(
+        ClockWidgetConfiguration configuration,
+        ITimeProvider? timeProvider = null,
+        Action<ClockWidgetConfiguration>? onConfigurationChanged = null)
     {
         _configuration = configuration;
         _timeProvider = timeProvider ?? new SystemTimeProvider();
-        // v0.1 product requirement: fixed 24-hour display.
-        _configuration.Use24HourFormat = true;
+        _onConfigurationChanged = onConfigurationChanged;
         RefreshDisplay();
     }
 
     public void ApplyTheme(ThemeDefinition theme)
     {
-        RootBorder.Background = ThemePainter.Brush(theme.WidgetBackground, ThemePainter.EffectiveWidgetOpacity(theme));
-        RootBorder.CornerRadius = new CornerRadius(theme.CornerRadius);
+        _theme = theme;
+        WidgetSurfaceStyle.ApplyLayeredChrome(OuterShell, RootBorder, theme);
         TimeText.Foreground = ThemePainter.Brush(theme.WidgetForeground);
         DateText.Foreground = ThemePainter.Brush(theme.ForegroundMuted);
-        TimeText.FontFamily = new Microsoft.UI.Xaml.Media.FontFamily(theme.FontFamily);
-        DateText.FontFamily = new Microsoft.UI.Xaml.Media.FontFamily(theme.FontFamily);
+        TimeText.FontFamily = new FontFamily(theme.FontFamily);
+        DateText.FontFamily = new FontFamily(theme.FontFamily);
+        AccentHairline.Background = ThemePainter.Brush(theme.Accent, 0.9);
+        AnalogRingOuter.Stroke = ThemePainter.Brush(theme.Border, 0.35);
+        AnalogFace.Stroke = ThemePainter.Brush(theme.Border, 0.7);
+        HourHand.Stroke = ThemePainter.Brush(theme.WidgetForeground);
+        MinuteHand.Stroke = ThemePainter.Brush(theme.WidgetForeground);
+        SecondHand.Stroke = ThemePainter.Brush(theme.Accent, 0.95);
+        AnalogCenter.Fill = ThemePainter.Brush(theme.Accent);
+        WidgetSurfaceStyle.ApplyGhostButton(SettingsButton, theme);
+        RefreshDisplay();
     }
 
     private void OnLoaded(object sender, RoutedEventArgs e)
@@ -53,6 +66,7 @@ public sealed partial class ClockWidgetView : UserControl, IDisposable
         }
 
         RefreshDisplay();
+        WidgetSurfaceStyle.FadeOpacity(this, 1, 220);
         if (!_timer.IsEnabled)
         {
             _timer.Start();
@@ -65,10 +79,132 @@ public sealed partial class ClockWidgetView : UserControl, IDisposable
 
     private void RefreshDisplay()
     {
+        var now = _timeProvider.GetLocalNow();
+        var scale = Math.Clamp(_configuration.SizeScale, 0.75, 1.5);
+        var style = _configuration.DisplayStyle ?? ClockWidgetConfiguration.StyleDigital;
+        var isAnalog = string.Equals(style, ClockWidgetConfiguration.StyleAnalog, StringComparison.Ordinal);
+        DigitalPanel.Visibility = isAnalog ? Visibility.Collapsed : Visibility.Visible;
+        AnalogPanel.Visibility = isAnalog ? Visibility.Visible : Visibility.Collapsed;
+        AccentHairline.Visibility = style is ClockWidgetConfiguration.StyleMinimal
+            ? Visibility.Collapsed
+            : Visibility.Visible;
+
+        if (isAnalog)
+        {
+            UpdateAnalogHands(now);
+            return;
+        }
+
         var (time, date) = ClockDisplayFormatter.Format(_timeProvider, _configuration);
         TimeText.Text = time;
         DateText.Text = date;
         DateText.Visibility = string.IsNullOrEmpty(date) ? Visibility.Collapsed : Visibility.Visible;
+
+        TimeText.FontSize = style switch
+        {
+            ClockWidgetConfiguration.StyleMinimal => 56 * scale,
+            ClockWidgetConfiguration.StyleFocus => 38 * scale,
+            _ => 44 * scale
+        };
+        TimeText.FontWeight = style == ClockWidgetConfiguration.StyleMinimal
+            ? Microsoft.UI.Text.FontWeights.Light
+            : Microsoft.UI.Text.FontWeights.SemiLight;
+        TimeText.CharacterSpacing = style == ClockWidgetConfiguration.StyleMinimal ? 120 : 80;
+        TimeText.HorizontalAlignment = style == ClockWidgetConfiguration.StyleMinimal
+            ? HorizontalAlignment.Center
+            : HorizontalAlignment.Left;
+        DateText.HorizontalAlignment = TimeText.HorizontalAlignment;
+        DateText.FontSize = style switch
+        {
+            ClockWidgetConfiguration.StyleMinimal => 12 * scale,
+            ClockWidgetConfiguration.StyleFocus => 14 * scale,
+            _ => 13 * scale
+        };
+        DateText.Opacity = style == ClockWidgetConfiguration.StyleMinimal ? 0.7 : 0.92;
+    }
+
+    private void UpdateAnalogHands(DateTimeOffset now)
+    {
+        var hour = now.Hour % 12 + now.Minute / 60.0;
+        var minute = now.Minute + now.Second / 60.0;
+        var second = now.Second + now.Millisecond / 1000.0;
+        SetHand(HourHand, hour * 30, 26);
+        SetHand(MinuteHand, minute * 6, 38);
+        SetHand(SecondHand, second * 6, 42);
+        SecondHand.Visibility = _configuration.ShowSeconds ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private static void SetHand(Line hand, double angleDegrees, double length)
+    {
+        var radians = angleDegrees * Math.PI / 180.0;
+        hand.X2 = 66 + Math.Sin(radians) * length;
+        hand.Y2 = 66 - Math.Cos(radians) * length;
+    }
+
+    private async void SettingsButton_Click(object sender, RoutedEventArgs e)
+    {
+        var styleBox = new ComboBox
+        {
+            Header = "Style",
+            ItemsSource = new[] { "Digital", "Minimal", "Analog", "Focus" },
+            HorizontalAlignment = HorizontalAlignment.Stretch
+        };
+        styleBox.SelectedItem = _configuration.DisplayStyle switch
+        {
+            ClockWidgetConfiguration.StyleMinimal => "Minimal",
+            ClockWidgetConfiguration.StyleAnalog => "Analog",
+            ClockWidgetConfiguration.StyleFocus => "Focus",
+            _ => "Digital"
+        };
+
+        var format24 = new CheckBox { Content = "24-hour format", IsChecked = _configuration.Use24HourFormat };
+        var showSeconds = new CheckBox { Content = "Show seconds", IsChecked = _configuration.ShowSeconds };
+        var showDate = new CheckBox { Content = "Show date", IsChecked = _configuration.ShowDate };
+        var sizeBox = new Slider
+        {
+            Header = "Size",
+            Minimum = 0.75,
+            Maximum = 1.5,
+            StepFrequency = 0.05,
+            Value = _configuration.SizeScale
+        };
+
+        var panel = new StackPanel { Spacing = 10 };
+        panel.Children.Add(styleBox);
+        panel.Children.Add(format24);
+        panel.Children.Add(showSeconds);
+        panel.Children.Add(showDate);
+        panel.Children.Add(sizeBox);
+
+        var dialog = new ContentDialog
+        {
+            Title = "Clock",
+            Content = panel,
+            PrimaryButtonText = "Apply",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = XamlRoot
+        };
+
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary)
+        {
+            return;
+        }
+
+        _configuration.DisplayStyle = (styleBox.SelectedItem as string) switch
+        {
+            "Minimal" => ClockWidgetConfiguration.StyleMinimal,
+            "Analog" => ClockWidgetConfiguration.StyleAnalog,
+            "Focus" => ClockWidgetConfiguration.StyleFocus,
+            _ => ClockWidgetConfiguration.StyleDigital
+        };
+        _configuration.Use24HourFormat = format24.IsChecked == true;
+        _configuration.ShowSeconds = showSeconds.IsChecked == true;
+        _configuration.ShowDate = showDate.IsChecked == true;
+        _configuration.SizeScale = sizeBox.Value;
+        _onConfigurationChanged?.Invoke(_configuration);
+        WidgetSurfaceStyle.PulseScale(RootBorder);
+        RefreshDisplay();
     }
 
     private void StopTimer()

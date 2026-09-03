@@ -5,6 +5,7 @@ using SecretBase.Core.Calendar;
 using SecretBase.Core.Creative;
 using SecretBase.Core.Integration;
 using SecretBase.Core.Music;
+using SecretBase.Core.Workspace;
 
 namespace SecretBase.Core.Assistant;
 
@@ -22,6 +23,8 @@ public sealed class AssistantToolExecutor : IAiToolExecutor
     private readonly AppCommandService? _apps;
     private readonly MusicCommandService? _music;
     private readonly IAssistantContextService? _context;
+    private readonly WorkspaceCommandService? _workspace;
+    private readonly IIntegrationMemory? _integrations;
 
     public AssistantToolExecutor(
         IAiToolRegistry registry,
@@ -31,7 +34,9 @@ public sealed class AssistantToolExecutor : IAiToolExecutor
         IntegrationCommandService? integration = null,
         AppCommandService? apps = null,
         MusicCommandService? music = null,
-        IAssistantContextService? context = null)
+        IAssistantContextService? context = null,
+        WorkspaceCommandService? workspace = null,
+        IIntegrationMemory? integrations = null)
     {
         _registry = registry ?? throw new ArgumentNullException(nameof(registry));
         _calendar = calendar;
@@ -41,6 +46,8 @@ public sealed class AssistantToolExecutor : IAiToolExecutor
         _apps = apps;
         _music = music;
         _context = context;
+        _workspace = workspace;
+        _integrations = integrations;
     }
 
     public async Task<AssistantToolResult> ExecuteAsync(
@@ -69,6 +76,9 @@ public sealed class AssistantToolExecutor : IAiToolExecutor
             AssistantToolNames.AssistantGetContext => await GetContextAsync(cancellationToken).ConfigureAwait(false),
             AssistantToolNames.CalendarGetToday => await CalendarTodayAsync(cancellationToken).ConfigureAwait(false),
             AssistantToolNames.CalendarGetUpcoming => await CalendarUpcomingAsync(root, cancellationToken).ConfigureAwait(false),
+            AssistantToolNames.CalendarAddEvent => await CalendarAddAsync(root, cancellationToken).ConfigureAwait(false),
+            AssistantToolNames.CalendarRememberUsual => await CalendarRememberUsualAsync(root, cancellationToken).ConfigureAwait(false),
+            AssistantToolNames.CalendarApplyUsual => await CalendarApplyUsualAsync(cancellationToken).ConfigureAwait(false),
             AssistantToolNames.CreativeListProjects => CreativeList(),
             AssistantToolNames.CreativeGetProject => await CreativeGetAsync(root, cancellationToken).ConfigureAwait(false),
             AssistantToolNames.CreativeOpenProject => CreativeOpen(root),
@@ -82,6 +92,9 @@ public sealed class AssistantToolExecutor : IAiToolExecutor
             AssistantToolNames.ProjectRecommend => await ProjectRecommendAsync(cancellationToken).ConfigureAwait(false),
             AssistantToolNames.ScheduleRecommend => await ScheduleRecommendAsync(cancellationToken).ConfigureAwait(false),
             AssistantToolNames.MusicRecommend => await MusicRecommendAsync(root, cancellationToken).ConfigureAwait(false),
+            AssistantToolNames.WorkspaceOpenNamed => WorkspaceOpen(root),
+            AssistantToolNames.WorkspaceRemove => WorkspaceRemove(root),
+            AssistantToolNames.FilesDelete => WorkspaceRemove(root),
             _ => AssistantToolResult.Fail(AssistantUserMessages.ToolUnavailable)
         };
     }
@@ -164,6 +177,127 @@ public sealed class AssistantToolExecutor : IAiToolExecutor
 
         return AssistantToolResult.Ok(
             FormatEvents(result.Events, $"next {days} day(s)"),
+            activity: "Calendar ✓",
+            activityDomain: AssistantActivityDomains.Calendar);
+    }
+
+    private async Task<AssistantToolResult> CalendarAddAsync(JsonElement root, CancellationToken cancellationToken)
+    {
+        if (_calendar is null)
+        {
+            return AssistantToolResult.Fail(
+                AssistantUserMessages.ToolUnavailable,
+                activityDomain: AssistantActivityDomains.Calendar);
+        }
+
+        if (!AssistantToolArgumentValidator.TryGetString(root, "title", required: true, out var title, out var error))
+        {
+            return AssistantToolResult.Fail(error, activityDomain: AssistantActivityDomains.Calendar);
+        }
+
+        if (!AssistantToolArgumentValidator.TryGetInt(root, "hour", -1, -1, 23, out var hour, out error))
+        {
+            return AssistantToolResult.Fail(error, activityDomain: AssistantActivityDomains.Calendar);
+        }
+
+        if (!AssistantToolArgumentValidator.TryGetInt(root, "minute", 0, 0, 59, out var minute, out error))
+        {
+            return AssistantToolResult.Fail(error, activityDomain: AssistantActivityDomains.Calendar);
+        }
+
+        if (!AssistantToolArgumentValidator.TryGetInt(root, "duration_minutes", 60, 15, 480, out var duration, out error))
+        {
+            return AssistantToolResult.Fail(error, activityDomain: AssistantActivityDomains.Calendar);
+        }
+
+        var result = await _calendar
+            .ExecuteAsync(CalendarCommand.AddEvent(title, hour, minute, duration), cancellationToken)
+            .ConfigureAwait(false);
+        if (!result.Succeeded)
+        {
+            return AssistantToolResult.Fail(
+                result.ErrorMessage ?? AssistantUserMessages.CalendarFailed,
+                activityDomain: AssistantActivityDomains.Calendar);
+        }
+
+        var created = result.Events.FirstOrDefault();
+        var when = created is null
+            ? title
+            : $"{created.Start:HH:mm} {created.Title}";
+        return AssistantToolResult.Ok(
+            $"Added local event: {when}. It appears in the Calendar widget (not pushed to Google).",
+            activity: "Calendar ✓",
+            activityDomain: AssistantActivityDomains.Calendar);
+    }
+
+    private async Task<AssistantToolResult> CalendarRememberUsualAsync(JsonElement root, CancellationToken cancellationToken)
+    {
+        if (_calendar is null)
+        {
+            return AssistantToolResult.Fail(
+                AssistantUserMessages.ToolUnavailable,
+                activityDomain: AssistantActivityDomains.Calendar);
+        }
+
+        if (!AssistantToolArgumentValidator.TryGetString(root, "title", required: true, out var title, out var error))
+        {
+            return AssistantToolResult.Fail(error, activityDomain: AssistantActivityDomains.Calendar);
+        }
+
+        if (!AssistantToolArgumentValidator.TryGetInt(root, "hour", 9, 0, 23, out var hour, out error))
+        {
+            return AssistantToolResult.Fail(error, activityDomain: AssistantActivityDomains.Calendar);
+        }
+
+        if (!AssistantToolArgumentValidator.TryGetInt(root, "minute", 0, 0, 59, out var minute, out error))
+        {
+            return AssistantToolResult.Fail(error, activityDomain: AssistantActivityDomains.Calendar);
+        }
+
+        if (!AssistantToolArgumentValidator.TryGetInt(root, "duration_minutes", 60, 15, 480, out var duration, out error))
+        {
+            return AssistantToolResult.Fail(error, activityDomain: AssistantActivityDomains.Calendar);
+        }
+
+        var result = await _calendar
+            .ExecuteAsync(CalendarCommand.RememberUsual(title, hour, minute, duration), cancellationToken)
+            .ConfigureAwait(false);
+        if (!result.Succeeded)
+        {
+            return AssistantToolResult.Fail(
+                result.ErrorMessage ?? AssistantUserMessages.CalendarFailed,
+                activityDomain: AssistantActivityDomains.Calendar);
+        }
+
+        var slot = result.Usual;
+        var label = slot is null ? title : $"{slot.Title} at {slot.Hour:00}:{slot.Minute:00}";
+        return AssistantToolResult.Ok(
+            $"Remembered usual schedule: {label}. Say the usual schedule to apply it to today.",
+            activity: "Calendar ✓",
+            activityDomain: AssistantActivityDomains.Calendar);
+    }
+
+    private async Task<AssistantToolResult> CalendarApplyUsualAsync(CancellationToken cancellationToken)
+    {
+        if (_calendar is null)
+        {
+            return AssistantToolResult.Fail(
+                AssistantUserMessages.ToolUnavailable,
+                activityDomain: AssistantActivityDomains.Calendar);
+        }
+
+        var result = await _calendar.ExecuteAsync(CalendarCommand.ApplyUsual(), cancellationToken)
+            .ConfigureAwait(false);
+        if (!result.Succeeded)
+        {
+            return AssistantToolResult.Fail(
+                result.ErrorMessage ?? AssistantUserMessages.CalendarFailed,
+                activityDomain: AssistantActivityDomains.Calendar);
+        }
+
+        return AssistantToolResult.Ok(
+            FormatEvents(result.Events, "usual schedule applied today")
+            + " Events are local Secret Base agenda items (Calendar widget), not Google writes.",
             activity: "Calendar ✓",
             activityDomain: AssistantActivityDomains.Calendar);
     }
@@ -354,8 +488,20 @@ public sealed class AssistantToolExecutor : IAiToolExecutor
                 activityDomain: AssistantActivityDomains.Integration);
         }
 
+        if (string.Equals(target, "classroom", StringComparison.OrdinalIgnoreCase))
+        {
+            _integrations?.RememberOpened(
+                IntegrationMemoryIds.Classroom,
+                "Google Classroom",
+                inAppExperience: false);
+        }
+
+        var inApp = string.Equals(target, "calendar", StringComparison.OrdinalIgnoreCase);
+        var note = inApp
+            ? " Prefer the Calendar widget when Google Calendar is connected; browser Open is optional."
+            : " Classroom has no API in Secret Base — the official site opens in the existing Web Widget.";
         return AssistantToolResult.Ok(
-            $"Open {target} at {result.LaunchTarget}.",
+            $"Open {target} at {result.LaunchTarget}.{note}",
             activity: "Integration ✓",
             activityDomain: AssistantActivityDomains.Integration,
             shouldLaunch: result.ShouldLaunch,
@@ -515,16 +661,44 @@ public sealed class AssistantToolExecutor : IAiToolExecutor
                 activityDomain: AssistantActivityDomains.Music);
         }
 
-        if (!AssistantToolArgumentValidator.TryGetString(root, "track_id", required: true, out var trackId, out var error))
+        AssistantToolArgumentValidator.TryGetString(root, "track_id", required: false, out var trackId, out var idError);
+        if (!string.IsNullOrWhiteSpace(idError) && root.TryGetProperty("track_id", out _))
         {
-            return AssistantToolResult.Fail(error, activityDomain: AssistantActivityDomains.Music);
+            return AssistantToolResult.Fail(idError, activityDomain: AssistantActivityDomains.Music);
+        }
+
+        AssistantToolArgumentValidator.TryGetString(root, "query", required: false, out var query, out var queryError);
+        if (!string.IsNullOrWhiteSpace(queryError) && root.TryGetProperty("query", out _))
+        {
+            return AssistantToolResult.Fail(queryError, activityDomain: AssistantActivityDomains.Music);
+        }
+
+        if (string.IsNullOrWhiteSpace(trackId) && !string.IsNullOrWhiteSpace(query))
+        {
+            var search = await _music.ExecuteAsync(MusicCommand.SearchTrack(query), cancellationToken)
+                .ConfigureAwait(false);
+            if (!search.Succeeded || search.Tracks.Count == 0)
+            {
+                return AssistantToolResult.Fail(
+                    search.ErrorMessage ?? "No matching track in the Secret Base music catalog.",
+                    activityDomain: AssistantActivityDomains.Music);
+            }
+
+            trackId = search.Tracks[0].Id;
+        }
+
+        if (string.IsNullOrWhiteSpace(trackId))
+        {
+            return AssistantToolResult.Fail(
+                "Provide track_id or query.",
+                activityDomain: AssistantActivityDomains.Music);
         }
 
         var caps = _music.MusicService.AggregateCapabilities();
         if (!caps.HasFlag(MusicProviderCapabilities.Playback))
         {
             return AssistantToolResult.Fail(
-                "Music playback is not available. The demo catalog may search, but no playback-capable provider is configured. Secret Base does not invent Spotify playback.",
+                "Music playback is not available. Connect Spotify in the Music widget to play inside Secret Base. Secret Base does not invent Spotify playback.",
                 activityDomain: AssistantActivityDomains.Music);
         }
 
@@ -538,10 +712,79 @@ public sealed class AssistantToolExecutor : IAiToolExecutor
         }
 
         var title = result.CurrentTrack?.Title ?? trackId;
+        var spotify = _music.MusicService.Providers.Any(p =>
+            string.Equals(p.ProviderId, "spotify", StringComparison.Ordinal)
+            && p.AuthStatus == MusicAuthStatus.Connected);
+        var where = spotify
+            ? "Spotify via the Music widget"
+            : "the Secret Base music catalog (demo/local providers only)";
         return AssistantToolResult.Ok(
-            $"Playing {title} in the Secret Base music catalog (demo/local providers only).",
+            $"Playing {title} in {where}.",
             activity: "Music ✓",
             activityDomain: AssistantActivityDomains.Music);
+    }
+
+    private AssistantToolResult WorkspaceOpen(JsonElement root)
+    {
+        if (_workspace is null)
+        {
+            return AssistantToolResult.Fail(
+                AssistantUserMessages.ToolUnavailable,
+                activityDomain: AssistantActivityDomains.Workspace);
+        }
+
+        if (!AssistantToolArgumentValidator.TryGetString(root, "name", required: true, out var name, out var error))
+        {
+            return AssistantToolResult.Fail(error, activityDomain: AssistantActivityDomains.Workspace);
+        }
+
+        var result = _workspace.Execute(WorkspaceCommand.OpenNamed(name));
+        if (!result.Succeeded)
+        {
+            return AssistantToolResult.Fail(
+                result.ErrorMessage ?? AssistantUserMessages.ToolUnavailable,
+                activityDomain: AssistantActivityDomains.Workspace);
+        }
+
+        return AssistantToolResult.Ok(
+            result.Message ?? $"Opened {name}.",
+            activity: "Workspace ✓",
+            activityDomain: AssistantActivityDomains.Workspace,
+            shouldLaunch: result.ShouldLaunch,
+            launchTarget: result.LaunchTarget,
+            launchIsExternalLink: result.LaunchIsExternalLink);
+    }
+
+    private AssistantToolResult WorkspaceRemove(JsonElement root)
+    {
+        if (_workspace is null)
+        {
+            return AssistantToolResult.Fail(
+                AssistantUserMessages.DiskDeleteRefused,
+                activityDomain: AssistantActivityDomains.Workspace);
+        }
+
+        if (!AssistantToolArgumentValidator.TryGetString(root, "name", required: true, out var name, out var error))
+        {
+            return AssistantToolResult.Fail(
+                string.IsNullOrWhiteSpace(error) || error == AssistantUserMessages.ToolUnavailable
+                    ? AssistantUserMessages.DiskDeleteRefused
+                    : error,
+                activityDomain: AssistantActivityDomains.Workspace);
+        }
+
+        var result = _workspace.Execute(WorkspaceCommand.RemoveNamed(name));
+        if (!result.Succeeded)
+        {
+            return AssistantToolResult.Fail(
+                result.ErrorMessage ?? AssistantUserMessages.DiskDeleteRefused,
+                activityDomain: AssistantActivityDomains.Workspace);
+        }
+
+        return AssistantToolResult.Ok(
+            result.Message ?? $"Removed {name} from Secret Base (disk files were not deleted).",
+            activity: "Workspace ✓",
+            activityDomain: AssistantActivityDomains.Workspace);
     }
 
     private async Task<AssistantToolResult> ProjectRecommendAsync(CancellationToken cancellationToken)

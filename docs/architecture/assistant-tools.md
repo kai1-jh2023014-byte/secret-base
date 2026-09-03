@@ -23,13 +23,13 @@ RequiresConfirmation
   → Command → Service → Host launch (if ShouldLaunch / ShouldOpenCursorAtFolder)
 ```
 
-## Tool catalog (v0.5)
+## Tool catalog (v0.6)
 
 ### ReadOnly
 
 | Tool | Routes to |
 |------|-----------|
-| `assistant_get_context` | `IAssistantContextService.GetSnapshotAsync` |
+| `assistant_get_context` | `IAssistantContextService.GetSnapshotAsync` (includes remembered integrations) |
 | `calendar_get_today` | `CalendarCommand.GetTodayEvents` |
 | `calendar_get_upcoming` | `CalendarCommand.GetUpcoming` |
 | `creative_list_projects` | `CreativeCommand.SearchProjects` |
@@ -50,11 +50,16 @@ RequiresConfirmation
 
 | Tool | Routes to |
 |------|-----------|
+| `calendar_add_event` | Local `CalendarCommand.AddEvent` (Calendar widget; not Google write) |
+| `calendar_remember_usual` | Remember a local usual slot |
+| `calendar_apply_usual` | Apply remembered usual schedule onto today |
 | `creative_open_project` | `CreativeCommand.OpenCreativeProject` |
 | `cursor_open_project` | `AiCommand.OpenProjectInCursor` → Host `ICursorLaunchService` |
 | `integration_open` | `IntegrationCommandService` (`classroom` / `calendar`) |
 | `apps_open` | `AppCommand.OpenApp` → Host |
-| `music_play` | `MusicCommand.PlayTrackById` (if Playback capability) |
+| `music_play` | `track_id` or `query` → Music widget (Spotify if connected) |
+| `workspace_open_named` | Open Block item / My App / Creative Project by **name** |
+| `workspace_remove` / `files_delete` | Return Block item to Desktop or unregister. **Never OS `File.Delete`.** |
 
 ## Argument validation
 
@@ -64,7 +69,13 @@ RequiresConfirmation
 
 ## Music honesty
 
-If only the demo catalog supports search/playback, tool results say so. Spotify/YouTube API playback is never invented.
+If only the demo catalog supports search/playback, tool results say so. Spotify/YouTube API playback is never invented. After Spotify is connected, play stays in the Music widget.
+
+Connected integrations (Spotify, Google Calendar) are remembered in `settings/integrations.json` (flags only — tokens stay in the OS secret store). Classroom is remembered as “opened / web widget” because this repo has no Classroom API.
+
+## Disk safety
+
+`files_delete` and `workspace_remove` never call OS `File.Delete` on user files. They return a hidden Block item to Desktop or unregister a Secret Base item. Unregistered disk paths are refused.
 
 ## Multi-tool / multi-action
 

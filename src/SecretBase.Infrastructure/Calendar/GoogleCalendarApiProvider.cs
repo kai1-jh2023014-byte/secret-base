@@ -16,7 +16,7 @@ namespace SecretBase.Infrastructure.Calendar;
 public sealed class GoogleCalendarApiProvider : ICalendarProvider
 {
     public const string ReadonlyScope = "https://www.googleapis.com/auth/calendar.readonly";
-    public const string SecretKeyRefresh = "Calendar/Google/RefreshToken";
+    public const string SecretKeyRefresh = CalendarSecretKeys.GoogleRefreshToken;
 
     private readonly GoogleOAuthClientConfig? _client;
     private readonly ISecureSecretStore _secrets;

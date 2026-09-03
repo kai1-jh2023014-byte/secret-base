@@ -23,6 +23,8 @@ public sealed class AssistantContextService : IAssistantContextService
     private readonly ITimeProvider _time;
     private readonly Func<AssistantSettings> _settings;
     private readonly Func<bool> _isOpenAiKeyConfigured;
+    private readonly Func<bool>? _isGeminiKeyConfigured;
+    private readonly IIntegrationMemory? _integrations;
 
     public AssistantContextService(
         CalendarCommandService? calendar = null,
@@ -31,7 +33,9 @@ public sealed class AssistantContextService : IAssistantContextService
         MusicCommandService? music = null,
         ITimeProvider? time = null,
         Func<AssistantSettings>? settings = null,
-        Func<bool>? isOpenAiKeyConfigured = null)
+        Func<bool>? isOpenAiKeyConfigured = null,
+        Func<bool>? isGeminiKeyConfigured = null,
+        IIntegrationMemory? integrations = null)
     {
         _calendar = calendar;
         _creative = creative;
@@ -40,6 +44,8 @@ public sealed class AssistantContextService : IAssistantContextService
         _time = time ?? new SystemTimeProvider();
         _settings = settings ?? (() => new AssistantSettings());
         _isOpenAiKeyConfigured = isOpenAiKeyConfigured ?? (() => false);
+        _isGeminiKeyConfigured = isGeminiKeyConfigured;
+        _integrations = integrations;
     }
 
     public Task<AssistantContextSnapshot> GetSnapshotAsync(CancellationToken cancellationToken = default) =>
@@ -199,11 +205,7 @@ public sealed class AssistantContextService : IAssistantContextService
         }
 
         var integrations = scope.HasFlag(AssistantContextScope.Integrations)
-            ? IntegrationCatalog.Commands
-                .Select(c => c.Domain)
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .OrderBy(d => d, StringComparer.OrdinalIgnoreCase)
-                .ToArray()
+            ? BuildIntegrationLabels()
             : Array.Empty<string>();
         if (scope.HasFlag(AssistantContextScope.Integrations))
         {
@@ -275,6 +277,35 @@ public sealed class AssistantContextService : IAssistantContextService
         return Task.FromResult<AssistantProjectSummary?>(ToProjectSummary(result.Project));
     }
 
+    private string[] BuildIntegrationLabels()
+    {
+        var labels = new List<string>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (_integrations is not null)
+        {
+            foreach (var entry in _integrations.List())
+            {
+                labels.Add(entry.ToContextLabel());
+                seen.Add(entry.Id);
+            }
+        }
+
+        foreach (var domain in IntegrationCatalog.Commands
+                     .Select(c => c.Domain)
+                     .Distinct(StringComparer.OrdinalIgnoreCase)
+                     .OrderBy(d => d, StringComparer.OrdinalIgnoreCase))
+        {
+            if (seen.Contains(domain) || labels.Any(l => l.Contains(domain, StringComparison.OrdinalIgnoreCase)))
+            {
+                continue;
+            }
+
+            labels.Add(domain);
+        }
+
+        return labels.ToArray();
+    }
+
     public AssistantMusicState GetMusicState()
     {
         if (_music is null)
@@ -313,32 +344,52 @@ public sealed class AssistantContextService : IAssistantContextService
     public AssistantProviderStatusInfo GetProviderStatus()
     {
         var settings = AssistantSettingsMigrator.MigrateToCurrent(_settings());
-        var hasKey = _isOpenAiKeyConfigured();
-        var configured = string.Equals(settings.ProviderId, AssistantProviderIds.OpenAi, StringComparison.OrdinalIgnoreCase)
-                         && hasKey;
+        var providerId = string.IsNullOrWhiteSpace(settings.ProviderId)
+            ? AssistantProviderIds.OpenAi
+            : settings.ProviderId.Trim().ToLowerInvariant();
+        var hasOpenAiKey = _isOpenAiKeyConfigured();
+        var hasGeminiKey = _isGeminiKeyConfigured?.Invoke() ?? false;
 
-        var label = configured
-            ? "Connected"
-            : string.Equals(settings.ProviderId, AssistantProviderIds.OpenAi, StringComparison.OrdinalIgnoreCase)
-                ? "Not configured"
-                : "AI provider is unavailable.";
-
-        return new AssistantProviderStatusInfo
+        return providerId switch
         {
-            ProviderId = settings.ProviderId,
-            DisplayName = settings.ProviderId switch
+            AssistantProviderIds.Gemini => new AssistantProviderStatusInfo
             {
-                AssistantProviderIds.Gemini => "Gemini",
-                AssistantProviderIds.Local => "Local/Ollama",
-                _ => "OpenAI"
+                ProviderId = providerId,
+                DisplayName = "Gemini",
+                Model = settings.Model,
+                IsConfigured = hasGeminiKey,
+                IsAvailable = true,
+                StatusLabel = hasGeminiKey ? "Connected" : "Not configured",
+                FallbackNote = hasGeminiKey ? null : "Falls back to Local AI when Gemini is unavailable.",
+                MaxSteps = settings.MaxSteps,
+                RequireConfirmationForActions = settings.RequireConfirmationForActions,
+                HasApiKey = hasGeminiKey
             },
-            Model = settings.Model,
-            IsConfigured = configured,
-            IsAvailable = string.Equals(settings.ProviderId, AssistantProviderIds.OpenAi, StringComparison.OrdinalIgnoreCase),
-            StatusLabel = label,
-            MaxSteps = settings.MaxSteps,
-            RequireConfirmationForActions = settings.RequireConfirmationForActions,
-            HasApiKey = hasKey
+            AssistantProviderIds.Local => new AssistantProviderStatusInfo
+            {
+                ProviderId = providerId,
+                DisplayName = "Local AI",
+                Model = settings.LocalModel,
+                IsConfigured = true,
+                IsAvailable = true,
+                StatusLabel = "Local AI",
+                MaxSteps = settings.MaxSteps,
+                RequireConfirmationForActions = settings.RequireConfirmationForActions,
+                HasApiKey = false
+            },
+            _ => new AssistantProviderStatusInfo
+            {
+                ProviderId = AssistantProviderIds.OpenAi,
+                DisplayName = "OpenAI",
+                Model = settings.Model,
+                IsConfigured = hasOpenAiKey,
+                IsAvailable = true,
+                StatusLabel = hasOpenAiKey ? "Connected" : "Not configured",
+                FallbackNote = hasOpenAiKey ? null : "Falls back to Local AI when OpenAI is unavailable.",
+                MaxSteps = settings.MaxSteps,
+                RequireConfirmationForActions = settings.RequireConfirmationForActions,
+                HasApiKey = hasOpenAiKey
+            }
         };
     }
 

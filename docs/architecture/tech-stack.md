@@ -7,8 +7,10 @@
 | .NET | **10.0 (LTS)** SDK 10.0.302 | Active LTS until 2028-11-14. .NET 9 STS ends 2026-11; .NET 8 LTS also ends 2026-11. |
 | Windows App SDK | **2.3.1** (stable) | Latest stable WASDK/WinUI 3 line as of 2026-07-16. Highest priority for UI/platform compatibility. |
 | WinUI | 3 (via WASDK 2.3) | Official modern Windows UI framework |
+| Avalonia | **11.3.14** (`SecretBase.App.Mac`) | macOS workspace host; not a WinUI rewrite |
 | WebView2 | via WASDK dependency | Web Widget + Music browse host; no Electron |
 | TFM (App) | `net10.0-windows10.0.26100.0` | Matches current Windows SDK projections used by WASDK tooling |
+| TFM (App.Mac / Platform.Mac) | `net10.0` | Portable; no `net*-macos` Apple SDK required to compile |
 | Min OS | `10.0.17763.0` (declared) | WASDK support floor; development target is Windows 11 |
 | IDE | Rider 2026.1 + `dotnet` CLI | Visual Studio not required; WinUI `dotnet new` templates used |
 

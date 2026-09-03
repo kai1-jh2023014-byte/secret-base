@@ -17,6 +17,12 @@ public sealed class MusicTrack
     /// <summary>Optional https artwork URL from the provider. Never a file:// path.</summary>
     public string? ArtworkUrl { get; set; }
 
+    /// <summary>Playback progress in milliseconds when known.</summary>
+    public long? ProgressMilliseconds { get; set; }
+
+    /// <summary>Track duration in milliseconds when known.</summary>
+    public long? DurationMilliseconds { get; set; }
+
     /// <summary>Provider id that owns this track (e.g. demo-catalog).</summary>
     public string ProviderId { get; set; } = string.Empty;
 

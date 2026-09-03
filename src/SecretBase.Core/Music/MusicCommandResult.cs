@@ -15,18 +15,34 @@ public sealed class MusicCommandResult
 
     public bool IsPlaying { get; init; }
 
+    public long? ProgressMilliseconds { get; init; }
+
+    public long? DurationMilliseconds { get; init; }
+
+    public string? ProviderId { get; init; }
+
+    public MusicAuthStatus AuthStatus { get; init; } = MusicAuthStatus.NotConfigured;
+
     public static MusicCommandResult Ok(
         MusicCommandKind kind,
         IReadOnlyList<MusicTrack>? tracks = null,
         MusicTrack? current = null,
-        bool isPlaying = false) =>
+        bool isPlaying = false,
+        long? progressMs = null,
+        long? durationMs = null,
+        string? providerId = null,
+        MusicAuthStatus authStatus = MusicAuthStatus.NotConfigured) =>
         new()
         {
             Succeeded = true,
             Kind = kind,
             Tracks = tracks ?? Array.Empty<MusicTrack>(),
             CurrentTrack = current,
-            IsPlaying = isPlaying
+            IsPlaying = isPlaying,
+            ProgressMilliseconds = progressMs ?? current?.ProgressMilliseconds,
+            DurationMilliseconds = durationMs ?? current?.DurationMilliseconds,
+            ProviderId = providerId,
+            AuthStatus = authStatus
         };
 
     public static MusicCommandResult Fail(MusicCommandKind kind, string error) =>

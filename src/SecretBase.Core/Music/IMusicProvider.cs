@@ -36,4 +36,13 @@ public interface IMusicProvider
     Task NextAsync(CancellationToken cancellationToken = default);
 
     Task PreviousAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>OAuth / connect flow when <see cref="MusicProviderCapabilities.Authentication"/> is set.</summary>
+    Task ConnectAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Disconnect and revoke stored credentials for this provider.</summary>
+    Task DisconnectAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Refresh now-playing metadata from the provider when supported.</summary>
+    Task RefreshPlaybackStateAsync(CancellationToken cancellationToken = default);
 }

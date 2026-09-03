@@ -179,7 +179,9 @@ public sealed class JsonLayoutStore : ILayoutStore
                             Name = i.Name,
                             Type = i.Type,
                             Target = i.Target,
-                            Icon = i.Icon
+                            Icon = i.Icon,
+                            DesktopOriginPath = i.DesktopOriginPath,
+                            HiddenFromDesktop = i.HiddenFromDesktop
                         })
                         .ToList()
                 })

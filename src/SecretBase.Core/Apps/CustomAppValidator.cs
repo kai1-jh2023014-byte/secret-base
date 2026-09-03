@@ -67,7 +67,7 @@ public static class CustomAppValidator
                 return false;
             }
 
-            target = path.Replace('/', '\\');
+            target = HostPath.NormalizeSeparators(path);
         }
 
         string? root = null;

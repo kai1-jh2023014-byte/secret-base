@@ -1,21 +1,23 @@
 # Secret Base Architecture Overview
 
-Secret Base is an **overlay-style Personal Creative Desktop Environment** for Windows.
+Secret Base is an **overlay-style Personal Creative Desktop Environment**. The Windows host is a WinUI 3 overlay. The macOS host is a separate Avalonia workspace window that shares Core.
 
 Highest principle:
 
-> If Secret Base breaks, Windows itself must remain intact.
+> If Secret Base breaks, the OS shell (Explorer / Finder / Dock / Taskbar) must remain intact.
 
 ## Layers
 
 | Project | Responsibility |
 |---------|----------------|
-| `SecretBase.App` | WinUI shell, Desktop host UI, composition root |
-| `SecretBase.Core` | Domain models, Commands, validation. No Windows API calls |
+| `SecretBase.App` | WinUI shell, Desktop host UI, composition root (Windows) |
+| `SecretBase.App.Mac` | Avalonia workspace window, composition root (macOS) |
+| `SecretBase.Core` | Domain models, Commands, validation. No OS UI/API calls |
 | `SecretBase.Infrastructure` | Logging, AppData paths, JSON persistence |
 | `SecretBase.Platform.Abstractions` | OS-facing contracts |
 | `SecretBase.Platform.Windows` | Overlay HWND, Safe Exit, launch, Cursor discovery |
-| `SecretBase.Widgets` | Built-in widget views + theme painting |
+| `SecretBase.Platform.Mac` | LaunchAgent, Keychain, `/usr/bin/open`, Cursor.app |
+| `SecretBase.Widgets` | Built-in WinUI widget views + theme painting |
 
 ## Process model (v0.1 / v0.2)
 
@@ -74,3 +76,4 @@ Web Widget: WebView2 with **no Host Bridge**. Dangerous URL schemes rejected.
 - [Assistant Tools](assistant-tools.md)
 - [Integration Hub](integration-hub.md)
 - [Keyboard shortcuts](../guides/keyboard-shortcuts.md)
+- [macOS host](macos.md)

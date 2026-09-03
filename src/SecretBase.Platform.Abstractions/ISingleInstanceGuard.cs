@@ -2,7 +2,7 @@ namespace SecretBase.Platform.Abstractions;
 
 /// <summary>
 /// Ensures only one Secret Base process owns the desktop overlay at a time.
-/// Implementations are platform-specific (Windows mutex).
+/// Implementations are platform-specific (Windows mutex / macOS file lock).
 /// </summary>
 public interface ISingleInstanceGuard : IDisposable
 {

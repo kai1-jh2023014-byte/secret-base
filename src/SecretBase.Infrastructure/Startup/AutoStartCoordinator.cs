@@ -2,12 +2,12 @@ using SecretBase.Infrastructure.Logging;
 using SecretBase.Infrastructure.Persistence;
 using SecretBase.Platform.Abstractions;
 
-namespace SecretBase.App;
+namespace SecretBase.Infrastructure.Startup;
 
 /// <summary>
-/// Keeps JSON launch preference and the Windows Startup Apps registry entry aligned.
+/// Keeps JSON launch preference and the OS login auto-start registration aligned.
 /// </summary>
-internal static class AutoStartCoordinator
+public static class AutoStartCoordinator
 {
     public static void SynchronizeAtStartup(
         IAutoStartService autoStart,
@@ -21,7 +21,7 @@ internal static class AutoStartCoordinator
 
         var settings = settingsStore.LoadOrCreate();
         var status = autoStart.GetStatus();
-        var registryOn = status.IsRegistered && status.PointsToCurrentExecutable;
+        var registrationOn = status.IsRegistered && status.PointsToCurrentExecutable;
 
         if (settings.LaunchAtWindowsLogin)
         {
@@ -40,22 +40,22 @@ internal static class AutoStartCoordinator
             {
                 settings.LaunchAtWindowsLogin = false;
                 settingsStore.Save(settings);
-                logger?.Info("startup", "Auto-start preference cleared (disabled in Windows Startup apps).");
+                logger?.Info("startup", "Auto-start preference cleared (disabled in OS login items).");
             }
         }
         else if (!settings.LaunchAtWindowsLogin)
         {
-            if (registryOn)
+            if (registrationOn)
             {
                 settings.LaunchAtWindowsLogin = true;
                 settingsStore.Save(settings);
-                logger?.Info("startup", "Auto-start enabled from Windows Startup apps.");
+                logger?.Info("startup", "Auto-start enabled from OS login items.");
             }
             else if (status.IsRegistered)
             {
                 if (autoStart.TryDisable(out var disableError))
                 {
-                    logger?.Info("startup", "Removed stale Windows auto-start registration.");
+                    logger?.Info("startup", "Removed stale auto-start registration.");
                 }
                 else
                 {

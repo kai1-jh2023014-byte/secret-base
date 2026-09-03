@@ -5,27 +5,140 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-    mc:Ignorable="d">
+    mc:Ignorable="d"
+    Opacity="0">
 
+    <!-- Atelier Clock — editorial time surface. -->
     <Border
-        x:Name="RootBorder"
-        Padding="20,16"
-        Background="#CC243447"
-        CornerRadius="16">
-        <StackPanel VerticalAlignment="Center" Spacing="4">
-            <TextBlock
-                x:Name="TimeText"
-                Text="00:00:00"
-                FontSize="40"
-                FontWeight="SemiBold"
-                Foreground="#FFF4F0E6"
-                HorizontalAlignment="Center" />
-            <TextBlock
-                x:Name="DateText"
-                Text="2026 / 01 / 01"
-                FontSize="16"
-                Foreground="#FF9AA7B2"
-                HorizontalAlignment="Center" />
-        </StackPanel>
+        x:Name="OuterShell"
+        Background="#20151A24"
+        CornerRadius="20"
+        Padding="2"
+        BorderThickness="1"
+        BorderBrush="#28FFFFFF">
+        <Border
+            x:Name="RootBorder"
+            Padding="22,18"
+            Background="#D9181E28"
+            CornerRadius="18"
+            BorderThickness="1"
+            BorderBrush="#3DFFFFFF">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+
+                <Grid Grid.Row="0">
+                    <Border
+                        x:Name="AccentHairline"
+                        Width="28"
+                        Height="2"
+                        HorizontalAlignment="Left"
+                        VerticalAlignment="Center"
+                        CornerRadius="1"
+                        Background="#FF7A9E86"
+                        Opacity="0.85" />
+                    <Button
+                        x:Name="SettingsButton"
+                        Content="···"
+                        HorizontalAlignment="Right"
+                        VerticalAlignment="Top"
+                        MinWidth="32"
+                        MinHeight="26"
+                        Padding="6,2"
+                        Opacity="0.55"
+                        Click="SettingsButton_Click"
+                        ToolTipService.ToolTip="Clock style and format" />
+                </Grid>
+
+                <Grid x:Name="DigitalPanel" Grid.Row="1" VerticalAlignment="Center">
+                    <StackPanel VerticalAlignment="Center" Spacing="6">
+                        <TextBlock
+                            x:Name="TimeText"
+                            Text="00:00"
+                            FontSize="44"
+                            FontWeight="SemiLight"
+                            CharacterSpacing="80"
+                            Foreground="#FFF3EFE6"
+                            HorizontalAlignment="Left"
+                            TextAlignment="Left" />
+                        <TextBlock
+                            x:Name="DateText"
+                            Text="Wednesday&#x0a;September 2"
+                            FontSize="13"
+                            FontWeight="Normal"
+                            CharacterSpacing="30"
+                            LineHeight="20"
+                            Foreground="#FF8B93A0"
+                            HorizontalAlignment="Left"
+                            TextAlignment="Left"
+                            TextWrapping="WrapWholeWords" />
+                    </StackPanel>
+                </Grid>
+
+                <Canvas
+                    x:Name="AnalogPanel"
+                    Grid.Row="1"
+                    Width="132"
+                    Height="132"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    Visibility="Collapsed">
+                    <Ellipse
+                        x:Name="AnalogRingOuter"
+                        Width="132"
+                        Height="132"
+                        Stroke="#28FFFFFF"
+                        StrokeThickness="1" />
+                    <Ellipse
+                        x:Name="AnalogFace"
+                        Width="118"
+                        Height="118"
+                        Canvas.Left="7"
+                        Canvas.Top="7"
+                        Stroke="#55FFFFFF"
+                        StrokeThickness="1.5" />
+                    <Line
+                        x:Name="HourHand"
+                        X1="66"
+                        Y1="66"
+                        X2="66"
+                        Y2="40"
+                        StrokeThickness="3.5"
+                        Stroke="#FFF3EFE6"
+                        StrokeStartLineCap="Round"
+                        StrokeEndLineCap="Round" />
+                    <Line
+                        x:Name="MinuteHand"
+                        X1="66"
+                        Y1="66"
+                        X2="66"
+                        Y2="28"
+                        StrokeThickness="2"
+                        Stroke="#FFF3EFE6"
+                        StrokeStartLineCap="Round"
+                        StrokeEndLineCap="Round" />
+                    <Line
+                        x:Name="SecondHand"
+                        X1="66"
+                        Y1="66"
+                        X2="66"
+                        Y2="24"
+                        StrokeThickness="1"
+                        Stroke="#FF7A9E86"
+                        StrokeStartLineCap="Round"
+                        StrokeEndLineCap="Round"
+                        Opacity="0.9" />
+                    <Ellipse
+                        x:Name="AnalogCenter"
+                        Width="8"
+                        Height="8"
+                        Fill="#FF7A9E86"
+                        Canvas.Left="62"
+                        Canvas.Top="62" />
+                </Canvas>
+            </Grid>
+        </Border>
     </Border>
 </UserControl>

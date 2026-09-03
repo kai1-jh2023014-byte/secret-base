@@ -81,20 +81,24 @@ public sealed partial class BlockFrame : UserControl
 
     private void ApplyTheme(ThemeDefinition theme)
     {
-        var radius = Math.Max(10, theme.CornerRadius);
+        var radius = Math.Max(12, theme.CornerRadius);
         DragBar.CornerRadius = new CornerRadius(radius, radius, 0, 0);
         Surface.CornerRadius = new CornerRadius(0, 0, radius, radius);
         Surface.Background = ThemePainter.Brush(theme.WidgetBackground, ThemePainter.EffectiveWidgetOpacity(theme));
+        Surface.BorderBrush = ThemePainter.Brush(theme.Border, 0.4);
+        Surface.BorderThickness = new Thickness(1, 0, 1, 1);
         NameText.Text = _block.Name;
         NameText.Foreground = ThemePainter.Brush(theme.WidgetForeground);
         NameText.FontFamily = new FontFamily(theme.FontFamily);
+        NameText.CharacterSpacing = 30;
         EmptyHint.Foreground = ThemePainter.Brush(theme.ForegroundMuted);
         EmptyHint.FontFamily = new FontFamily(theme.FontFamily);
-        DeleteButton.Foreground = ThemePainter.Brush(theme.ForegroundMuted);
-        ArrangeButton.Foreground = ThemePainter.Brush(theme.ForegroundMuted);
+        WidgetSurfaceStyle.ApplyGhostButton(DeleteButton, theme);
+        WidgetSurfaceStyle.ApplyGhostButton(ArrangeButton, theme);
+        ResizeHandle.Background = ThemePainter.Brush(theme.Border, 0.55);
 
         var grip = ThemePainter.ParseColor(theme.WidgetForeground);
-        grip.A = 0x28;
+        grip.A = 0x18;
         DragBar.Background = new SolidColorBrush(grip);
     }
 
@@ -206,7 +210,26 @@ public sealed partial class BlockFrame : UserControl
         tile.PointerMoved += ItemTile_PointerMoved;
         tile.PointerReleased += ItemTile_PointerReleased;
         tile.PointerCaptureLost += ItemTile_PointerCaptureLost;
-        ToolTipService.SetToolTip(tile, $"{item.Name}\n{item.Target}\nDrag to move · Click to open");
+        ToolTipService.SetToolTip(tile, $"{item.Name}\n{item.Target}\nDrag to move · Click to open · Right-click for more");
+
+        var menu = new MenuFlyout();
+        var openItem = new MenuFlyoutItem { Text = "Open" };
+        openItem.Click += (_, _) => LaunchItem(item);
+        menu.Items.Add(openItem);
+        if (item.HiddenFromDesktop)
+        {
+            var restoreItem = new MenuFlyoutItem { Text = "Return to Desktop" };
+            restoreItem.Click += (_, _) => RestoreItemToDesktop(item);
+            menu.Items.Add(restoreItem);
+        }
+        else
+        {
+            var removeItem = new MenuFlyoutItem { Text = "Remove from Block" };
+            removeItem.Click += (_, _) => RemoveLinkedItem(item);
+            menu.Items.Add(removeItem);
+        }
+
+        tile.ContextFlyout = menu;
 
         Canvas.SetLeft(tile, item.X);
         Canvas.SetTop(tile, item.Y);
@@ -326,24 +349,59 @@ public sealed partial class BlockFrame : UserControl
         }
         else
         {
-            var result = _launcher.TryLaunch(new TargetLaunchRequest(
-                Target: item.Target,
-                ItemType: item.Type.ToString(),
-                DisplayName: item.Name));
-            if (!result.Succeeded)
-            {
-                _onStatus?.Invoke(result.ErrorMessage ?? "Launch failed.");
-            }
+            LaunchItem(item);
         }
 
         e.Handled = true;
     }
 
+    private void LaunchItem(BlockItem item)
+    {
+        var result = _launcher.TryLaunch(new TargetLaunchRequest(
+            Target: item.Target,
+            ItemType: item.Type.ToString(),
+            DisplayName: item.Name));
+        if (!result.Succeeded)
+        {
+            _onStatus?.Invoke(result.ErrorMessage ?? "Launch failed.");
+        }
+    }
+
+    private void RestoreItemToDesktop(BlockItem item)
+    {
+        if (!item.HiddenFromDesktop)
+        {
+            RemoveLinkedItem(item);
+            return;
+        }
+
+        if (!_intake.TryRestoreToDesktop(item.Target, item.DesktopOriginPath, out _, out var error))
+        {
+            _onStatus?.Invoke(error ?? "Could not return the item to Desktop. It stayed in the Block.");
+            return;
+        }
+
+        _block.Items.Remove(item);
+        RefreshItems(arrangeIfNeeded: true);
+        _onLayoutCommitted();
+        _onBoundsChanged?.Invoke();
+        _onStatus?.Invoke($"Returned '{item.Name}' to the Desktop.");
+    }
+
+    private void RemoveLinkedItem(BlockItem item)
+    {
+        _block.Items.Remove(item);
+        RefreshItems(arrangeIfNeeded: true);
+        _onLayoutCommitted();
+        _onBoundsChanged?.Invoke();
+        _onStatus?.Invoke($"Removed '{item.Name}' from '{_block.Name}'. The original file was not deleted.");
+    }
+
     private void SetChromeEmphasis(bool emphasized)
     {
-        var opacity = emphasized || _dragging || _resizing ? 0.95 : 0.35;
-        DragBar.Opacity = opacity;
-        ResizeHandle.Opacity = opacity;
+        var opacity = emphasized || _dragging || _resizing ? 0.96 : 0.28;
+        WidgetSurfaceStyle.FadeOpacity(DragBar, opacity, emphasized ? 140 : 220);
+        WidgetSurfaceStyle.FadeOpacity(ResizeHandle, opacity, emphasized ? 140 : 220);
     }
 
     private void RootGrid_PointerEntered(object sender, PointerRoutedEventArgs e)
@@ -573,6 +631,8 @@ public sealed partial class BlockFrame : UserControl
                 Type = type,
                 Target = target,
                 Icon = iconPath,
+                DesktopOriginPath = intake.DesktopOriginPath,
+                HiddenFromDesktop = intake.MovedFromSource,
                 X = -1,
                 Y = -1
             };
@@ -602,7 +662,7 @@ public sealed partial class BlockFrame : UserControl
             _onLayoutCommitted();
             _onBoundsChanged?.Invoke();
             var msg = moved > 0
-                ? $"Moved {moved} shortcut(s) into '{_block.Name}' (removed from Desktop)."
+                ? $"Moved {moved} item(s) off the Desktop into '{_block.Name}'."
                 : $"Linked {added} item(s) into '{_block.Name}'.";
             _onStatus?.Invoke(msg);
         }

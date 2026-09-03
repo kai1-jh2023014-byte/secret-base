@@ -18,7 +18,8 @@ public static class CalendarServiceFactory
         ITimeProvider timeProvider,
         ISecureSecretStore? secretStore = null,
         Func<string, bool>? openBrowser = null,
-        HttpClient? httpClient = null)
+        HttpClient? httpClient = null,
+        ILocalCalendarStore? localStore = null)
     {
         var providers = new List<ICalendarProvider>();
 
@@ -27,17 +28,20 @@ public static class CalendarServiceFactory
             && configuration.UseSampleAgendaWhenEmpty
             && string.IsNullOrWhiteSpace(configuration.GoogleIcsUrl)
             && !configuration.IncludeMockProvider
-            && !WillAddGoogleApi(configuration, secretStore, openBrowser))
+            && !WillAddGoogleApi(configuration, secretStore, openBrowser)
+            && (localStore is null || localStore.LoadEvents().Count == 0))
         {
             var now = timeProvider.GetLocalNow();
             var day = DateOnly.FromDateTime(now.DateTime);
             localEvents.AddRange(SampleCalendarEvents.CreateCreativeDay(day, now.Offset));
         }
 
+        var store = localStore ?? new MemoryLocalCalendarStore(localEvents);
         providers.Add(new LocalCalendarProvider(
-            localEvents,
+            store,
             displayName: "Local",
-            openUrl: configuration.OpenCalendarUrl));
+            openUrl: configuration.OpenCalendarUrl,
+            seedIfEmpty: localEvents));
 
         if (configuration.IncludeMockProvider)
         {

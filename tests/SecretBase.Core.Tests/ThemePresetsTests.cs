@@ -27,9 +27,9 @@ public class ThemePresetsTests
         ThemePresets.ApplyPreset(theme, "not-a-real-preset");
 
         Assert.Equal("not-a-real-preset", theme.DisplayName);
-        Assert.Equal("#CC243447", theme.WidgetBackground);
-        Assert.Equal("#FFF4F0E6", theme.WidgetForeground);
-        Assert.Equal(16, theme.CornerRadius);
+        Assert.Equal("#D9181E28", theme.WidgetBackground);
+        Assert.Equal("#FFF3EFE6", theme.WidgetForeground);
+        Assert.Equal(18, theme.CornerRadius);
     }
 
     [Fact]
@@ -50,10 +50,13 @@ public class ThemePresetsTests
     }
 
     [Theory]
+    [InlineData("Atelier")]
     [InlineData("Default")]
     [InlineData("Warm Paper")]
     [InlineData("Forest")]
     [InlineData("Soft Rose")]
+    [InlineData("Glass")]
+    [InlineData("Focus")]
     public void ApplyPreset_AllNamedPresets_SetOpaqueEnoughTransparency(string name)
     {
         var theme = ThemeDefinition.CreateDefault();

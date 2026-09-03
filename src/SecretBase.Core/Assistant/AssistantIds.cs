@@ -8,10 +8,12 @@ public static class AssistantProviderIds
     public const string Local = "local";
 }
 
-/// <summary>Credential Manager key (prefixed with SecretBase/ by the Windows store).</summary>
+/// <summary>OS secret-store key (Credential Manager / Keychain; implementations add their own prefix).</summary>
 public static class AssistantSecretKeys
 {
     public const string OpenAiApiKey = "Assistant/OpenAI/ApiKey";
+
+    public const string GeminiApiKey = "Assistant/Gemini/ApiKey";
 }
 
 public static class AssistantToolNames
@@ -19,6 +21,9 @@ public static class AssistantToolNames
     public const string AssistantGetContext = "assistant_get_context";
     public const string CalendarGetToday = "calendar_get_today";
     public const string CalendarGetUpcoming = "calendar_get_upcoming";
+    public const string CalendarAddEvent = "calendar_add_event";
+    public const string CalendarRememberUsual = "calendar_remember_usual";
+    public const string CalendarApplyUsual = "calendar_apply_usual";
     public const string CreativeListProjects = "creative_list_projects";
     public const string CreativeGetProject = "creative_get_project";
     public const string CreativeOpenProject = "creative_open_project";
@@ -32,6 +37,9 @@ public static class AssistantToolNames
     public const string ProjectRecommend = "project_recommend";
     public const string ScheduleRecommend = "schedule_recommend";
     public const string MusicRecommend = "music_recommend";
+    public const string WorkspaceOpenNamed = "workspace_open_named";
+    public const string WorkspaceRemove = "workspace_remove";
+    public const string FilesDelete = "files_delete";
 }
 
 public static class AssistantActivityDomains
@@ -43,6 +51,7 @@ public static class AssistantActivityDomains
     public const string Apps = "Apps";
     public const string Music = "Music";
     public const string Integration = "Integration";
+    public const string Workspace = "Workspace";
     public const string Suggest = "Suggest";
 }
 
@@ -67,4 +76,6 @@ public static class AssistantUserMessages
     public const string MaxStepsReached = "Stopped after the maximum number of steps.";
     public const string PendingConfirmationMustResolve =
         "Resolve the pending confirmation with Run or Cancel before sending a new message.";
+    public const string DiskDeleteRefused =
+        "Secret Base will not delete files on disk. Confirm to return a Block item to Desktop or unregister a Secret Base item.";
 }

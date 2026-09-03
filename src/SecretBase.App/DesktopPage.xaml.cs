@@ -27,10 +27,14 @@ using SecretBase.Core.Widgets.Creative;
 using SecretBase.Core.Widgets.Music;
 using SecretBase.Core.Widgets.Text;
 using SecretBase.Core.Widgets.Web;
+using SecretBase.Core.Workspace;
 using SecretBase.Infrastructure.Assistant;
+using SecretBase.Infrastructure.Integration;
+using SecretBase.Infrastructure.Music;
 using SecretBase.Infrastructure.Calendar;
 using SecretBase.Infrastructure.Logging;
 using SecretBase.Infrastructure.Persistence;
+using SecretBase.Infrastructure.Startup;
 using SecretBase.Platform.Abstractions;
 using SecretBase.Platform.Windows;
 using SecretBase.Widgets.Ai;
@@ -67,6 +71,10 @@ public sealed partial class DesktopPage : Page
     private AiCommandService? _aiCommands;
     private AppCommandService? _appCommands;
     private CalendarCommandService? _calendarCommands;
+    private CalendarService? _calendarService;
+    private ILocalCalendarStore? _localCalendarStore;
+    private IIntegrationMemory? _integrationMemory;
+    private DesktopWorkspaceCatalog? _workspaceCatalog;
     private MusicCommandService? _musicCommands;
     private IntegrationCommandService? _integrationCommands;
     private IAssistantService? _assistant;
@@ -129,14 +137,27 @@ public sealed partial class DesktopPage : Page
         _appCommands = args.AppCommands
             ?? new AppCommandService(new CustomAppService(new JsonCustomAppStore()), projectService);
         var time = _timeProvider ?? new SystemTimeProvider();
-        _calendarCommands = new CalendarCommandService(
-            CalendarServiceFactory.Create(
-                CalendarWidgetConfiguration.CreateDefault(),
-                time,
-                secretStore: _secretStore,
-                openBrowser: url => TryOpenHttpsUrl(url)),
-            time);
-        _musicCommands = new MusicCommandService(new MusicService());
+        _localCalendarStore = new JsonLocalCalendarStore();
+        _calendarService = CalendarServiceFactory.Create(
+            CalendarWidgetConfiguration.CreateDefault(),
+            time,
+            secretStore: _secretStore,
+            openBrowser: url => TryOpenHttpsUrl(url),
+            localStore: _localCalendarStore);
+        _calendarCommands = new CalendarCommandService(_calendarService, time);
+        _musicCommands = new MusicCommandService(MusicServiceFactory.Create(_secretStore, TryOpenHttpsUrl));
+        _integrationMemory = new JsonIntegrationMemoryStore();
+        if (_secretStore is not null)
+        {
+            IntegrationMemorySynchronizer.SyncFromSecrets(_integrationMemory, _secretStore);
+        }
+        _workspaceCatalog = _intake is null
+            ? null
+            : new DesktopWorkspaceCatalog(
+                () => _layout,
+                _intake,
+                PersistLayoutNow,
+                ShowHostStatus);
         _integrationCommands = new IntegrationCommandService(
             calendar: _calendarCommands,
             music: _musicCommands,
@@ -157,7 +178,17 @@ public sealed partial class DesktopPage : Page
             isOpenAiKeyConfigured: () =>
                 _secretStore is not null
                 && _secretStore.TryGetSecret(AssistantSecretKeys.OpenAiApiKey, out var key)
-                && !string.IsNullOrWhiteSpace(key));
+                && !string.IsNullOrWhiteSpace(key),
+            isGeminiKeyConfigured: () =>
+                _secretStore is not null
+                && _secretStore.TryGetSecret(AssistantSecretKeys.GeminiApiKey, out var gemini)
+                && !string.IsNullOrWhiteSpace(gemini),
+            integrations: _integrationMemory);
+        var workspaceCommands = new WorkspaceCommandService(
+            _appCommands,
+            _creativeCommands,
+            _calendarCommands,
+            _workspaceCatalog);
         _assistant = new AssistantService(
             assistantRegistry,
             new AssistantToolExecutor(
@@ -168,7 +199,9 @@ public sealed partial class DesktopPage : Page
                 _integrationCommands,
                 _appCommands,
                 _musicCommands,
-                assistantContext),
+                assistantContext,
+                workspaceCommands,
+                _integrationMemory),
             () => _assistantProviders.Create(_assistantSettings.LoadOrCreate()),
             () => _assistantSettings.LoadOrCreate(),
             assistantContext);
@@ -184,8 +217,10 @@ public sealed partial class DesktopPage : Page
         ShowDebugChrome(forceVisible: false);
 
         RenderDesktopObjects();
+        InitializeTaskbarAiChat();
         _logger.Info("desktop", $"Overlay desktop shown for room '{_layout.RoomId}' with {_layout.Widgets.Count} widget(s), {_layout.Blocks.Count} block(s).");
         _logger.Info("widget", "Widget hosts ready (Clock, Text, Web, Calendar, Music, Creative, AI Workspace, Apps, Secret Base AI).");
+        _logger.Info("assistant", "Taskbar AI chat bar ready (Ctrl+Shift+K). Does not replace Windows Search.");
         _logger.Info("block", "Block host ready (use Blk button to add; drop + drag icons inside a Block).");
         _logger.Info("theme", "Theme editor ready (Aa button) — colors apply to all widgets and Blocks.");
         _logger.Info("layout", "Arrange ready (Grid button) — even placement for widgets and blocks.");
@@ -194,34 +229,37 @@ public sealed partial class DesktopPage : Page
 
     private void StyleFabButtons(ThemeDefinition theme)
     {
-        AddWidgetFab.Background = ThemePainter.Brush(theme.Accent, 0.92);
-        AddWidgetFab.Foreground = ThemePainter.Brush(theme.Foreground);
-        AddWidgetFab.BorderBrush = ThemePainter.Brush(theme.WidgetForeground, 0.35);
-        AddWidgetFab.BorderThickness = new Thickness(1);
-        AddWidgetFab.FontFamily = new FontFamily(theme.FontFamily);
+        void StylePrimary(Button button)
+        {
+            button.Background = ThemePainter.Brush(theme.Accent, 0.9);
+            button.Foreground = ThemePainter.Brush(theme.Foreground);
+            button.BorderBrush = ThemePainter.Brush(theme.Border, 0.35);
+            button.BorderThickness = new Thickness(1);
+            button.CornerRadius = new CornerRadius(Math.Max(12, theme.CornerRadius * 0.7));
+            button.FontFamily = new FontFamily(theme.FontFamily);
+        }
 
-        AddBlockFab.Background = ThemePainter.Brush(theme.WidgetBackground, ThemePainter.EffectiveWidgetOpacity(theme));
-        AddBlockFab.Foreground = ThemePainter.Brush(theme.WidgetForeground);
-        AddBlockFab.BorderBrush = ThemePainter.Brush(theme.Accent, 0.7);
-        AddBlockFab.BorderThickness = new Thickness(1);
-        AddBlockFab.FontFamily = new FontFamily(theme.FontFamily);
+        void StyleSecondary(Button button)
+        {
+            button.Background = ThemePainter.Brush(theme.WidgetBackground, ThemePainter.EffectiveWidgetOpacity(theme));
+            button.Foreground = ThemePainter.Brush(theme.WidgetForeground);
+            button.BorderBrush = ThemePainter.Brush(theme.Border, 0.5);
+            button.BorderThickness = new Thickness(1);
+            button.CornerRadius = new CornerRadius(Math.Max(12, theme.CornerRadius * 0.7));
+            button.FontFamily = new FontFamily(theme.FontFamily);
+        }
 
-        ThemeFab.Background = ThemePainter.Brush(theme.WidgetBackground, ThemePainter.EffectiveWidgetOpacity(theme));
-        ThemeFab.Foreground = ThemePainter.Brush(theme.WidgetForeground);
-        ThemeFab.BorderBrush = ThemePainter.Brush(theme.Accent, 0.7);
-        ThemeFab.BorderThickness = new Thickness(1);
-        ThemeFab.FontFamily = new FontFamily(theme.FontFamily);
-
-        ArrangeFab.Background = ThemePainter.Brush(theme.WidgetBackground, ThemePainter.EffectiveWidgetOpacity(theme));
-        ArrangeFab.Foreground = ThemePainter.Brush(theme.WidgetForeground);
-        ArrangeFab.BorderBrush = ThemePainter.Brush(theme.Accent, 0.7);
-        ArrangeFab.BorderThickness = new Thickness(1);
-        ArrangeFab.FontFamily = new FontFamily(theme.FontFamily);
+        StylePrimary(AddWidgetFab);
+        StyleSecondary(AddBlockFab);
+        StyleSecondary(ThemeFab);
+        StyleSecondary(ArrangeFab);
+        TaskbarAiChat.ApplyTheme(theme);
 
         if (HostStatusLabel is not null)
         {
             HostStatusLabel.Foreground = ThemePainter.Brush(theme.ForegroundMuted);
             HostStatusLabel.FontFamily = new FontFamily(theme.FontFamily);
+            HostStatusLabel.CharacterSpacing = 20;
         }
     }
 
@@ -240,6 +278,8 @@ public sealed partial class DesktopPage : Page
             HostStatusLabel.Foreground = ThemePainter.Brush(theme.ForegroundMuted);
             HostStatusLabel.FontFamily = new FontFamily(theme.FontFamily);
         }
+
+        TaskbarAiChat.ApplyTheme(theme);
     }
 
     private void RefreshDebugStatus()
@@ -251,6 +291,25 @@ public sealed partial class DesktopPage : Page
 
         StatusText.Text =
             $"{AppInfo.Name} · {_layout.Widgets.Count}w / {_layout.Blocks.Count}b · v{_compatibility.AppVersion}";
+    }
+
+    private void InitializeTaskbarAiChat()
+    {
+        var enabled = _launchSettingsStore?.LoadOrCreate().TaskbarAiChatEnabled ?? true;
+        if (!enabled || _assistant is null)
+        {
+            TaskbarAiChat.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        TaskbarAiChat.Initialize(_assistant, TryApplyAssistantLaunch);
+        TaskbarAiChat.LayoutChanged += SyncInteractiveInputRegions;
+        if (_theme is not null)
+        {
+            TaskbarAiChat.ApplyTheme(_theme);
+        }
+
+        TaskbarAiChat.Loaded += (_, _) => SyncInteractiveInputRegions();
     }
 
     private void InitializeAutoStartToggle()
@@ -443,6 +502,18 @@ public sealed partial class DesktopPage : Page
             rects.Add(arrangeFabRect);
         }
 
+        if (TaskbarAiChat.Visibility == Visibility.Visible
+            && TryCreateClientRect(TaskbarAiChat, scale, out var chatRect))
+        {
+            rects.Add(chatRect);
+        }
+
+        if (HostStatusLabel.Visibility == Visibility.Visible
+            && TryCreateClientRect(HostStatusLabel, scale, out var statusRect))
+        {
+            rects.Add(statusRect);
+        }
+
         _overlay.UpdateInteractiveInputRegions(_overlayTarget, rects);
     }
 
@@ -489,11 +560,17 @@ public sealed partial class DesktopPage : Page
         if (instance.Type == WidgetTypes.Clock)
         {
             var config = ClockWidgetConfiguration.FromDictionary(instance.Configuration);
-            config.Use24HourFormat = true;
             instance.Configuration = config.ToDictionary();
 
             var view = new ClockWidgetView();
-            view.Initialize(config, _timeProvider);
+            view.Initialize(
+                config,
+                _timeProvider,
+                onConfigurationChanged: updated =>
+                {
+                    instance.Configuration = updated.ToDictionary();
+                    PersistLayoutNow();
+                });
             if (_theme is not null)
             {
                 view.ApplyTheme(_theme);
@@ -547,11 +624,12 @@ public sealed partial class DesktopPage : Page
             var config = CalendarWidgetConfiguration.FromDictionary(instance.Configuration);
             instance.Configuration = config.ToDictionary();
 
-            var service = CalendarServiceFactory.Create(
+            var service = _calendarService ?? CalendarServiceFactory.Create(
                 config,
                 _timeProvider ?? new SystemTimeProvider(),
                 secretStore: _secretStore,
-                openBrowser: url => TryOpenBrowserUrl(url));
+                openBrowser: url => TryOpenBrowserUrl(url),
+                localStore: _localCalendarStore);
             var view = new CalendarWidgetView();
             view.Initialize(
                 config,
@@ -563,7 +641,8 @@ public sealed partial class DesktopPage : Page
                     instance.Configuration = updated.ToDictionary();
                     PersistLayoutNow();
                 },
-                cache: _calendarCache);
+                cache: _calendarCache,
+                integrations: _integrationMemory);
             if (_theme is not null)
             {
                 view.ApplyTheme(_theme);
@@ -585,7 +664,9 @@ public sealed partial class DesktopPage : Page
                     instance.Configuration = updated.ToDictionary();
                     PersistLayoutNow();
                 },
-                openUrl: url => TryOpenHttpsUrl(url));
+                openUrl: url => TryOpenHttpsUrl(url),
+                musicService: _musicCommands.MusicService,
+                integrations: _integrationMemory);
             if (_theme is not null)
             {
                 view.ApplyTheme(_theme);
@@ -631,13 +712,18 @@ public sealed partial class DesktopPage : Page
             var config = AiWorkspaceWidgetConfiguration.FromDictionary(instance.Configuration);
             instance.Configuration = config.ToDictionary();
 
-            var ai = _aiCommands
-                ?? new AiCommandService(
-                    config,
-                    _creativeCommands?.Projects,
-                    () => (_cursorLaunch ?? new WindowsCursorLaunchService()).IsAvailable);
+            if (_assistant is null || _assistantSettings is null || _secretStore is null || _assistantProviders is null)
+            {
+                return null;
+            }
+
             var view = new AiWorkspaceView();
-            view.Initialize(ai, tryExecute: TryExecuteAiResult);
+            view.Initialize(
+                _assistant,
+                _assistantSettings,
+                _secretStore,
+                _assistantProviders,
+                TryApplyAssistantLaunch);
             if (_theme is not null)
             {
                 view.ApplyTheme(_theme);
@@ -1005,6 +1091,17 @@ public sealed partial class DesktopPage : Page
         await AddWidgetByTypeAsync(WidgetTypes.Ai);
     }
 
+    private void TaskbarAiChatAccelerator_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        args.Handled = true;
+        if (TaskbarAiChat.Visibility != Visibility.Visible)
+        {
+            return;
+        }
+
+        TaskbarAiChat.FocusInput();
+    }
+
     private async Task ShowAddWidgetCatalogAsync()
     {
         if (_layout is null)
@@ -1334,7 +1431,7 @@ public sealed partial class DesktopPage : Page
         {
             Header = "Preset",
             HorizontalAlignment = HorizontalAlignment.Stretch,
-            SelectedItem = ThemePresets.Names.Contains(draft.DisplayName) ? draft.DisplayName : "Default"
+            SelectedItem = ThemePresets.Names.Contains(draft.DisplayName) ? draft.DisplayName : "Atelier"
         };
         foreach (var name in ThemePresets.Names)
         {
@@ -1384,29 +1481,60 @@ public sealed partial class DesktopPage : Page
             SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline
         };
 
+        var previewOuter = new Border
+        {
+            Padding = new Thickness(2),
+            CornerRadius = new CornerRadius(draft.CornerRadius + 2),
+            BorderThickness = new Thickness(1),
+            Margin = new Thickness(0, 4, 0, 0)
+        };
         var preview = new Border
         {
-            Height = 72,
+            MinHeight = 88,
             CornerRadius = new CornerRadius(draft.CornerRadius),
-            Padding = new Thickness(12, 8, 12, 8),
-            Margin = new Thickness(0, 4, 0, 0)
+            Padding = new Thickness(16, 12, 16, 12),
+            BorderThickness = new Thickness(1)
+        };
+        var previewAccent = new Border
+        {
+            Width = 24,
+            Height = 2,
+            HorizontalAlignment = HorizontalAlignment.Left,
+            CornerRadius = new CornerRadius(1),
+            Margin = new Thickness(0, 0, 0, 6)
         };
         var previewTime = new TextBlock
         {
-            Text = "14:35:08",
-            FontSize = 22,
-            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
+            Text = "23:41",
+            FontSize = 28,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiLight,
+            CharacterSpacing = 80
         };
-        var previewDate = new TextBlock { Text = "2026 / 08 / 13", FontSize = 12, Opacity = 0.9 };
-        var previewStack = new StackPanel { Spacing = 2 };
+        var previewDate = new TextBlock
+        {
+            Text = "Wednesday\nSeptember 2",
+            FontSize = 12,
+            CharacterSpacing = 20,
+            LineHeight = 18
+        };
+        var previewStack = new StackPanel { Spacing = 4 };
+        previewStack.Children.Add(previewAccent);
         previewStack.Children.Add(previewTime);
         previewStack.Children.Add(previewDate);
         preview.Child = previewStack;
+        previewOuter.Child = preview;
 
         void RefreshPreview()
         {
-            preview.Background = ThemePainter.Brush(widgetBg.Text, Math.Clamp(opacityBox.Value, 0.35, 1.0));
-            preview.CornerRadius = new CornerRadius(Math.Clamp(radiusBox.Value, 0, 40));
+            var opacity = Math.Clamp(opacityBox.Value, 0.35, 1.0);
+            var radius = Math.Clamp(radiusBox.Value, 0, 40);
+            previewOuter.Background = ThemePainter.Brush(draft.SurfaceSecondary, opacity * 0.55);
+            previewOuter.BorderBrush = ThemePainter.Brush(draft.Border, 0.28);
+            previewOuter.CornerRadius = new CornerRadius(radius + 2);
+            preview.Background = ThemePainter.Brush(widgetBg.Text, opacity);
+            preview.CornerRadius = new CornerRadius(Math.Max(8, radius - 2));
+            preview.BorderBrush = ThemePainter.Brush(draft.Border, 0.55);
+            previewAccent.Background = ThemePainter.Brush(accent.Text, 0.9);
             previewTime.Foreground = ThemePainter.Brush(widgetFg.Text);
             previewDate.Foreground = ThemePainter.Brush(mutedFg.Text);
             var font = fontBox.SelectedItem as string ?? draft.FontFamily;
@@ -1447,13 +1575,13 @@ public sealed partial class DesktopPage : Page
         var panel = new StackPanel { Spacing = 8, Width = 360 };
         panel.Children.Add(new TextBlock
         {
-            Text = "Applies to Clock, date, Text boxes, and Blocks.",
+            Text = "Applies to Clock, Music, Calendar, Text, AI, and Blocks.",
             TextWrapping = TextWrapping.Wrap,
             Opacity = 0.8,
             FontSize = 12
         });
         panel.Children.Add(presetBox);
-        panel.Children.Add(preview);
+        panel.Children.Add(previewOuter);
         panel.Children.Add(widgetBg);
         panel.Children.Add(widgetFg);
         panel.Children.Add(mutedFg);
@@ -1599,6 +1727,36 @@ public sealed partial class DesktopPage : Page
         if (_layout is null)
         {
             return;
+        }
+
+        if (_intake is not null)
+        {
+            var failed = 0;
+            foreach (var item in block.Items.ToList())
+            {
+                if (!item.HiddenFromDesktop)
+                {
+                    continue;
+                }
+
+                if (!_intake.TryRestoreToDesktop(item.Target, item.DesktopOriginPath, out _, out var error))
+                {
+                    failed++;
+                    ShowHostStatus(error ?? $"Could not return '{item.Name}' to the Desktop.");
+                    continue;
+                }
+
+                block.Items.Remove(item);
+            }
+
+            if (failed > 0)
+            {
+                PersistLayoutNow();
+                RenderDesktopObjects();
+                RefreshDebugStatus();
+                ShowHostStatus("Some items could not be returned to the Desktop. The Block was kept.");
+                return;
+            }
         }
 
         _layout.Blocks.RemoveAll(b => b.Id == block.Id);

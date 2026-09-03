@@ -124,6 +124,9 @@ public sealed class AssistantProviderStatusInfo
 
     public bool HasApiKey { get; init; }
 
+    /// <summary>When remote provider falls back to Local AI.</summary>
+    public string? FallbackNote { get; init; }
+
     /// <summary>Masked key status for Settings UI. Never the raw secret.</summary>
     public string ApiKeyDisplay => HasApiKey ? "••••••••" : "(not set)";
 }

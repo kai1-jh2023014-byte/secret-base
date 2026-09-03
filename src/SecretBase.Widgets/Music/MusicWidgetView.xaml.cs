@@ -2,6 +2,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
+using SecretBase.Core.Integration;
 using SecretBase.Core.Music;
 using SecretBase.Core.Themes;
 using SecretBase.Core.Widgets.Music;
@@ -27,6 +28,9 @@ public sealed partial class MusicWidgetView : UserControl
     private int _searchGate;
     private int _commandGate;
 
+    private bool _connectDismissed;
+    private IIntegrationMemory? _integrations;
+
     public MusicWidgetView()
     {
         InitializeComponent();
@@ -37,11 +41,13 @@ public sealed partial class MusicWidgetView : UserControl
         MusicWidgetConfiguration configuration,
         Action<MusicWidgetConfiguration>? onConfigurationChanged = null,
         Func<string, bool>? openUrl = null,
-        MusicService? musicService = null)
+        MusicService? musicService = null,
+        IIntegrationMemory? integrations = null)
     {
         _configuration = configuration;
         _onConfigurationChanged = onConfigurationChanged;
         _openUrl = openUrl;
+        _integrations = integrations;
         if (musicService is not null)
         {
             _musicService = musicService;
@@ -55,50 +61,110 @@ public sealed partial class MusicWidgetView : UserControl
 
         UpdateCurrentTrackUi(_configuration.CurrentTrack, isPlaying: false);
         UpdateTransportEnabled();
+        RefreshConnectPanel();
         ResultsList.Children.Clear();
-        ResultsList.Children.Add(CreateMuted("Search the Demo catalog (Spotify/YouTube API not connected)."));
+        ResultsList.Children.Add(CreateMuted("Search tracks from your connected provider."));
         StatusLabel.Text = string.Empty;
-        SourceLabel.Text = "Source: Demo catalog";
+        SourceLabel.Text = DescribeSource();
+        _ = RefreshPlaybackStateAsync();
+    }
+
+    private string DescribeSource()
+    {
+        var spotify = _musicService.Providers.FirstOrDefault(p => p.ProviderId == "spotify");
+        if (spotify?.AuthStatus == MusicAuthStatus.Connected)
+        {
+            _integrations?.RememberConnected(IntegrationMemoryIds.Spotify, "Spotify", inAppExperience: true);
+            return "Source: Spotify";
+        }
+
+        return "Source: Demo catalog (connect Spotify for full search and playback control)";
+    }
+
+    private void RefreshConnectPanel()
+    {
+        var spotify = _musicService.Providers.FirstOrDefault(p => p.ProviderId == "spotify");
+        var needsConnect = !_connectDismissed
+                           && spotify is not null
+                           && spotify.AuthStatus is MusicAuthStatus.NotConfigured or MusicAuthStatus.Disconnected;
+        ConnectPanel.Visibility = needsConnect ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private async Task RefreshPlaybackStateAsync()
+    {
+        var result = await _commands.ExecuteAsync(MusicCommand.GetPlaybackState("spotify"));
+        if (!result.Succeeded || result.CurrentTrack is null)
+        {
+            PlaybackProgress.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        UpdateCurrentTrackUi(result.CurrentTrack, result.IsPlaying);
+        if (result.DurationMilliseconds is > 0 && result.ProgressMilliseconds is not null)
+        {
+            PlaybackProgress.Maximum = result.DurationMilliseconds.Value;
+            PlaybackProgress.Value = result.ProgressMilliseconds.Value;
+            PlaybackProgress.Visibility = Visibility.Visible;
+        }
+        else
+        {
+            PlaybackProgress.Visibility = Visibility.Collapsed;
+        }
+    }
+
+    private async void ConnectSpotifyButton_Click(object sender, RoutedEventArgs e)
+    {
+        StatusLabel.Text = "Connecting to Spotify…";
+        var result = await _commands.ExecuteAsync(MusicCommand.ConnectProvider("spotify"));
+        if (!result.Succeeded)
+        {
+            StatusLabel.Text = result.ErrorMessage ?? "Spotify connect failed.";
+            return;
+        }
+
+        _connectDismissed = true;
+        RefreshConnectPanel();
+        SourceLabel.Text = DescribeSource();
+        StatusLabel.Text = "Spotify connected.";
+        ResultsList.Children.Clear();
+        ResultsList.Children.Add(CreateMuted("Search Spotify tracks above."));
+        await RefreshPlaybackStateAsync();
+    }
+
+    private void ConnectYouTubeButton_Click(object sender, RoutedEventArgs e)
+    {
+        StatusLabel.Text =
+            "YouTube Music does not offer a full public API like Spotify. Use Spotify or the demo catalog for now.";
+    }
+
+    private void LaterConnectButton_Click(object sender, RoutedEventArgs e)
+    {
+        _connectDismissed = true;
+        RefreshConnectPanel();
     }
 
     public void ApplyTheme(ThemeDefinition theme)
     {
         _theme = theme;
-        RootBorder.Background = ThemePainter.Brush(theme.WidgetBackground, ThemePainter.EffectiveWidgetOpacity(theme));
-        RootBorder.CornerRadius = new CornerRadius(theme.CornerRadius);
-        RootBorder.BorderBrush = ThemePainter.Brush(theme.WidgetForeground, 0.25);
-
-        var font = new FontFamily(theme.FontFamily);
-        HeaderText.FontFamily = font;
-        HeaderText.Foreground = ThemePainter.Brush(theme.WidgetForeground);
-        SearchBox.FontFamily = font;
-        TrackTitleText.FontFamily = font;
-        TrackTitleText.Foreground = ThemePainter.Brush(theme.WidgetForeground);
-        TrackArtistText.FontFamily = font;
-        TrackArtistText.Foreground = ThemePainter.Brush(theme.ForegroundMuted);
-        SourceLabel.FontFamily = font;
-        SourceLabel.Foreground = ThemePainter.Brush(theme.ForegroundMuted);
-        StatusLabel.FontFamily = font;
-        StatusLabel.Foreground = ThemePainter.Brush(theme.ForegroundMuted);
+        WidgetSurfaceStyle.ApplyLayeredChrome(OuterShell, RootBorder, theme);
+        WidgetSurfaceStyle.ApplyHeader(HeaderText, SourceLabel, theme);
+        WidgetSurfaceStyle.ApplyMuted(StatusLabel, theme);
+        WidgetSurfaceStyle.ApplyMuted(ConnectPromptText, theme);
+        WidgetSurfaceStyle.ApplyBody(TrackTitleText, theme);
+        WidgetSurfaceStyle.ApplyMuted(TrackArtistText, theme);
+        SearchBox.FontFamily = new FontFamily(theme.FontFamily);
         ArtGlyph.Foreground = ThemePainter.Brush(theme.Accent);
-        ArtPlaceholder.Background = ThemePainter.Brush(theme.Accent, 0.2);
+        ArtPlaceholder.Background = ThemePainter.Brush(theme.Accent, 0.18);
+        ArtPlaceholder.CornerRadius = new CornerRadius(Math.Max(10, theme.CornerRadius * 0.55));
+        WidgetSurfaceStyle.ApplyProgress(PlaybackProgress, theme);
 
-        StyleActionButton(SearchButton, theme, accent: true);
-        StyleActionButton(PreviousButton, theme);
-        StyleActionButton(PlayPauseButton, theme, accent: true);
-        StyleActionButton(NextButton, theme);
-        StyleActionButton(OpenWebSourceButton, theme);
-    }
-
-    private static void StyleActionButton(Button button, ThemeDefinition theme, bool accent = false)
-    {
-        button.FontFamily = new FontFamily(theme.FontFamily);
-        button.Background = accent
-            ? ThemePainter.Brush(theme.Accent, 0.85)
-            : ThemePainter.Brush(theme.WidgetBackground, ThemePainter.EffectiveWidgetOpacity(theme));
-        button.Foreground = ThemePainter.Brush(theme.WidgetForeground);
-        button.BorderBrush = ThemePainter.Brush(theme.Accent, 0.55);
-        button.BorderThickness = new Thickness(1);
+        WidgetSurfaceStyle.ApplyActionButton(SearchButton, theme, accent: true);
+        WidgetSurfaceStyle.ApplyGhostButton(PreviousButton, theme);
+        WidgetSurfaceStyle.ApplyActionButton(PlayPauseButton, theme, accent: true);
+        WidgetSurfaceStyle.ApplyGhostButton(NextButton, theme);
+        WidgetSurfaceStyle.ApplyGhostButton(OpenWebSourceButton, theme);
+        WidgetSurfaceStyle.ApplyActionButton(ConnectSpotifyButton, theme, accent: true);
+        WidgetSurfaceStyle.ApplyGhostButton(ConnectYouTubeButton, theme);
     }
 
     private void SearchBox_KeyDown(object sender, KeyRoutedEventArgs e)

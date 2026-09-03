@@ -7,154 +7,194 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d">
 
-    <!--
-      Native Music UI — Secret Base chrome first.
-      External pages are NOT the primary surface (no Host Bridge).
-      Move/resize stay on WidgetFrame DragBar.
-    -->
     <Border
-        x:Name="RootBorder"
-        Padding="12,10"
-        Background="#CC243447"
-        CornerRadius="16"
+        x:Name="OuterShell"
+        Background="#20151A24"
+        CornerRadius="20"
+        Padding="2"
         BorderThickness="1"
-        BorderBrush="#44FFFFFF"
-        MinWidth="280"
-        MinHeight="360">
-        <Grid RowSpacing="8">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="*" />
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="Auto" />
-            </Grid.RowDefinitions>
+        BorderBrush="#28FFFFFF">
+        <Border
+            x:Name="RootBorder"
+            Padding="14,12"
+            Background="#D9181E28"
+            CornerRadius="18"
+            BorderThickness="1"
+            BorderBrush="#3DFFFFFF"
+            MinWidth="280"
+            MinHeight="360">
+            <Grid RowSpacing="10">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
 
-            <TextBlock
-                x:Name="HeaderText"
-                Grid.Row="0"
-                Text="Music"
-                FontSize="18"
-                FontWeight="SemiBold" />
-
-            <!-- Search -->
-            <Grid Grid.Row="1" ColumnSpacing="6">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
-                <TextBox
-                    x:Name="SearchBox"
-                    Grid.Column="0"
-                    PlaceholderText="Search tracks…"
-                    FontSize="12"
-                    MinHeight="28"
-                    KeyDown="SearchBox_KeyDown" />
-                <Button
-                    x:Name="SearchButton"
-                    Grid.Column="1"
-                    Content="Search"
-                    MinWidth="64"
-                    Padding="10,4"
-                    Click="SearchButton_Click" />
-            </Grid>
-
-            <!-- Results -->
-            <ScrollViewer
-                Grid.Row="2"
-                VerticalScrollBarVisibility="Auto"
-                HorizontalScrollBarVisibility="Disabled">
-                <StackPanel x:Name="ResultsList" Spacing="4" />
-            </ScrollViewer>
-
-            <!-- Current track -->
-            <Grid x:Name="CurrentTrackPanel" Grid.Row="3" ColumnSpacing="10">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="*" />
-                </Grid.ColumnDefinitions>
-                <Border
-                    x:Name="ArtPlaceholder"
-                    Grid.Column="0"
-                    Width="48"
-                    Height="48"
-                    CornerRadius="8"
-                    Background="#33FFFFFF">
+                <StackPanel Grid.Row="0" Spacing="2">
                     <TextBlock
-                        x:Name="ArtGlyph"
-                        Text="♪"
-                        FontSize="20"
-                        HorizontalAlignment="Center"
-                        VerticalAlignment="Center"
-                        Opacity="0.85" />
-                </Border>
-                <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
-                    <TextBlock
-                        x:Name="TrackTitleText"
-                        Text="No track selected"
-                        FontSize="14"
+                        x:Name="HeaderText"
+                        Text="Music"
+                        FontSize="15"
                         FontWeight="SemiBold"
-                        TextWrapping="WrapWholeWords" />
+                        CharacterSpacing="60" />
                     <TextBlock
-                        x:Name="TrackArtistText"
-                        Text=""
-                        FontSize="12"
+                        x:Name="SourceLabel"
+                        FontSize="11"
                         Opacity="0.8"
+                        Text="Source: Demo catalog"
                         TextWrapping="WrapWholeWords" />
                 </StackPanel>
-            </Grid>
 
-            <!-- Transport -->
-            <Grid Grid.Row="4" ColumnSpacing="8" HorizontalAlignment="Center">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
-                <Button
-                    x:Name="PreviousButton"
-                    Grid.Column="0"
-                    Content="◀"
-                    MinWidth="44"
-                    Click="PreviousButton_Click"
-                    ToolTipService.ToolTip="Previous" />
-                <Button
-                    x:Name="PlayPauseButton"
-                    Grid.Column="1"
-                    Content="▶"
-                    MinWidth="52"
-                    Click="PlayPauseButton_Click"
-                    ToolTipService.ToolTip="Play / Pause" />
-                <Button
-                    x:Name="NextButton"
-                    Grid.Column="2"
-                    Content="▶▶"
-                    MinWidth="44"
-                    Click="NextButton_Click"
-                    ToolTipService.ToolTip="Next" />
-            </Grid>
+                <StackPanel
+                    x:Name="ConnectPanel"
+                    Grid.Row="1"
+                    Spacing="8"
+                    Visibility="Collapsed">
+                    <TextBlock
+                        x:Name="ConnectPromptText"
+                        Text="Connect your music service"
+                        FontSize="13"
+                        TextWrapping="WrapWholeWords" />
+                    <Button
+                        x:Name="ConnectSpotifyButton"
+                        Content="Spotify"
+                        HorizontalAlignment="Stretch"
+                        Click="ConnectSpotifyButton_Click" />
+                    <Button
+                        x:Name="ConnectYouTubeButton"
+                        Content="YouTube Music"
+                        HorizontalAlignment="Stretch"
+                        Click="ConnectYouTubeButton_Click" />
+                    <HyperlinkButton
+                        x:Name="LaterConnectButton"
+                        Content="Later"
+                        Click="LaterConnectButton_Click" />
+                </StackPanel>
 
-            <StackPanel Grid.Row="5" Spacing="4">
-                <TextBlock
-                    x:Name="SourceLabel"
-                    FontSize="11"
-                    Opacity="0.8"
-                    Text="Source: Demo catalog"
-                    TextWrapping="WrapWholeWords" />
-                <TextBlock
-                    x:Name="StatusLabel"
-                    FontSize="11"
-                    Opacity="0.75"
-                    TextWrapping="WrapWholeWords"
-                    Text="" />
-                <Button
-                    x:Name="OpenWebSourceButton"
-                    Content="Open web source…"
-                    HorizontalAlignment="Stretch"
-                    Click="OpenWebSourceButton_Click"
-                    ToolTipService.ToolTip="Optional: open registered Spotify/YouTube URL in the system browser (not in-widget WebView)" />
-            </StackPanel>
-        </Grid>
+                <Grid Grid.Row="2" ColumnSpacing="6">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBox
+                        x:Name="SearchBox"
+                        Grid.Column="0"
+                        PlaceholderText="Search tracks…"
+                        FontSize="12"
+                        MinHeight="32"
+                        KeyDown="SearchBox_KeyDown" />
+                    <Button
+                        x:Name="SearchButton"
+                        Grid.Column="1"
+                        Content="Search"
+                        MinWidth="72"
+                        Padding="12,6"
+                        Click="SearchButton_Click" />
+                </Grid>
+
+                <ScrollViewer
+                    Grid.Row="3"
+                    VerticalScrollBarVisibility="Auto"
+                    HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel x:Name="ResultsList" Spacing="6" />
+                </ScrollViewer>
+
+                <Grid x:Name="CurrentTrackPanel" Grid.Row="4" ColumnSpacing="12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Border
+                        x:Name="ArtPlaceholder"
+                        Grid.Column="0"
+                        Width="64"
+                        Height="64"
+                        CornerRadius="12"
+                        Background="#28FFFFFF">
+                        <TextBlock
+                            x:Name="ArtGlyph"
+                            Text="♪"
+                            FontSize="24"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center"
+                            Opacity="0.85" />
+                    </Border>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="3">
+                        <TextBlock
+                            x:Name="TrackTitleText"
+                            Text="No track selected"
+                            FontSize="15"
+                            FontWeight="SemiBold"
+                            TextWrapping="WrapWholeWords" />
+                        <TextBlock
+                            x:Name="TrackArtistText"
+                            Text=""
+                            FontSize="12"
+                            Opacity="0.8"
+                            TextWrapping="WrapWholeWords" />
+                    </StackPanel>
+                </Grid>
+
+                <ProgressBar
+                    x:Name="PlaybackProgress"
+                    Grid.Row="5"
+                    Maximum="100"
+                    Value="0"
+                    Height="3"
+                    Visibility="Collapsed" />
+
+                <Grid Grid.Row="6" ColumnSpacing="10" HorizontalAlignment="Center">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <Button
+                        x:Name="PreviousButton"
+                        Grid.Column="0"
+                        Content="⏮"
+                        MinWidth="48"
+                        MinHeight="40"
+                        Click="PreviousButton_Click"
+                        ToolTipService.ToolTip="Previous" />
+                    <Button
+                        x:Name="PlayPauseButton"
+                        Grid.Column="1"
+                        Content="▶"
+                        MinWidth="56"
+                        MinHeight="40"
+                        Click="PlayPauseButton_Click"
+                        ToolTipService.ToolTip="Play / Pause" />
+                    <Button
+                        x:Name="NextButton"
+                        Grid.Column="2"
+                        Content="⏭"
+                        MinWidth="48"
+                        MinHeight="40"
+                        Click="NextButton_Click"
+                        ToolTipService.ToolTip="Next" />
+                </Grid>
+
+                <StackPanel Grid.Row="7" Spacing="4">
+                    <TextBlock
+                        x:Name="StatusLabel"
+                        FontSize="11"
+                        Opacity="0.75"
+                        TextWrapping="WrapWholeWords"
+                        Text="" />
+                    <Button
+                        x:Name="OpenWebSourceButton"
+                        Content="Open web source…"
+                        HorizontalAlignment="Stretch"
+                        Click="OpenWebSourceButton_Click"
+                        ToolTipService.ToolTip="Optional: open registered Spotify/YouTube URL in the system browser" />
+                </StackPanel>
+            </Grid>
+        </Border>
     </Border>
 </UserControl>

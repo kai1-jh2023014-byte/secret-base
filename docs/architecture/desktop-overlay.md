@@ -12,8 +12,8 @@ Desktop
   ├── Secret Base Overlay           ← HWND shaped to widgets + FABs (SetWindowRgn)
   │     ├── Widgets (Clock, Text, Web, Calendar, Music, Creative, AI, …)
   │     ├── Blocks
-  │     └── FABs (+ Add Widget, Blk, Aa, Grid)
-  └── Other application windows / Taskbar
+  │     └── FABs (+ Add Widget, Blk, Aa, Grid) + Secret Base AI command bar
+  └── Other application windows / Taskbar / Windows Search (unchanged)
 ```
 
 Normal UX: **widgets only**. Transparent/empty areas pass input to Windows. No title, status strip, or Exit button on the wallpaper.
@@ -71,6 +71,7 @@ Investigation notes: [overlay-input-and-edges.md](overlay-input-and-edges.md).
 | **Aa** Theme | Always visible | Debug chrome **Theme**, **Ctrl+Shift+T** |
 | **Grid** Arrange | Always visible | Debug chrome **Arrange** |
 | Host status | Ephemeral message above FABs | Also mirrored in debug chrome |
+| **Secret Base AI bar** | Centered above the taskbar (work area) | **Ctrl+Shift+K** focuses it. Does **not** replace Windows Search |
 | Status / widget count | Hidden | **Ctrl+Shift+D** shows debug chrome |
 | Exit button | Hidden | Debug chrome **Exit**, or **Ctrl+Shift+Q** |
 | `WidgetFrame` | Grip + resize + **×** remove | Same |

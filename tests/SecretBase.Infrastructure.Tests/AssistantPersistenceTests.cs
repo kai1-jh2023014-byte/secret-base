@@ -66,7 +66,7 @@ public class AssistantSettingsStoreTests
 public class AssistantCredentialAndProviderTests
 {
     [Fact]
-    public async Task Factory_UsesCredentialStore_NeverLogsKey_AndStubsGeminiLocal()
+    public async Task Factory_UsesCredentialStore_NeverLogsKey_AndSupportsGeminiLocalProviders()
     {
         var secrets = new MemorySecureSecretStore();
         var handler = new RecordingHandler
@@ -81,28 +81,38 @@ public class AssistantCredentialAndProviderTests
         };
         var factory = new AssistantProviderFactory(secrets, new HttpClient(handler));
 
-        var gemini = factory.Create(new AssistantSettings { ProviderId = AssistantProviderIds.Gemini });
+        var gemini = factory.CreateForProviderId(AssistantProviderIds.Gemini, new AssistantSettings { ProviderId = AssistantProviderIds.Gemini });
         var geminiReply = await gemini.ChatAsync(
             [new AiMessage { Role = AiMessageRole.User, Content = "hi" }],
             [],
             "gemini");
-        Assert.Equal(AiProviderStatus.Unavailable, geminiReply.Status);
+        Assert.Equal(AiProviderStatus.NotConfigured, geminiReply.Status);
 
-        var local = factory.Create(new AssistantSettings { ProviderId = AssistantProviderIds.Local });
+        var wrappedGemini = factory.Create(new AssistantSettings { ProviderId = AssistantProviderIds.Gemini });
+        var wrappedReply = await wrappedGemini.ChatAsync(
+            [new AiMessage { Role = AiMessageRole.User, Content = "hi" }],
+            [],
+            "gemini");
+        Assert.Equal(AiProviderStatus.Ok, wrappedReply.Status);
+        Assert.Equal("pong", wrappedReply.Content);
+
+        var local = factory.CreateForProviderId(AssistantProviderIds.Local, new AssistantSettings { ProviderId = AssistantProviderIds.Local });
         var localReply = await local.ChatAsync(
             [new AiMessage { Role = AiMessageRole.User, Content = "hi" }],
             [],
             "llama");
-        Assert.Equal(AiProviderStatus.Unavailable, localReply.Status);
+        Assert.Equal(AiProviderStatus.Ok, localReply.Status);
+        Assert.Equal("pong", localReply.Content);
 
         var missing = factory.Create(new AssistantSettings());
         var missingReply = await missing.ChatAsync(
             [new AiMessage { Role = AiMessageRole.User, Content = "hi" }],
             [],
             AssistantSettings.DefaultOpenAiModel);
-        Assert.Equal(AiProviderStatus.NotConfigured, missingReply.Status);
-        Assert.Equal(AssistantUserMessages.NotConfigured, missingReply.ErrorMessage);
-        Assert.Null(handler.LastRequest);
+        Assert.Equal(AiProviderStatus.Ok, missingReply.Status);
+        Assert.Equal("pong", missingReply.Content);
+        Assert.NotNull(handler.LastRequest);
+        Assert.Contains("/v1/chat/completions", handler.LastRequest!.RequestUri!.ToString(), StringComparison.Ordinal);
 
         secrets.SetSecret(AssistantSecretKeys.OpenAiApiKey, "sk-test-not-for-git");
         var openai = factory.Create(new AssistantSettings());

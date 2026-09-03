@@ -24,12 +24,12 @@ public static class AssistantContextSelector
             scope |= AssistantContextScope.Apps;
         }
 
-        if (ContainsAny(lower, text, "音楽", "music", "曲", "再生", "play"))
+        if (ContainsAny(lower, text, "音楽", "music", "曲", "再生", "play", "かけて", "spotify"))
         {
             scope |= AssistantContextScope.Music;
         }
 
-        if (ContainsAny(lower, text, "classroom", "クラスルーム", "連携", "integration"))
+        if (ContainsAny(lower, text, "classroom", "クラスルーム", "連携", "integration", "spotify", "google"))
         {
             scope |= AssistantContextScope.Integrations;
         }

@@ -6,7 +6,8 @@ public static class AssistantIntentClassifier
     private static readonly string[] ActionMarkers =
     [
         "開いて", "開けて", "起動", "始めて", "始めよう", "はじめよう", "再生", "プレイ",
-        "run", "open", "launch", "start", "play", "execute"
+        "かけて", "入れて", "いれて", "削除",
+        "run", "open", "launch", "start", "play", "execute", "delete", "remove"
     ];
 
     private static readonly string[] QuestionMarkers =

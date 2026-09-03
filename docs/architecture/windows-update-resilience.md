@@ -3,7 +3,7 @@
 ## Strategy
 
 1. **Overlay, don't replace.** Secret Base is a separate process, not a shell substitute.
-2. **Adapter isolation.** All OS-facing code lives in `SecretBase.Platform.Windows`.
+2. **Adapter isolation.** All OS-facing code lives in `SecretBase.Platform.Windows` or `SecretBase.Platform.Mac`.
 3. **Public APIs first.** Prefer Windows App SDK / WinUI / documented .NET APIs.
 4. **Compatibility snapshot.** `ICompatibilityService` records OS / .NET / WASDK / app versions at startup for diagnostics.
 5. **Safe exit.** `ISafeExitService` only ends the Secret Base process.

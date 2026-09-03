@@ -4,6 +4,11 @@ namespace SecretBase.Core.Assistant;
 public interface IAiProviderFactory
 {
     IAiProvider Create(AssistantSettings settings);
+
+    IAiProvider CreateForProviderId(string providerId, AssistantSettings settings);
+
+    /// <summary>Lightweight availability probe (no chat). Used for status UI.</summary>
+    Task<bool> ProbeAvailabilityAsync(string providerId, AssistantSettings settings, CancellationToken cancellationToken = default);
 }
 
 /// <summary>In-memory / test provider that returns scripted replies. No network.</summary>

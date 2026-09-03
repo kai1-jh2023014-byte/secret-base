@@ -41,18 +41,10 @@ public sealed partial class AppsWidgetView : UserControl
     public void ApplyTheme(ThemeDefinition theme)
     {
         _theme = theme;
-        RootBorder.Background = ThemePainter.Brush(theme.WidgetBackground, ThemePainter.EffectiveWidgetOpacity(theme));
-        RootBorder.CornerRadius = new CornerRadius(theme.CornerRadius);
-        RootBorder.BorderBrush = ThemePainter.Brush(theme.WidgetForeground, 0.25);
-
-        var font = new FontFamily(theme.FontFamily);
-        HeaderText.FontFamily = font;
-        HeaderText.Foreground = ThemePainter.Brush(theme.WidgetForeground);
-        SubtitleText.FontFamily = font;
-        SubtitleText.Foreground = ThemePainter.Brush(theme.ForegroundMuted);
-        StatusLabel.FontFamily = font;
-        StatusLabel.Foreground = ThemePainter.Brush(theme.ForegroundMuted);
-        StyleActionButton(AddButton, theme, accent: true);
+        WidgetSurfaceStyle.ApplyChrome(RootBorder, theme);
+        WidgetSurfaceStyle.ApplyHeader(HeaderText, SubtitleText, theme);
+        WidgetSurfaceStyle.ApplyMuted(StatusLabel, theme);
+        WidgetSurfaceStyle.ApplyActionButton(AddButton, theme, accent: true);
         Rebuild();
     }
 
@@ -173,16 +165,8 @@ public sealed partial class AppsWidgetView : UserControl
         _ => "🎮"
     };
 
-    private static void StyleActionButton(Button button, ThemeDefinition theme, bool accent = false)
-    {
-        button.FontFamily = new FontFamily(theme.FontFamily);
-        button.Background = accent
-            ? ThemePainter.Brush(theme.Accent, 0.85)
-            : ThemePainter.Brush(theme.WidgetBackground, ThemePainter.EffectiveWidgetOpacity(theme));
-        button.Foreground = ThemePainter.Brush(theme.WidgetForeground);
-        button.BorderBrush = ThemePainter.Brush(theme.Accent, 0.55);
-        button.BorderThickness = new Thickness(1);
-    }
+    private static void StyleActionButton(Button button, ThemeDefinition theme, bool accent = false) =>
+        WidgetSurfaceStyle.ApplyActionButton(button, theme, accent);
 
     private void OpenApp_Click(object sender, RoutedEventArgs e)
     {

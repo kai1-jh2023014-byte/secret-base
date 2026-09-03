@@ -36,13 +36,25 @@ public sealed partial class AssistantWidgetView : UserControl
         IAssistantSettingsStore settingsStore,
         ISecureSecretStore secrets,
         IAiProviderFactory providers,
-        Func<AssistantTurnResult, string?> applyLaunch)
+        Func<AssistantTurnResult, string?> applyLaunch,
+        string? headerTitle = null,
+        string? headerSubtitle = null)
     {
         _assistant = assistant;
         _settingsStore = settingsStore;
         _secrets = secrets;
         _providers = providers;
         _applyLaunch = applyLaunch;
+        if (!string.IsNullOrWhiteSpace(headerTitle))
+        {
+            HeaderText.Text = headerTitle;
+        }
+
+        if (!string.IsNullOrWhiteSpace(headerSubtitle))
+        {
+            SubtitleText.Text = headerSubtitle;
+        }
+
         StatusLabel.Text = string.Empty;
         RefreshProviderStatus();
         SeedFromHistory();
@@ -52,33 +64,21 @@ public sealed partial class AssistantWidgetView : UserControl
     public void ApplyTheme(ThemeDefinition theme)
     {
         _theme = theme;
-        RootBorder.Background = ThemePainter.Brush(theme.WidgetBackground, ThemePainter.EffectiveWidgetOpacity(theme));
-        RootBorder.CornerRadius = new CornerRadius(theme.CornerRadius);
-        RootBorder.BorderBrush = ThemePainter.Brush(theme.WidgetForeground, 0.25);
-
-        var font = new FontFamily(theme.FontFamily);
-        HeaderText.FontFamily = font;
-        HeaderText.Foreground = ThemePainter.Brush(theme.WidgetForeground);
-        SubtitleText.FontFamily = font;
-        SubtitleText.Foreground = ThemePainter.Brush(theme.ForegroundMuted);
-        ProviderStatusText.FontFamily = font;
-        ProviderStatusText.Foreground = ThemePainter.Brush(theme.ForegroundMuted);
-        OnboardingText.FontFamily = font;
-        OnboardingText.Foreground = ThemePainter.Brush(theme.WidgetForeground);
-        CapabilitiesText.FontFamily = font;
-        CapabilitiesText.Foreground = ThemePainter.Brush(theme.ForegroundMuted);
-        StatusLabel.FontFamily = font;
-        StatusLabel.Foreground = ThemePainter.Brush(theme.ForegroundMuted);
-        ConfirmText.FontFamily = font;
-        ConfirmText.Foreground = ThemePainter.Brush(theme.WidgetForeground);
-        InputBox.FontFamily = font;
-        StyleActionButton(SendButton, theme, accent: true);
-        StyleActionButton(SettingsButton, theme);
-        StyleActionButton(OpenSettingsFromOnboardingButton, theme, accent: true);
-        StyleActionButton(ConfirmRunButton, theme, accent: true);
-        StyleActionButton(ConfirmCancelButton, theme);
-        StyleActionButton(RetryButton, theme);
-        StyleActionButton(OpenSettingsFromErrorButton, theme);
+        WidgetSurfaceStyle.ApplyLayeredChrome(OuterShell, RootBorder, theme);
+        WidgetSurfaceStyle.ApplyHeader(HeaderText, SubtitleText, theme);
+        WidgetSurfaceStyle.ApplyMuted(ProviderStatusText, theme);
+        WidgetSurfaceStyle.ApplyBody(OnboardingText, theme);
+        WidgetSurfaceStyle.ApplyMuted(CapabilitiesText, theme);
+        WidgetSurfaceStyle.ApplyMuted(StatusLabel, theme);
+        WidgetSurfaceStyle.ApplyBody(ConfirmText, theme);
+        InputBox.FontFamily = new FontFamily(theme.FontFamily);
+        WidgetSurfaceStyle.ApplyActionButton(SendButton, theme, accent: true);
+        WidgetSurfaceStyle.ApplyGhostButton(SettingsButton, theme);
+        WidgetSurfaceStyle.ApplyActionButton(OpenSettingsFromOnboardingButton, theme, accent: true);
+        WidgetSurfaceStyle.ApplyActionButton(ConfirmRunButton, theme, accent: true);
+        WidgetSurfaceStyle.ApplyGhostButton(ConfirmCancelButton, theme);
+        WidgetSurfaceStyle.ApplyGhostButton(RetryButton, theme);
+        WidgetSurfaceStyle.ApplyGhostButton(OpenSettingsFromErrorButton, theme);
         RefreshProviderStatus();
         RenderTranscript();
     }
@@ -107,21 +107,16 @@ public sealed partial class AssistantWidgetView : UserControl
         }
 
         var mark = status.IsConfigured ? "● Connected" : "○ " + status.StatusLabel;
-        ProviderStatusText.Text =
-            $"{mark} · {status.DisplayName} · {status.Model} · max {status.MaxSteps} steps · key {status.ApiKeyDisplay}";
-        OnboardingPanel.Visibility = status.IsConfigured ? Visibility.Collapsed : Visibility.Visible;
+        ProviderStatusText.Text = string.IsNullOrWhiteSpace(status.FallbackNote)
+            ? $"{mark} · {status.DisplayName} · {status.Model} · max {status.MaxSteps} steps · key {status.ApiKeyDisplay}"
+            : $"{mark} · {status.DisplayName} · {status.Model} · {status.FallbackNote}";
+        OnboardingPanel.Visibility = status.IsConfigured || !string.IsNullOrWhiteSpace(status.FallbackNote)
+            ? Visibility.Collapsed
+            : Visibility.Visible;
     }
 
-    private static void StyleActionButton(Button button, ThemeDefinition theme, bool accent = false)
-    {
-        button.FontFamily = new FontFamily(theme.FontFamily);
-        button.Background = accent
-            ? ThemePainter.Brush(theme.Accent, 0.85)
-            : ThemePainter.Brush(theme.WidgetBackground, ThemePainter.EffectiveWidgetOpacity(theme));
-        button.Foreground = ThemePainter.Brush(theme.WidgetForeground);
-        button.BorderBrush = ThemePainter.Brush(theme.Accent, 0.55);
-        button.BorderThickness = new Thickness(1);
-    }
+    private static void StyleActionButton(Button button, ThemeDefinition theme, bool accent = false) =>
+        WidgetSurfaceStyle.ApplyActionButton(button, theme, accent);
 
     private void SeedFromHistory()
     {
@@ -541,9 +536,9 @@ public sealed partial class AssistantWidgetView : UserControl
         {
             providerHelp.Text = (providerBox.SelectedItem as string) switch
             {
-                "Gemini" => "Gemini is not implemented in this MVP yet. The provider will show as unavailable.",
-                "Local" => "Local/Ollama is not implemented in this MVP yet. The provider will show as unavailable.",
-                _ => "OpenAI is the currently supported provider. API Key is stored in Credential Manager only."
+                "Gemini" => "Gemini uses your API key. When unavailable, Secret Base falls back to Local AI (Ollama).",
+                "Local" => "Local AI uses Ollama at the configured endpoint. No API key required.",
+                _ => "OpenAI uses your API key. When unavailable, Secret Base falls back to Local AI (Ollama)."
             };
         }
         providerBox.SelectionChanged += (_, _) => RefreshProviderHelp();

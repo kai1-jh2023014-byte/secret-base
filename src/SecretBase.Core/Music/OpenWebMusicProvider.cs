@@ -71,4 +71,11 @@ public sealed class OpenWebMusicProvider : IMusicProvider
 
     public Task PreviousAsync(CancellationToken cancellationToken = default) =>
         Task.FromException(new NotSupportedException("Web Music provider does not support previous."));
+
+    public Task ConnectAsync(CancellationToken cancellationToken = default) =>
+        Task.FromException(new NotSupportedException("Web Music provider does not support connect."));
+
+    public Task DisconnectAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+    public Task RefreshPlaybackStateAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
 }

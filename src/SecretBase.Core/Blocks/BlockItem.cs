@@ -20,6 +20,12 @@ public sealed class BlockItem
     /// <summary>Absolute path to the executable, .lnk, file, or folder the user chose.</summary>
     public string Target { get; set; } = string.Empty;
 
+    /// <summary>Original Desktop path when the item was hidden from Desktop. Null if it was only linked.</summary>
+    public string? DesktopOriginPath { get; set; }
+
+    /// <summary>True when Secret Base moved the Desktop original into block-items storage.</summary>
+    public bool HiddenFromDesktop { get; set; }
+
     /// <summary>Optional cached icon path (PNG). Empty = extract from Target at runtime.</summary>
     public string Icon { get; set; } = string.Empty;
 

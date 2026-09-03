@@ -8,18 +8,18 @@
     Background="Transparent"
     mc:Ignorable="d">
 
-    <!-- Floating widget chrome: grip + resize + remove; fades in on hover. -->
+    <!-- Floating chrome — quiet until hover; grip + remove + resize. -->
     <Grid
         x:Name="RootGrid"
         Background="Transparent"
         PointerEntered="RootGrid_PointerEntered"
         PointerExited="RootGrid_PointerExited">
         <Grid.RowDefinitions>
-            <RowDefinition Height="20" />
+            <RowDefinition Height="22" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <Grid Grid.Row="0" ColumnSpacing="4">
+        <Grid Grid.Row="0" ColumnSpacing="4" x:Name="ChromeRow">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
@@ -27,31 +27,34 @@
             <Border
                 x:Name="DragBar"
                 Grid.Column="0"
-                Background="#18FFFFFF"
-                CornerRadius="10,0,0,0"
-                Opacity="0.35"
+                Background="#14FFFFFF"
+                CornerRadius="12,0,0,0"
+                Opacity="0.28"
                 PointerPressed="DragArea_PointerPressed"
                 PointerMoved="DragArea_PointerMoved"
                 PointerReleased="DragArea_PointerReleased"
                 PointerCaptureLost="DragArea_PointerCaptureLost"
                 ToolTipService.ToolTip="Drag to move">
-                <Ellipse
-                    Width="28"
-                    Height="4"
-                    Fill="#66FFFFFF"
+                <StackPanel
+                    Orientation="Horizontal"
                     HorizontalAlignment="Center"
-                    VerticalAlignment="Center" />
+                    VerticalAlignment="Center"
+                    Spacing="3">
+                    <Ellipse x:Name="GripDot1" Width="3" Height="3" Fill="#66FFFFFF" />
+                    <Ellipse x:Name="GripDot2" Width="3" Height="3" Fill="#66FFFFFF" />
+                    <Ellipse x:Name="GripDot3" Width="3" Height="3" Fill="#66FFFFFF" />
+                </StackPanel>
             </Border>
             <Button
                 x:Name="RemoveButton"
                 Grid.Column="1"
-                Width="22"
-                Height="20"
+                Width="24"
+                Height="22"
                 Padding="0"
-                FontSize="11"
+                FontSize="12"
                 Content="×"
-                Opacity="0.35"
-                CornerRadius="0,10,0,0"
+                Opacity="0.28"
+                CornerRadius="0,12,0,0"
                 Click="RemoveButton_Click"
                 ToolTipService.ToolTip="Remove widget from Secret Base" />
         </Grid>
@@ -64,14 +67,14 @@
         <Border
             x:Name="ResizeHandle"
             Grid.Row="1"
-            Width="14"
-            Height="14"
-            Margin="0,0,3,3"
+            Width="12"
+            Height="12"
+            Margin="0,0,4,4"
             HorizontalAlignment="Right"
             VerticalAlignment="Bottom"
-            Background="#44FFFFFF"
+            Background="#33FFFFFF"
             CornerRadius="3"
-            Opacity="0.35"
+            Opacity="0.28"
             PointerPressed="ResizeHandle_PointerPressed"
             PointerMoved="ResizeHandle_PointerMoved"
             PointerReleased="ResizeHandle_PointerReleased"

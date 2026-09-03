@@ -12,12 +12,19 @@
       Move/resize stay on WidgetFrame DragBar.
     -->
     <Border
+        x:Name="OuterShell"
+        Background="#20151A24"
+        CornerRadius="20"
+        Padding="2"
+        BorderThickness="1"
+        BorderBrush="#28FFFFFF">
+    <Border
         x:Name="RootBorder"
         Padding="14,12"
-        Background="#CC243447"
-        CornerRadius="16"
+        Background="#D9181E28"
+        CornerRadius="18"
         BorderThickness="1"
-        BorderBrush="#44FFFFFF">
+        BorderBrush="#3DFFFFFF">
         <Grid RowSpacing="10">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
@@ -25,14 +32,25 @@
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
-            <TextBlock
-                x:Name="HeaderText"
-                Grid.Row="0"
-                Text="Today"
-                FontSize="18"
-                FontWeight="SemiBold" />
+            <StackPanel Grid.Row="0" Spacing="2">
+                <TextBlock
+                    x:Name="HeaderText"
+                    Text="Today"
+                    FontSize="15"
+                    FontWeight="SemiBold"
+                    CharacterSpacing="60" />
+                <Border
+                    x:Name="HeaderAccent"
+                    Width="24"
+                    Height="2"
+                    HorizontalAlignment="Left"
+                    CornerRadius="1"
+                    Background="#FF7A9E86"
+                    Opacity="0.85" />
+            </StackPanel>
 
             <ScrollViewer
                 Grid.Row="1"
@@ -57,7 +75,35 @@
                 TextWrapping="WrapWholeWords"
                 Visibility="Collapsed" />
 
-            <Grid Grid.Row="4" ColumnSpacing="8">
+            <Grid Grid.Row="4" ColumnSpacing="6" Margin="0,4,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="72" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBox
+                    x:Name="AddTitleBox"
+                    Grid.Column="0"
+                    PlaceholderText="Add event…"
+                    FontSize="12"
+                    MinHeight="32" />
+                <TextBox
+                    x:Name="AddTimeBox"
+                    Grid.Column="1"
+                    PlaceholderText="14:00"
+                    FontSize="12"
+                    MinHeight="32"
+                    Margin="0,0,0,0" />
+                <Button
+                    x:Name="AddEventButton"
+                    Grid.Column="2"
+                    Content="Add"
+                    MinWidth="56"
+                    Click="AddEventButton_Click"
+                    ToolTipService.ToolTip="Add a local event in this widget (not Google)" />
+            </Grid>
+
+            <Grid Grid.Row="5" ColumnSpacing="8">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="*" />
@@ -76,7 +122,7 @@
                     Content="Open"
                     HorizontalAlignment="Stretch"
                     Click="OpenCalendarButton_Click"
-                    ToolTipService.ToolTip="Open calendar in the browser" />
+                    ToolTipService.ToolTip="Optional: open calendar in the browser" />
                 <Button
                     x:Name="ConnectButton"
                     Grid.Column="2"
@@ -86,5 +132,6 @@
                     ToolTipService.ToolTip="Connect Google Calendar (OAuth)" />
             </Grid>
         </Grid>
+    </Border>
     </Border>
 </UserControl>

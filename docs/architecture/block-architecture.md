@@ -11,7 +11,7 @@ They are **not** Windows folders and do not replace Explorer.
 | **Core** | `Block`, `BlockItem`, `BlockItemType`, `BlockTargetValidator`, `DefaultBlockFactory` |
 | **Infrastructure** | Layout JSON (`blocks` array), schema v1→v2 migration |
 | **Platform.Abstractions** | `ITargetLaunchService`, `IFileIconService`, `IBlockItemIntakeService` |
-| **Platform.Windows** | Launch; icons; **move Desktop .lnk into block-items storage** |
+| **Platform.Windows** | Launch; icons; **move Desktop files/shortcuts into block-items storage; restore on Return to Desktop** |
 | **App** | `BlockFrame` (+ **Grid** arrange, drop/move intake), Add Block **+** button |
 
 Core has no Win32 / WinUI references.
@@ -39,9 +39,12 @@ Core has no Win32 / WinUI references.
           "id": "...",
           "name": "Cursor",
           "type": "application",
-          "target": "C:\\\\Tools\\\\Cursor\\\\Cursor.exe",
+          "target": ".../block-items/{blockId}/{itemId}.lnk",
+          "desktopOriginPath": "C:\\\\Users\\\\me\\\\Desktop\\\\Cursor.lnk",
+          "hiddenFromDesktop": true,
           "icon": ""
         }
+      ]
       ]
     }
   ]
@@ -59,8 +62,9 @@ Core has no Win32 / WinUI references.
 
 - Always-visible **+** button (bottom-left) opens Add Block dialog
 - Block header **Grid** button arranges icons evenly; also auto-arranges after drop / resize
-- Drop **Desktop shortcuts (.lnk)** → **moved** into `%LocalAppData%\SecretBase\block-items\` (Desktop original removed — no duplicate)
-- Drop Program Files `.exe` → path **link** only (binary is not relocated)
+- Drop **Desktop files and shortcuts** (including Desktop `.exe`) → **moved** into `%LocalAppData%\SecretBase\block-items\` so the Desktop original is hidden
+- Right-click: **Open**, **Return to Desktop** (hidden items), or **Remove from Block** (linked items — original is not deleted). Deleting a Block restores hidden items first
+- Folders, `.app` bundles, and Program Files / Applications stay as path **links** only
 - Real shell icons via `IFileIconService`; click to launch; drag to fine-tune then **Grid** to re-even
 
 ## Shared with widgets
