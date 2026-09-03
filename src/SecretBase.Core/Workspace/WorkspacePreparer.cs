@@ -1,6 +1,7 @@
 using SecretBase.Core.Apps;
 using SecretBase.Core.Calendar;
 using SecretBase.Core.Creative;
+using SecretBase.Core.Memory;
 using SecretBase.Core.Todo;
 
 namespace SecretBase.Core.Workspace;
@@ -17,12 +18,14 @@ public static class WorkspacePreparer
         IReadOnlyList<CustomApp> apps,
         TodoList todos,
         IReadOnlyList<CalendarEvent> events,
-        DateTimeOffset now)
+        DateTimeOffset now,
+        IReadOnlyList<MemoryEntry>? memories = null)
     {
         projects ??= [];
         apps ??= [];
         todos ??= new TodoList();
         events ??= [];
+        memories ??= [];
 
         var project = MatchProject(intent, projects);
         var openTodos = todos.Items.Where(item => !item.IsDone).Take(3).ToList();
@@ -62,9 +65,10 @@ public static class WorkspacePreparer
             checks.Add("Open tasks");
         }
 
-        var lastSession = project is null
-            ? "No matching project yet. Register one in Projects."
-            : $"{project.Name} · {project.Resources.Count} registered resource(s)";
+        var lastSession = memories.FirstOrDefault(item => item.Scope == MemoryScope.Session)?.Summary
+                          ?? (project is null
+                              ? "No matching project yet. Register one in Projects."
+                              : $"{project.Name} · {project.Resources.Count} registered resource(s)");
 
         var nextTask = openTodos.Count > 0
             ? openTodos[0].Title

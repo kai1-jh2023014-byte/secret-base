@@ -24,7 +24,10 @@ public static class BuiltinContextProviders
         Func<FocusSession> focus,
         Func<AssistantProviderStatusInfo> provider,
         Func<IReadOnlyList<string>> integrations,
-        Func<string> atmosphere)
+        Func<string> atmosphere,
+        Func<IReadOnlyList<string>>? memory = null,
+        Func<IReadOnlyList<string>>? activity = null,
+        Func<string>? intent = null)
     {
         return
         [
@@ -151,6 +154,27 @@ public static class BuiltinContextProviders
                     BaseContextSliceIds.Preferences,
                     string.IsNullOrWhiteSpace(name) ? "Calm" : name,
                     []);
+            }),
+            new StaticContextProvider(BaseContextSliceIds.Memory, () =>
+            {
+                var facts = memory?.Invoke() ?? [];
+                return new BaseContextSlice(
+                    BaseContextSliceIds.Memory,
+                    facts.Count == 0 ? "No durable memories" : $"{facts.Count} memory fact(s)",
+                    facts.Take(8).ToList());
+            }),
+            new StaticContextProvider(BaseContextSliceIds.RecentActivity, () =>
+            {
+                var facts = activity?.Invoke() ?? [];
+                return new BaseContextSlice(
+                    BaseContextSliceIds.RecentActivity,
+                    facts.Count == 0 ? "No recent activity" : facts[0],
+                    facts.Take(8).ToList());
+            }),
+            new StaticContextProvider(BaseContextSliceIds.Intent, () =>
+            {
+                var line = intent?.Invoke() ?? "Unknown";
+                return new BaseContextSlice(BaseContextSliceIds.Intent, line, [line]);
             })
         ];
     }

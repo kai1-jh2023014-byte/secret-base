@@ -51,9 +51,10 @@ public static class BaseModules
     public const string Music = "music";
     public const string Projects = "projects";
     public const string Todo = "todo";
+    public const string Dashboard = "dashboard";
 
     public static IReadOnlyList<string> All { get; } =
-        [Ai, Clock, Calendar, Music, Projects, Todo];
+        [Ai, Clock, Calendar, Music, Projects, Todo, Dashboard];
 }
 
 public interface IBaseSettingsStore

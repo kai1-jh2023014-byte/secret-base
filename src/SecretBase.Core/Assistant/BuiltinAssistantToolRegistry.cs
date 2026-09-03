@@ -460,6 +460,108 @@ public sealed class BuiltinAssistantToolRegistry : IAiToolRegistry
                 "Suggest unused registered files for review. Never deletes. Suggestion only.",
             RiskLevel = ActionPrivilege.Observation,
             Capability = AssistantToolCapability.Suggest
+        },
+        new()
+        {
+            Name = AssistantToolNames.MemoryRecall,
+            Description =
+                "Recall durable Secret Base memory (project, session, decisions, preferences). Names only — no secrets or paths. Read-only.",
+            Parameters =
+            [
+                new AssistantToolParameter
+                {
+                    Name = "query",
+                    Type = "string",
+                    Description = "Optional keyword such as a project name.",
+                    Required = false
+                }
+            ],
+            RiskLevel = ActionPrivilege.Observation,
+            Capability = AssistantToolCapability.ReadOnly
+        },
+        new()
+        {
+            Name = AssistantToolNames.MemoryRemember,
+            Description =
+                "Store a short durable fact for future decisions. Refuses secrets, API keys, and file paths. Safe Auto.",
+            Parameters =
+            [
+                new AssistantToolParameter
+                {
+                    Name = "key",
+                    Type = "string",
+                    Description = "Stable key such as last-session or decision.",
+                    Required = true
+                },
+                new AssistantToolParameter
+                {
+                    Name = "summary",
+                    Type = "string",
+                    Description = "One-line fact. Not a path or secret.",
+                    Required = true
+                },
+                new AssistantToolParameter
+                {
+                    Name = "detail",
+                    Type = "string",
+                    Description = "Optional short detail.",
+                    Required = false
+                }
+            ],
+            RiskLevel = ActionPrivilege.Observation,
+            Capability = AssistantToolCapability.SafeAuto
+        },
+        new()
+        {
+            Name = AssistantToolNames.ActivityRecent,
+            Description =
+                "Read recent meaningful activity in Secret Base (not OS hooks). Read-only.",
+            RiskLevel = ActionPrivilege.Observation,
+            Capability = AssistantToolCapability.ReadOnly
+        },
+        new()
+        {
+            Name = AssistantToolNames.SearchBase,
+            Description =
+                "Deterministic search across memory, activity, projects, files, calendar, and todos. No disk crawl. Read-only.",
+            Parameters =
+            [
+                new AssistantToolParameter
+                {
+                    Name = "query",
+                    Type = "string",
+                    Description = "What to find, e.g. last Secret Base session or a todo title.",
+                    Required = true
+                }
+            ],
+            RiskLevel = ActionPrivilege.Observation,
+            Capability = AssistantToolCapability.ReadOnly
+        },
+        new()
+        {
+            Name = AssistantToolNames.UserState,
+            Description =
+                "Read current user state, likely intent, and project continuation context. Heuristic confidence — not an action. Read-only.",
+            RiskLevel = ActionPrivilege.Observation,
+            Capability = AssistantToolCapability.ReadOnly
+        },
+        new()
+        {
+            Name = AssistantToolNames.AutomationFeedback,
+            Description =
+                "Record whether the user accepted or dismissed the last quiet suggestion. Safe Auto. Does not raise safety.",
+            Parameters =
+            [
+                new AssistantToolParameter
+                {
+                    Name = "accepted",
+                    Type = "boolean",
+                    Description = "true if the user continued, false if dismissed.",
+                    Required = true
+                }
+            ],
+            RiskLevel = ActionPrivilege.Observation,
+            Capability = AssistantToolCapability.SafeAuto
         }
     ];
 

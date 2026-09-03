@@ -1,4 +1,5 @@
 using SecretBase.Core;
+using SecretBase.Core.Activity;
 using SecretBase.Core.Ai;
 using SecretBase.Core.Apps;
 using SecretBase.Core.Assistant;
@@ -42,6 +43,7 @@ public sealed class MacHostSession
     public required IAppLaunchSettingsStore LaunchSettings { get; init; }
     public required IAssistantSettingsStore AssistantSettings { get; init; }
     public required IAssistantService Assistant { get; init; }
+    public required IBaseExperienceServices Base { get; init; }
     public required IPathPickService PathPicker { get; init; }
 }
 
@@ -116,6 +118,9 @@ public static class MacHostComposer
             calendarCommands);
         var todoStore = new JsonTodoStore();
         var focus = new FocusSessionStore();
+        var memoryStore = new JsonMemoryStore();
+        var activityStore = new JsonActivityStore();
+        var feedbackStore = new JsonAutomationFeedbackStore();
         var layoutExisted = new JsonLayoutStore(logger: logger).Exists(RoomId.DefaultRoomId);
         var baseSettings = new JsonBaseSettingsStore().LoadOrCreate(layoutExisted);
         var baseExperience = new BaseExperienceServices(
@@ -132,7 +137,10 @@ public static class MacHostComposer
                 return listed.Succeeded ? listed.Apps.ToList() : [];
             },
             () => calendarCommands.ListLocalEvents(),
-            () => time.GetLocalNow());
+            () => time.GetLocalNow(),
+            memoryStore,
+            activityStore,
+            feedbackStore);
         baseExperience.CurrentWorkspace = baseSettings.LastWorkspace;
         var assistant = new AssistantService(
             assistantRegistry,
@@ -167,6 +175,7 @@ public static class MacHostComposer
             LaunchSettings = launchSettings,
             AssistantSettings = assistantSettings,
             Assistant = assistant,
+            Base = baseExperience,
             PathPicker = new MacPathPickService()
         };
     }

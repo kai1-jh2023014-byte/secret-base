@@ -24,7 +24,7 @@ RequiresConfirmation
   → Command → Service → Host launch (if ShouldLaunch / ShouldOpenCursorAtFolder)
 ```
 
-## Tool catalog (v0.6)
+## Tool catalog (v0.7)
 
 ### ReadOnly
 
@@ -39,6 +39,10 @@ RequiresConfirmation
 | `music_search` | `MusicCommand.SearchTrack` (if Search capability) |
 | `music_get_state` | Context / MusicService state |
 | `todo_list` | Local todos |
+| `memory_recall` | Durable `IMemoryStore` facts (names only) |
+| `activity_recent` | Meaningful activity (not OS hooks) |
+| `search_base` | Deterministic metadata search |
+| `user_state` | Heuristic user state + intent + continuation |
 
 ### SafeAuto
 
@@ -46,6 +50,8 @@ RequiresConfirmation
 |------|----------|
 | `workspace_prepare` | Build a workspace card from registered data. No launch. |
 | `focus_start` | Local Pomodoro. No launch. |
+| `memory_remember` | Store a short fact. Refuses secrets/paths. |
+| `automation_feedback` | Record accept/dismiss. Never raises safety. |
 
 ### Suggest
 

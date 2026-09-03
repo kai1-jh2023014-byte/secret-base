@@ -39,6 +39,16 @@ public static class AssistantPlanner
             return Clamp(BuildOpenNamedPlan(), maxSteps);
         }
 
+        if (LooksLikeSearch(text))
+        {
+            return Clamp(BuildSearchPlan(), maxSteps);
+        }
+
+        if (LooksLikeRecall(text))
+        {
+            return Clamp(BuildRecallPlan(), maxSteps);
+        }
+
         if (LooksLikeContinue(text) || LooksLikeStartProject(text)
             || (intent == AssistantIntentKind.ActionRequest && LooksLikeProject(text)))
         {
@@ -147,13 +157,20 @@ public static class AssistantPlanner
                 new AssistantPlanStep
                 {
                     Index = 1,
+                    Title = "Recall last session",
+                    Kind = AssistantPlanStepKind.Read,
+                    ToolName = AssistantToolNames.MemoryRecall
+                },
+                new AssistantPlanStep
+                {
+                    Index = 2,
                     Title = "Workspace を準備",
                     Kind = AssistantPlanStepKind.Read,
                     ToolName = AssistantToolNames.WorkspacePrepare
                 },
                 new AssistantPlanStep
                 {
-                    Index = 2,
+                    Index = 3,
                     Title = "プロジェクトを開く（確認が必要）",
                     Kind = AssistantPlanStepKind.ConfirmAction,
                     ToolName = AssistantToolNames.WorkspaceContinue,
@@ -162,6 +179,45 @@ public static class AssistantPlanner
             ]
         };
     }
+
+    private static AssistantPlan BuildSearchPlan() =>
+        new()
+        {
+            Summary = "Secret Base の記憶・活動・プロジェクトから探します。",
+            Steps =
+            [
+                new AssistantPlanStep
+                {
+                    Index = 1,
+                    Title = "Search Base",
+                    Kind = AssistantPlanStepKind.Read,
+                    ToolName = AssistantToolNames.SearchBase
+                }
+            ]
+        };
+
+    private static AssistantPlan BuildRecallPlan() =>
+        new()
+        {
+            Summary = "前回の作業と現在の状態を確認します。",
+            Steps =
+            [
+                new AssistantPlanStep
+                {
+                    Index = 1,
+                    Title = "User state",
+                    Kind = AssistantPlanStepKind.Read,
+                    ToolName = AssistantToolNames.UserState
+                },
+                new AssistantPlanStep
+                {
+                    Index = 2,
+                    Title = "Memory",
+                    Kind = AssistantPlanStepKind.Read,
+                    ToolName = AssistantToolNames.MemoryRecall
+                }
+            ]
+        };
 
     private static AssistantPlan BuildFocusPlan() =>
         new()
@@ -398,6 +454,19 @@ public static class AssistantPlanner
         || text.Contains("何をすれ", StringComparison.Ordinal)
         || text.Contains("what should", StringComparison.OrdinalIgnoreCase)
         || text.Contains("today", StringComparison.OrdinalIgnoreCase);
+
+    private static bool LooksLikeSearch(string text) =>
+        text.Contains("検索", StringComparison.Ordinal)
+        || text.Contains("search", StringComparison.OrdinalIgnoreCase)
+        || text.Contains("昨日見", StringComparison.Ordinal)
+        || text.Contains("先週読", StringComparison.Ordinal)
+        || text.Contains("最近作った", StringComparison.Ordinal);
+
+    private static bool LooksLikeRecall(string text) =>
+        text.Contains("前回止めた", StringComparison.Ordinal)
+        || text.Contains("last session", StringComparison.OrdinalIgnoreCase)
+        || text.Contains("覚えて", StringComparison.Ordinal)
+        || text.Contains("where did I", StringComparison.OrdinalIgnoreCase);
 
     private static bool LooksLikeContinue(string text) =>
         text.Contains("続け", StringComparison.Ordinal)

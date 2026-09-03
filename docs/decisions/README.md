@@ -213,3 +213,9 @@ See [2026-09-03-macos-host.md](2026-09-03-macos-host.md).
 **Decision:** Evolve Secret Base from a widget collection into one Personal Space: Base AI + explicit context providers/aggregator, Workspace session (prepare vs continue), local Todo/Focus, time-aware suggestions without an LLM loop, File Intelligence as deletion *candidates*, Clock Base style, onboarding that marks existing layouts complete, and design-system tokens (`SurfaceElevated`, `MotionDurationMs`). Reuse Confirmation, MaxSteps, allowlist launch, Single Instance, startup containment, and corrupt JSON recovery. Do **not** auto-launch apps, run git, crawl the disk, or call OS `File.Delete`.
 
 **Why:** The product promise is that the base is already prepared — quietly — not that more widgets appear. Safety lanes stay: Safe Auto / Confirmation / Explicit Confirmation.
+
+## 2026-09-03 — Unified Personal AI OS (v0.7)
+
+**Decision:** Add long-term Memory (scoped, TTL, importance, no secrets/paths), Activity events aggregated into meaningful work, User State with heuristic confidence, Intent Engine (intent ≠ action), Automation Engine wrapping TimeAwareAdvisor with quiet-by-default InterventionPolicy and accept/dismiss learning, Project Continuation context, deterministic Universal Search, File Intelligence 2.0 classifications, and a Base dashboard Mini App that is **not** seeded into existing layouts. Reuse Confirmation, Step Budget, Allowlist, Single Instance, startup containment, and corrupt JSON recovery. LLM stays event-driven (user chat), never at startup.
+
+**Why:** Secret Base should feel like *my computer, understood by AI* — prepare the next workspace, remember last session, stay quiet during Focus, and never auto-launch or delete.

@@ -5,6 +5,9 @@ using Avalonia.Interactivity;
 using Avalonia.Threading;
 using SecretBase.Core;
 using SecretBase.Core.Assistant;
+using SecretBase.Core.Automation;
+using SecretBase.Core.Base;
+using SecretBase.Core.Workspace;
 using SecretBase.Core.Blocks;
 using SecretBase.Core.Desktop;
 using SecretBase.Core.Themes;
@@ -27,6 +30,8 @@ public partial class MainWindow : Window
     private bool _busy;
     private bool _autoStartSync;
 
+    private int _clockTicks;
+
     public MainWindow()
     {
         InitializeComponent();
@@ -43,13 +48,22 @@ public partial class MainWindow : Window
             _session.Logger.Info("overlay", "macOS workspace window activated. Not a Dock/Finder replacement.");
             RefreshClock();
             RefreshProvider();
+            RefreshDashboard();
             InitializeAutoStartToggle();
             RefreshHistory();
         };
         Closing += (_, _) => _session.Logger.Info("lifecycle", "Safe exit — process end only.");
 
         _clockTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
-        _clockTimer.Tick += (_, _) => RefreshClock();
+        _clockTimer.Tick += (_, _) =>
+        {
+            RefreshClock();
+            _clockTicks++;
+            if (_clockTicks % 15 == 0)
+            {
+                RefreshDashboard();
+            }
+        };
         _clockTimer.Start();
 
         LoadWorkspace();
@@ -67,6 +81,8 @@ public partial class MainWindow : Window
 
         TitleText.Text = string.IsNullOrWhiteSpace(_theme.DisplayName) ? AppInfo.Name : _theme.DisplayName;
         StatusText.Text = $"v{AppInfo.Version} · {_session.Compatibility.OsDescription}";
+        _session.Base.EvaluateAutomation(AutomationTriggerKind.Startup);
+        RefreshDashboard();
     }
 
     private void RefreshClock()
@@ -79,6 +95,57 @@ public partial class MainWindow : Window
     private void RefreshProvider()
     {
         ProviderText.Text = BaseAiStatusFormatter.Format(_session.Assistant.ProviderStatus);
+        RefreshDashboard();
+    }
+
+    private void RefreshDashboard()
+    {
+        var state = _session.Base.ComposeUserState(provider: _session.Assistant.ProviderStatus);
+        var continuation = _session.Base.Continuation();
+        var card = BaseDashboardComposer.Compose(
+            state,
+            continuation,
+            _session.Base.LastSuggestion,
+            _session.Base.ListUpcomingEvents().Count);
+        GreetingText.Text = card.Greeting;
+        ReadyText.Text = card.ReadyLine;
+        ProjectText.Text = string.IsNullOrWhiteSpace(card.ContinuationTitle)
+            ? "Nothing prepared yet"
+            : card.ContinuationTitle;
+        SessionText.Text = card.ContinuationDetail;
+        SuggestionText.Text = string.IsNullOrWhiteSpace(card.SuggestionTitle)
+            ? string.Empty
+            : card.SuggestionTitle + (string.IsNullOrWhiteSpace(card.SuggestionDetail)
+                ? string.Empty
+                : " " + card.SuggestionDetail);
+        MetaText.Text = $"Calendar {card.CalendarLine} · Tasks {card.TasksLine} · {card.AiLine}";
+        ContinueButton.IsEnabled = card.ShowContinue || !string.IsNullOrWhiteSpace(card.SuggestionTitle);
+        NotNowButton.IsVisible = !string.IsNullOrWhiteSpace(card.SuggestionTitle);
+    }
+
+    private void ContinueButton_OnClick(object? sender, RoutedEventArgs e)
+    {
+        var session = _session.Base.CurrentWorkspace
+                      ?? WorkspacePreparer.Prepare(
+                          "Continue",
+                          _session.Base.ListProjects(),
+                          _session.Base.ListApps(),
+                          _session.Base.LoadTodos(),
+                          _session.Base.ListUpcomingEvents(),
+                          _session.Base.Now,
+                          _session.Base.Memory.Recall(_session.Base.Now));
+        _session.Base.RememberPreparedWorkspace(session);
+        _session.Base.RecordFeedback(true);
+        StatusText.Text =
+            "Workspace ready. Opening a registered project still requires confirmation in Base AI.";
+        RefreshDashboard();
+    }
+
+    private void NotNowButton_OnClick(object? sender, RoutedEventArgs e)
+    {
+        _session.Base.RecordFeedback(false);
+        _session.Base.LastSuggestion = null;
+        RefreshDashboard();
     }
 
     private void InitializeAutoStartToggle()

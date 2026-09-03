@@ -8,6 +8,7 @@ using SecretBase.Core.Widgets.Creative;
 using SecretBase.Core.Widgets.Music;
 using SecretBase.Core.Widgets.Text;
 using SecretBase.Core.Widgets.Web;
+using SecretBase.Core.Widgets.Dashboard;
 using SecretBase.Core.Widgets.Workspace;
 
 namespace SecretBase.Core.Widgets;
@@ -284,6 +285,28 @@ public static class DefaultWidgetFactory
             Type = WidgetTypes.Workspace,
             Position = new WidgetPosition(x ?? 360, y ?? 80),
             Size = new WidgetSize(width ?? 340, height ?? 420),
+            RoomId = room,
+            Configuration = config.ToDictionary()
+        };
+    }
+
+    /// <summary>Creates a Base dashboard Mini App. Not seeded into default layout.</summary>
+    public static WidgetInstance CreateDashboard(
+        RoomId? roomId = null,
+        double? x = null,
+        double? y = null,
+        double? width = null,
+        double? height = null,
+        DashboardWidgetConfiguration? configuration = null)
+    {
+        var room = roomId ?? RoomId.DefaultRoomId;
+        var config = configuration ?? DashboardWidgetConfiguration.CreateDefault();
+        return new WidgetInstance
+        {
+            Id = Guid.NewGuid(),
+            Type = WidgetTypes.Dashboard,
+            Position = new WidgetPosition(x ?? 48, y ?? 270),
+            Size = new WidgetSize(width ?? 340, height ?? 380),
             RoomId = room,
             Configuration = config.ToDictionary()
         };
