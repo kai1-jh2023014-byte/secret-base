@@ -221,7 +221,7 @@ public sealed partial class DesktopPage
         }
 
         var draft = _baseExperience.ClassifyCapture(box.Text ?? string.Empty);
-        CaptureDestination? force = destinations.SelectedItem as string switch
+        CaptureDestination? force = (destinations.SelectedItem as string) switch
         {
             "Idea" => CaptureDestination.Idea,
             "Todo" => CaptureDestination.Todo,

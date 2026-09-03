@@ -29,8 +29,9 @@ namespace SecretBase.Core.Base;
 
 /// <summary>
 /// Composition of Base domains for Assistant tools. Not a widget state bag.
+/// Also the Command Center / Base AI context (catalog, permissions, named reads).
 /// </summary>
-public interface IBaseExperienceServices
+public interface IBaseExperienceServices : ICommandContext
 {
     TodoList LoadTodos();
 
@@ -52,29 +53,17 @@ public interface IBaseExperienceServices
 
     DateTimeOffset? LastInterventionAt { get; }
 
-    IReadOnlyList<CreativeProject> ListProjects();
-
     IReadOnlyList<CustomApp> ListApps();
 
     IReadOnlyList<CalendarEvent> ListUpcomingEvents();
-
-    DateTimeOffset Now { get; }
 
     UserState ComposeUserState(
         AssistantMusicState? music = null,
         AssistantProviderStatusInfo? provider = null);
 
-    DetectedIntent DetectIntent(string? utterance = null);
-
-    CurrentSituation ComposeSituation();
-
-    ProjectContinuationContext Continuation();
-
     AutomationSuggestion? EvaluateAutomation(AutomationTriggerKind trigger = AutomationTriggerKind.Time);
 
     AutomationExecution EvaluatePipeline(AutomationTriggerKind trigger = AutomationTriggerKind.Time);
-
-    IReadOnlyList<SearchHit> Search(string query);
 
     bool IngestObservation(ObservationEvent observation);
 
@@ -88,13 +77,7 @@ public interface IBaseExperienceServices
 
     IAutomationRuleStore Rules { get; }
 
-    DailyBriefingSnapshot Briefing();
-
-    IReadOnlyList<PaletteItem> Palette(string query);
-
     CommandDispatch Dispatch(string utterance);
-
-    IReadOnlyList<TimelineEntry> Timeline();
 
     CaptureDraft ClassifyCapture(string text);
 
@@ -104,17 +87,11 @@ public interface IBaseExperienceServices
 
     string Privacy();
 
-    IReadOnlyList<AttentionItem> Attention();
-
     IReadOnlyList<SuggestionAudit> Audits();
-
-    ProjectIntelligenceSnapshot? ProjectInfo(string name);
 
     IReadOnlyList<LearningInsight> Learning();
 
     void RecordOpened();
-
-    string MemoryCatalog(string? query = null);
 
     IntegrationHost? Integrations { get; set; }
 }
