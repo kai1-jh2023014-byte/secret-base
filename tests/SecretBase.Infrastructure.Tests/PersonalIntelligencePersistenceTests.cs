@@ -92,4 +92,50 @@ public class PersonalIntelligencePersistenceTests
             Directory.Delete(dir, recursive: true);
         }
     }
+
+    [Fact]
+    public void Memory_UpdateMerge_Persists_AndCorruptRecovers()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "secret-base-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var path = Path.Combine(dir, "memory.json");
+            var store = new JsonMemoryStore(path);
+            var saved = store.Remember(new MemoryEntry { Key = "note", Summary = "one" });
+            store.Update(saved.Id, summary: "two");
+            store.Merge(new MemoryEntry { Key = "note", Summary = "three" });
+            Assert.Equal("three", new JsonMemoryStore(path).Recall(DateTimeOffset.UtcNow, query: "three")[0].Summary);
+
+            File.WriteAllText(path, "{ broken");
+            Assert.Empty(new JsonMemoryStore(path).Recall(DateTimeOffset.UtcNow));
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void AutomationRules_RoundTrip_AndCorruptBecomesDefaults()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "secret-base-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var path = Path.Combine(dir, "automation-rules.json");
+            var store = new JsonAutomationRuleStore(path);
+            var rule = store.List()[0];
+            rule.Enabled = false;
+            store.Save(rule);
+            Assert.False(new JsonAutomationRuleStore(path).List().First(item => item.Id == rule.Id).Enabled);
+
+            File.WriteAllText(path, "{ broken");
+            Assert.NotEmpty(new JsonAutomationRuleStore(path).List());
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
 }

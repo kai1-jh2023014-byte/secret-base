@@ -54,6 +54,13 @@ public static class AssistantToolNames
     public const string AutomationFeedback = "automation_feedback";
     public const string SituationNow = "situation_now";
     public const string SessionRecent = "session_recent";
+    public const string DailyBriefing = "daily_briefing";
+    public const string CommandPalette = "command_palette";
+    public const string QuickCapture = "quick_capture";
+    public const string IntentExplain = "intent_explain";
+    public const string ActivityTimeline = "activity_timeline";
+    public const string PrivacyManifest = "privacy_manifest";
+    public const string AttentionNow = "attention_now";
 }
 
 public static class AssistantActivityDomains

@@ -1,17 +1,26 @@
 using SecretBase.Core.Activity;
 using SecretBase.Core.Apps;
 using SecretBase.Core.Assistant;
+using SecretBase.Core.Attention;
 using SecretBase.Core.Automation;
+using SecretBase.Core.Briefing;
 using SecretBase.Core.Calendar;
+using SecretBase.Core.Capture;
+using SecretBase.Core.Commands;
 using SecretBase.Core.Creative;
+using SecretBase.Core.Explain;
+using SecretBase.Core.Files;
 using SecretBase.Core.Focus;
 using SecretBase.Core.Intent;
 using SecretBase.Core.Memory;
 using SecretBase.Core.Observation;
+using SecretBase.Core.Privacy;
+using SecretBase.Core.Projects;
 using SecretBase.Core.Search;
 using SecretBase.Core.Session;
 using SecretBase.Core.Situation;
 using SecretBase.Core.State;
+using SecretBase.Core.Timeline;
 using SecretBase.Core.Todo;
 using SecretBase.Core.Workspace;
 
@@ -73,9 +82,41 @@ public interface IBaseExperienceServices
     void RememberPreparedWorkspace(WorkspaceSession session);
 
     void RecordFeedback(bool accepted);
+
+    BaseSettings? Preferences { get; set; }
+
+    IAutomationRuleStore Rules { get; }
+
+    DailyBriefingSnapshot Briefing();
+
+    IReadOnlyList<PaletteItem> Palette(string query);
+
+    CommandDispatch Dispatch(string utterance);
+
+    IReadOnlyList<TimelineEntry> Timeline();
+
+    CaptureDraft ClassifyCapture(string text);
+
+    MemoryEntry? CommitCapture(CaptureDraft draft, CaptureDestination? force = null);
+
+    string ExplainIntent();
+
+    string Privacy();
+
+    IReadOnlyList<AttentionItem> Attention();
+
+    IReadOnlyList<SuggestionAudit> Audits();
+
+    ProjectIntelligenceSnapshot? ProjectInfo(string name);
+
+    IReadOnlyList<LearningInsight> Learning();
+
+    void RecordOpened();
+
+    string MemoryCatalog(string? query = null);
 }
 
-public sealed class BaseExperienceServices : IBaseExperienceServices
+public sealed class BaseExperienceServices : IBaseExperienceServices, ICommandContext
 {
     private readonly ITodoStore _todos;
     private readonly Func<IReadOnlyList<CreativeProject>> _projects;
@@ -93,7 +134,8 @@ public sealed class BaseExperienceServices : IBaseExperienceServices
         IMemoryStore? memory = null,
         IActivityLog? activity = null,
         IAutomationFeedbackStore? feedback = null,
-        IWorkSessionStore? sessions = null)
+        IWorkSessionStore? sessions = null,
+        IAutomationRuleStore? rules = null)
     {
         _todos = todos ?? throw new ArgumentNullException(nameof(todos));
         Focus = focus ?? throw new ArgumentNullException(nameof(focus));
@@ -105,6 +147,7 @@ public sealed class BaseExperienceServices : IBaseExperienceServices
         Activity = activity ?? new ActivityLog();
         AutomationFeedback = feedback ?? new AutomationFeedbackStore();
         Sessions = sessions ?? new WorkSessionStore();
+        Rules = rules ?? new AutomationRuleStore();
     }
 
     public FocusSessionStore Focus { get; }
@@ -119,11 +162,16 @@ public sealed class BaseExperienceServices : IBaseExperienceServices
 
     public IWorkSessionStore Sessions { get; }
 
+    public IAutomationRuleStore Rules { get; }
+
+    public BaseSettings? Preferences { get; set; }
+
     public AutomationSuggestion? LastSuggestion { get; set; }
 
     public DateTimeOffset? LastInterventionAt { get; private set; }
 
     private bool _focusWasRunning;
+    private readonly List<SuggestionAudit> _audits = [];
 
     public TodoList LoadTodos() => _todos.LoadOrCreate();
 
@@ -136,6 +184,8 @@ public sealed class BaseExperienceServices : IBaseExperienceServices
     public IReadOnlyList<CalendarEvent> ListUpcomingEvents() => _events();
 
     public DateTimeOffset Now => _now();
+
+    public int DefaultFocusMinutes => Math.Clamp(Preferences?.DefaultFocusMinutes ?? 25, 5, 90);
 
     public UserState ComposeUserState(
         AssistantMusicState? music = null,
@@ -199,7 +249,43 @@ public sealed class BaseExperienceServices : IBaseExperienceServices
         var state = ComposeUserState();
         var situation = ComposeSituation();
         var intent = IntentEngine.Detect(state, situation, Sessions.Current ?? Sessions.Recent(1).FirstOrDefault());
-        var execution = AutomationEngine.Run(state, intent, AutomationFeedback, trigger, LastInterventionAt);
+        situation.LikelyIntent = intent.Kind.ToString();
+        situation.NextLikelyAction = intent.IsActionable ? "Continue with confirmation" : "Stay quiet";
+        var execution = AutomationEngine.Run(
+            state,
+            intent,
+            AutomationFeedback,
+            trigger,
+            LastInterventionAt,
+            Preferences?.QuietHoursStart ?? 22,
+            Preferences?.QuietHoursEnd ?? 8,
+            Preferences?.AllowFocusInterruptions ?? false);
+        var matched = AutomationScheduler.Match(Rules.List(), trigger, intent, Now);
+        if (matched is not null)
+        {
+            matched.LastRun = Now;
+            matched.LastResult = execution.Suggestion?.Title ?? execution.Result ?? execution.Mode.ToString();
+            Rules.Save(matched);
+        }
+
+        if (execution.Suggestion is not null)
+        {
+            _audits.Add(new SuggestionAudit
+            {
+                At = Now,
+                What = execution.Suggestion.Title,
+                Why = string.Join("; ", execution.Evidence.Take(4)),
+                Confidence = execution.Suggestion.Confidence,
+                Action = execution.Suggestion.RequiresConfirmation ? "Waiting for confirmation" : "Safe Auto suggestion",
+                Status = "suggested",
+                Evidence = execution.Evidence
+            });
+            if (_audits.Count > 80)
+            {
+                _audits.RemoveRange(0, _audits.Count - 80);
+            }
+        }
+
         LastSuggestion = execution.Suggestion;
         if (execution.Suggestion is not null)
         {
@@ -209,16 +295,134 @@ public sealed class BaseExperienceServices : IBaseExperienceServices
         return execution;
     }
 
-    public IReadOnlyList<SearchHit> Search(string query) =>
-        BaseSearch.Query(
-            query,
-            Memory.RecallRanked(Now, query, ComposeUserState().CurrentProjectName, 40),
-            Activity.Recent(80),
-            ListProjects(),
+    public IReadOnlyList<SearchHit> Search(string query)
+    {
+        var suggestion = LastSuggestion;
+        SearchHit[] extra = suggestion is null
+            ? []
+            : [new SearchHit("suggestion", suggestion.Title, suggestion.Detail, 0.7, Now, "automation")];
+        return new KeywordSearchRanker().Rank(
+            BaseSearch.Query(
+                query,
+                Memory.RecallRanked(Now, query, ComposeUserState().CurrentProjectName, 40),
+                Activity.Recent(80),
+                ListProjects(),
+                ListUpcomingEvents(),
+                LoadTodos(),
+                CurrentWorkspace,
+                Sessions.Recent(8),
+                extra),
+            query);
+    }
+
+    public DailyBriefingSnapshot Briefing() =>
+        DailyBriefingComposer.Compose(
+            ComposeUserState(),
+            ComposeSituation(),
+            DetectIntent(),
+            Continuation(),
             ListUpcomingEvents(),
             LoadTodos(),
+            Sessions.Current ?? Sessions.Recent(1).FirstOrDefault());
+
+    public IReadOnlyList<PaletteItem> Palette(string query) =>
+        CommandPalette.Build(
+            query,
+            ComposeUserState(),
+            ComposeSituation(),
+            DetectIntent(query),
+            Search(string.IsNullOrWhiteSpace(query) ? "recent" : query),
+            ListProjects(),
+            ListApps(),
+            LoadTodos());
+
+    public CommandDispatch Dispatch(string utterance) => CommandCenter.Handle(utterance, this);
+
+    public IReadOnlyList<TimelineEntry> Timeline() =>
+        ActivityTimeline.ForDay(
+            Now,
+            Activity.Meaningful(Now, TimeSpan.FromHours(18)),
+            ListUpcomingEvents(),
+            Sessions.Recent(8),
+            LoadTodos());
+
+    public CaptureDraft ClassifyCapture(string text) =>
+        QuickCaptureClassifier.Classify(text, ListProjects().Select(item => item.Name).ToList());
+
+    public MemoryEntry? CommitCapture(CaptureDraft draft, CaptureDestination? force = null)
+    {
+        ArgumentNullException.ThrowIfNull(draft);
+        var destination = force ?? draft.Destination;
+        if (destination == CaptureDestination.Todo)
+        {
+            var list = LoadTodos();
+            list.Items.Add(QuickCaptureClassifier.ToTodo(draft));
+            SaveTodos(list);
+            Activity.Record(new ActivityEvent { Kind = ActivityKind.TodoCreated, Title = draft.Text, At = Now, Source = "quick-capture" });
+            try
+            {
+                return Memory.Remember(QuickCaptureClassifier.ToMemory(draft, Now));
+            }
+            catch (InvalidOperationException)
+            {
+                return QuickCaptureClassifier.ToMemory(draft, Now);
+            }
+        }
+
+        var memory = QuickCaptureClassifier.ToMemory(draft, Now);
+        try
+        {
+            return Memory.Remember(memory);
+        }
+        catch (InvalidOperationException)
+        {
+            return null;
+        }
+    }
+
+    public string ExplainIntent() => IntentExplainer.Explain(DetectIntent(), ComposeSituation());
+
+    public string Privacy() => PrivacyManifest.Format();
+
+    public IReadOnlyList<AttentionItem> Attention()
+    {
+        var state = ComposeUserState();
+        var situation = ComposeSituation();
+        var intent = DetectIntent();
+        var mode = InterventionPolicy.Decide(
+            state,
+            intent,
+            0.4,
+            AutomationFeedback.ConsecutiveDismissals(intent.Kind),
+            LastInterventionAt,
+            Preferences?.QuietHoursStart ?? 22,
+            Preferences?.QuietHoursEnd ?? 8,
+            Preferences?.AllowFocusInterruptions ?? false);
+        return AttentionCenter.Compose(
+            state,
+            situation,
+            intent,
+            LastSuggestion,
+            LoadTodos(),
+            ListUpcomingEvents(),
+            FileIntelligence.SuggestCleanup(ListProjects(), Now),
+            mode);
+    }
+
+    public IReadOnlyList<SuggestionAudit> Audits() => _audits.TakeLast(20).Reverse().ToList();
+
+    public ProjectIntelligenceSnapshot? ProjectInfo(string name) =>
+        ProjectIntelligence.For(
+            name,
+            ListProjects(),
             CurrentWorkspace,
-            Sessions.Recent(8));
+            Sessions.Current ?? Sessions.Recent(1).FirstOrDefault(),
+            Activity.Meaningful(Now),
+            Memory.RecallRanked(Now, name, name, 8),
+            LoadTodos());
+
+    public string MemoryCatalog(string? query = null) =>
+        PersonalSpaceCatalog.Memories(Memory, Now, query);
 
     public bool IngestObservation(ObservationEvent observation)
     {
@@ -245,9 +449,23 @@ public sealed class BaseExperienceServices : IBaseExperienceServices
             Activity.Recent(100),
             ListProjects(),
             ListApps(),
-            preferredFocusMinutes: 25,
+            preferredFocusMinutes: DefaultFocusMinutes,
             feedback: AutomationFeedback.Recent(40),
-            preferredWorkspace: CurrentWorkspace?.Title);
+            preferredWorkspace: Preferences?.PreferredProjectName ?? CurrentWorkspace?.Title);
+
+    public IReadOnlyList<LearningInsight> Learning() => LearningLoop.Detect(AutomationFeedback.Recent(80));
+
+    public void RecordOpened()
+    {
+        Activity.Record(new ActivityEvent
+        {
+            Kind = ActivityKind.SecretBaseOpened,
+            Title = "Secret Base opened",
+            At = Now,
+            Source = "host"
+        });
+        Sessions.StartOrContinue(Now, CurrentWorkspace?.ProjectId, CurrentWorkspace?.ProjectName, CurrentWorkspace?.Title);
+    }
 
     public void RememberPreparedWorkspace(WorkspaceSession session)
     {

@@ -168,9 +168,12 @@ public static class InterventionPolicy
         DetectedIntent intent,
         double urgency = 0.3,
         int dismissals = 0,
-        DateTimeOffset? lastIntervention = null)
+        DateTimeOffset? lastIntervention = null,
+        int quietHoursStart = 22,
+        int quietHoursEnd = 8,
+        bool allowFocusInterruptions = false)
     {
-        if (state.FocusRunning && urgency < 0.7)
+        if (state.FocusRunning && urgency < 0.7 && !allowFocusInterruptions)
         {
             return InterventionMode.Silent;
         }
@@ -181,7 +184,9 @@ public static class InterventionPolicy
         }
 
         var hour = state.Now.Hour;
-        var quietHours = hour >= 22 || hour < 8;
+        var quietHours = quietHoursStart > quietHoursEnd
+            ? hour >= quietHoursStart || hour < quietHoursEnd
+            : hour >= quietHoursStart && hour < quietHoursEnd;
         if (quietHours && urgency < 0.8 && state.CurrentCalendarTitle is null)
         {
             return InterventionMode.Silent;
@@ -269,7 +274,10 @@ public static class AutomationEngine
         DetectedIntent intent,
         IAutomationFeedbackStore? feedback = null,
         AutomationTriggerKind trigger = AutomationTriggerKind.Time,
-        DateTimeOffset? lastIntervention = null)
+        DateTimeOffset? lastIntervention = null,
+        int quietHoursStart = 22,
+        int quietHoursEnd = 8,
+        bool allowFocusInterruptions = false)
     {
         ArgumentNullException.ThrowIfNull(state);
         ArgumentNullException.ThrowIfNull(intent);
@@ -286,7 +294,15 @@ public static class AutomationEngine
         }
 
         var dismissals = feedback?.ConsecutiveDismissals(intent.Kind) ?? 0;
-        var mode = InterventionPolicy.Decide(state, intent, urgency, dismissals, lastIntervention);
+        var mode = InterventionPolicy.Decide(
+            state,
+            intent,
+            urgency,
+            dismissals,
+            lastIntervention,
+            quietHoursStart,
+            quietHoursEnd,
+            allowFocusInterruptions);
         if (mode is InterventionMode.Silent or InterventionMode.Passive)
         {
             return new AutomationExecution

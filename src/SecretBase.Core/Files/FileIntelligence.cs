@@ -10,7 +10,9 @@ public enum FileCandidateKind
     Duplicate = 3,
     Temporary = 4,
     Important = 5,
-    ProjectRelated = 6
+    ProjectRelated = 6,
+    OldExport = 7,
+    BuildArtifact = 8
 }
 
 /// <summary>
@@ -34,7 +36,10 @@ public static class FileIntelligence
         TimeSpan? unusedAge = null)
     {
         return Classify(projects, now, currentProjectName: null, unusedAge)
-            .Where(candidate => candidate.Kind is FileCandidateKind.Unused or FileCandidateKind.Temporary)
+            .Where(candidate => candidate.Kind is FileCandidateKind.Unused
+                or FileCandidateKind.Temporary
+                or FileCandidateKind.OldExport
+                or FileCandidateKind.BuildArtifact)
             .Take(12)
             .ToList();
     }
@@ -106,6 +111,8 @@ public static class FileIntelligence
                     FileCandidateKind.Recent => "Opened from Secret Base recently",
                     FileCandidateKind.Duplicate => "Same name registered in more than one project",
                     FileCandidateKind.Temporary => "Looks temporary",
+                    FileCandidateKind.OldExport => "Looks like an old export",
+                    FileCandidateKind.BuildArtifact => "Looks like a build artifact",
                     _ => lastOpened is not null && now - lastOpened.Value > age
                         ? $"Not used in {(int)(now - lastOpened.Value).TotalDays} days"
                         : "Not opened from Secret Base recently"
@@ -167,6 +174,16 @@ public static class FileIntelligence
             return FileCandidateKind.Temporary;
         }
 
+        if (LooksExport(name))
+        {
+            return FileCandidateKind.OldExport;
+        }
+
+        if (LooksArtifact(name))
+        {
+            return FileCandidateKind.BuildArtifact;
+        }
+
         if (LooksImportant(name))
         {
             return FileCandidateKind.Important;
@@ -189,6 +206,20 @@ public static class FileIntelligence
 
         return FileCandidateKind.Unused;
     }
+
+    private static bool LooksExport(string name) =>
+        name.Contains("export", StringComparison.OrdinalIgnoreCase)
+        || name.Contains("-copy", StringComparison.OrdinalIgnoreCase)
+        || name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase);
+
+    private static bool LooksArtifact(string name) =>
+        name.Contains("bin\\", StringComparison.OrdinalIgnoreCase)
+        || name.Contains("bin/", StringComparison.OrdinalIgnoreCase)
+        || name.Contains("obj\\", StringComparison.OrdinalIgnoreCase)
+        || name.Contains("obj/", StringComparison.OrdinalIgnoreCase)
+        || name.EndsWith(".pdb", StringComparison.OrdinalIgnoreCase)
+        || name.EndsWith(".dll", StringComparison.OrdinalIgnoreCase)
+        || name.Equals("node_modules", StringComparison.OrdinalIgnoreCase);
 
     private static bool LooksTemporary(string name) =>
         name.Contains(".tmp", StringComparison.OrdinalIgnoreCase)

@@ -43,6 +43,20 @@ public sealed class CurrentSituation
 
     public IReadOnlyList<SituationEvidence> Evidence { get; init; } = [];
 
+    public string? ActiveApplication { get; init; }
+
+    public string WorkingState { get; init; } = "unknown";
+
+    public string? LikelyIntent { get; set; }
+
+    public string? NextLikelyAction { get; set; }
+
+    public TimeSpan? SessionAge { get; init; }
+
+    public bool ProjectContinuity { get; init; }
+
+    public int InterruptionLevel { get; init; }
+
     public string Format()
     {
         var lines = new List<string>
@@ -171,10 +185,23 @@ public static class SituationComposer
                         : "unknown";
 
         var confidence = Math.Clamp(evidence.Sum(item => item.Weight), 0.15, 0.97);
+        var projectName = state.CurrentProjectName ?? last?.ProjectName ?? lastSession?.ProjectName;
+        var continuity = lastSession is not null
+                         && !string.IsNullOrWhiteSpace(projectName)
+                         && string.Equals(lastSession.ProjectName, projectName, StringComparison.OrdinalIgnoreCase);
+        var working = focusOn
+            ? "focus"
+            : activity == "idle"
+                ? "idle"
+                : activity == "listening"
+                    ? "break"
+                    : activity == "unknown"
+                        ? "unknown"
+                        : "working";
         return new CurrentSituation
         {
             At = state.Now,
-            ProjectName = state.CurrentProjectName ?? last?.ProjectName ?? lastSession?.ProjectName,
+            ProjectName = projectName,
             ProjectId = state.CurrentProjectId ?? lastSession?.ProjectId,
             Activity = activity,
             RecentActivity = last?.Title ?? lastSession?.PrimaryActivity,
@@ -186,7 +213,12 @@ public static class SituationComposer
             Evidence = evidence
                 .OrderByDescending(item => item.Weight)
                 .Take(8)
-                .ToList()
+                .ToList(),
+            ActiveApplication = last?.Title,
+            WorkingState = working,
+            SessionAge = lastSession is { EndedAt: null } ? state.Now - lastSession.StartedAt : null,
+            ProjectContinuity = continuity,
+            InterruptionLevel = focusOn ? 0 : working == "idle" ? 1 : 2
         };
     }
 }

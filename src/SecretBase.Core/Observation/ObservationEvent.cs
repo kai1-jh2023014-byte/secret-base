@@ -19,13 +19,23 @@ public enum ObservationKind
 /// </summary>
 public sealed class ObservationEvent
 {
+    public string EventId { get; init; } = Guid.NewGuid().ToString("N");
+
     public ObservationKind Kind { get; init; }
 
     public DateTimeOffset At { get; init; } = DateTimeOffset.UtcNow;
 
+    public string Source { get; init; } = "observation";
+
     public string? ApplicationName { get; init; }
 
     public string? WindowTitle { get; init; }
+
+    public string? CorrelationId { get; init; }
+
+    public double Confidence { get; init; } = 0.8;
+
+    public string SafePayload => ApplicationName ?? Kind.ToString();
 }
 
 public static class ObservationSanitizer

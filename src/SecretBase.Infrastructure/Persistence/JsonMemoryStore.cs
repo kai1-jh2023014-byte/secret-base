@@ -58,7 +58,41 @@ public sealed class JsonMemoryStore : IMemoryStore
         int take = 8) =>
         _inner.RecallRanked(now, query, projectName, take);
 
+    public MemoryEntry Update(string id, string? summary = null, string? detail = null, MemoryImportance? importance = null)
+    {
+        lock (_gate)
+        {
+            var updated = _inner.Update(id, summary, detail, importance);
+            PersistUnlocked();
+            return updated;
+        }
+    }
+
+    public MemoryEntry Merge(MemoryEntry incoming)
+    {
+        lock (_gate)
+        {
+            var saved = _inner.Merge(incoming);
+            PersistUnlocked();
+            return saved;
+        }
+    }
+
     public MemoryDocument Snapshot() => _inner.Snapshot();
+
+    public int Expire(DateTimeOffset now)
+    {
+        lock (_gate)
+        {
+            var removed = _inner.Expire(now);
+            if (removed > 0)
+            {
+                PersistUnlocked();
+            }
+
+            return removed;
+        }
+    }
 
     private MemoryDocument LoadUnlocked()
     {

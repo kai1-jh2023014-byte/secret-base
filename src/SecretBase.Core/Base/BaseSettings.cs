@@ -22,6 +22,18 @@ public sealed class BaseSettings
     public WorkspaceSession? LastWorkspace { get; set; }
 
     public DateTimeOffset? OnboardingCompletedAt { get; set; }
+
+    public int QuietHoursStart { get; set; } = 22;
+
+    public int QuietHoursEnd { get; set; } = 8;
+
+    public int DefaultFocusMinutes { get; set; } = 25;
+
+    public string PreferredIntervention { get; set; } = "Suggest";
+
+    public bool AllowFocusInterruptions { get; set; }
+
+    public string? PreferredProjectName { get; set; }
 }
 
 public static class BaseAtmosphere
@@ -104,6 +116,26 @@ public static class BaseSettingsMigrator
         if (string.IsNullOrWhiteSpace(settings.Atmosphere))
         {
             settings.Atmosphere = BaseAtmosphere.Calm;
+        }
+
+        if (string.IsNullOrWhiteSpace(settings.PreferredIntervention))
+        {
+            settings.PreferredIntervention = "Suggest";
+        }
+
+        if (settings.QuietHoursStart is < 0 or > 23)
+        {
+            settings.QuietHoursStart = 22;
+        }
+
+        if (settings.QuietHoursEnd is < 0 or > 23)
+        {
+            settings.QuietHoursEnd = 8;
+        }
+
+        if (settings.DefaultFocusMinutes is < 5 or > 90)
+        {
+            settings.DefaultFocusMinutes = 25;
         }
 
         return settings;

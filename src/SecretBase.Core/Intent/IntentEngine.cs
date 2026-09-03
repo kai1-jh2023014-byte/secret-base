@@ -16,7 +16,11 @@ public enum DetectedIntentKind
     EndWork = 6,
     TakeBreak = 7,
     MusicListening = 8,
-    ResumePreviousSession = 9
+    ResumePreviousSession = 9,
+    ReviewCalendar = 10,
+    SearchInformation = 11,
+    OrganizeFiles = 12,
+    QuickCapture = 13
 }
 
 public sealed class DetectedIntent
@@ -180,6 +184,34 @@ public static class IntentEngine
             return Finish(DetectedIntentKind.StartFocus, 0.85, state, ["User asked to focus."], "User asked to focus.");
         }
 
+        if (text.Contains("予定", StringComparison.Ordinal)
+            || text.Contains("calendar", StringComparison.OrdinalIgnoreCase)
+            || text.Contains("tomorrow", StringComparison.OrdinalIgnoreCase)
+            || text.Contains("明日", StringComparison.Ordinal))
+        {
+            return Finish(DetectedIntentKind.ReviewCalendar, 0.82, state, ["User asked about the calendar."], "User asked about the calendar.");
+        }
+
+        if (text.Contains("探して", StringComparison.Ordinal)
+            || text.Contains("search", StringComparison.OrdinalIgnoreCase)
+            || text.Contains("where did i", StringComparison.OrdinalIgnoreCase))
+        {
+            return Finish(DetectedIntentKind.SearchInformation, 0.8, state, ["User asked to search."], "User asked to search.");
+        }
+
+        if (text.Contains("整理", StringComparison.Ordinal)
+            || text.Contains("cleanup", StringComparison.OrdinalIgnoreCase)
+            || text.Contains("unused", StringComparison.OrdinalIgnoreCase))
+        {
+            return Finish(DetectedIntentKind.OrganizeFiles, 0.78, state, ["User asked to review files."], "User asked to review files.");
+        }
+
+        if (text.Contains("キャプチャ", StringComparison.Ordinal)
+            || text.Contains("capture", StringComparison.OrdinalIgnoreCase)
+            || text.Contains("メモ", StringComparison.Ordinal))
+        {
+            return Finish(DetectedIntentKind.QuickCapture, 0.84, state, ["User asked to capture a note."], "User asked to capture a note.");
+        }
         if (text.Contains("昨日", StringComparison.Ordinal)
             || text.Contains("前回", StringComparison.Ordinal)
             || text.Contains("yesterday", StringComparison.OrdinalIgnoreCase)

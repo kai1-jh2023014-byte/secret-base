@@ -1,3 +1,5 @@
+using SecretBase.Core.Commands;
+
 namespace SecretBase.Core.Assistant;
 
 /// <summary>
@@ -28,7 +30,8 @@ public sealed class AssistantService : IAssistantService
         + "If music is demo catalog, say so. Once Spotify is connected, play inside the Music widget. "
         + "Once Google Calendar is connected, use the Calendar widget; do not send the user to the browser as the primary path. "
         + "Classroom has no API — remember that it opens in the existing Web Widget. "
-        + "If a remote AI key is missing, Local AI may still be used. If a tool fails, say so honestly.";
+        + "If a remote AI key is missing, Local AI may still be used. If a tool fails, say so honestly. "
+        + "Simple briefing, search, focus, capture, timeline, and privacy questions are answered without calling the model when Command Center already handled them.";
 
     private readonly IAiToolRegistry _registry;
     private readonly IAiToolExecutor _executor;
@@ -71,6 +74,8 @@ public sealed class AssistantService : IAssistantService
     public AssistantProviderStatusInfo? ProviderStatus => _context?.GetProviderStatus();
 
     public bool HasPendingConfirmation => _pending is not null;
+
+    public ICommandContext? CommandContext { get; set; }
 
     public void ClearSession()
     {
@@ -142,7 +147,81 @@ public sealed class AssistantService : IAssistantService
 
         _history.Add(new AiMessage { Role = AiMessageRole.User, Content = text });
         TrimHistory();
+
+        if (CommandContext is not null)
+        {
+            var routed = CommandCenter.Handle(text, CommandContext);
+            if (routed.HandledWithoutLlm)
+            {
+                return await FinishRoutedAsync(routed, text, cancellationToken).ConfigureAwait(false);
+            }
+        }
+
         return await ContinueModelAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<AssistantTurnResult> FinishRoutedAsync(
+        CommandDispatch routed,
+        string userText,
+        CancellationToken cancellationToken)
+    {
+        if (routed.Kind == CommandKind.Focus)
+        {
+            var minutes = ParseFocusMinutes(userText, CommandContext?.DefaultFocusMinutes ?? 25);
+            var executed = await ExecuteAndRecordAsync(
+                    "cmd-focus",
+                    AssistantToolNames.FocusStart,
+                    $"{{\"minutes\":{minutes}}}",
+                    cancellationToken)
+                .ConfigureAwait(false);
+            var reply = executed.Succeeded ? executed.ContentForModel : routed.Body;
+            _history.Add(new AiMessage { Role = AiMessageRole.Assistant, Content = reply });
+            TrimHistory();
+            return Finish(AssistantTurnResult.Ok(reply, SnapshotActivities(), AssistantResponseKind.Execute));
+        }
+
+        if (routed.RequiresConfirmation && !string.IsNullOrWhiteSpace(routed.ToolHint))
+        {
+            var pending = new AssistantPendingConfirmation
+            {
+                Prompt = routed.Body + "\n\n[Cancel] [Continue]",
+                Actions =
+                [
+                    new AssistantPendingAction
+                    {
+                        ToolCallId = "cmd-" + Guid.NewGuid().ToString("N")[..8],
+                        ToolName = routed.ToolHint,
+                        ArgumentsJson = "{}",
+                        Label = routed.Title
+                    }
+                ],
+                HasRiskyAction = string.Equals(
+                    routed.ToolHint,
+                    AssistantToolNames.WorkspaceContinue,
+                    StringComparison.OrdinalIgnoreCase)
+            };
+            _pending = pending;
+            _history.Add(new AiMessage { Role = AiMessageRole.Assistant, Content = routed.Body });
+            TrimHistory();
+            return Finish(AssistantTurnResult.Confirm(pending, SnapshotActivities()));
+        }
+
+        _history.Add(new AiMessage { Role = AiMessageRole.Assistant, Content = routed.Body });
+        TrimHistory();
+        return Finish(AssistantTurnResult.Ok(routed.Body, SnapshotActivities()));
+    }
+
+    private static int ParseFocusMinutes(string text, int fallback)
+    {
+        foreach (var minutes in new[] { 90, 60, 45, 30, 25, 20, 15, 10 })
+        {
+            if (text.Contains(minutes.ToString(), StringComparison.Ordinal))
+            {
+                return minutes;
+            }
+        }
+
+        return Math.Clamp(fallback, 5, 90);
     }
 
     public async Task<AssistantTurnResult> ConfirmPendingAsync(CancellationToken cancellationToken = default)
