@@ -41,15 +41,19 @@ public static class BaseAtmosphere
     public const string Calm = "Calm";
     public const string Focus = "Focus";
     public const string Dark = "Dark";
+    public const string Light = "Light";
+    public const string Soft = "Soft";
     public const string Minimal = "Minimal";
 
-    public static IReadOnlyList<string> All { get; } = [Calm, Focus, Dark, Minimal];
+    public static IReadOnlyList<string> All { get; } = [Calm, Light, Dark, Soft, Minimal, Focus];
 
     public static string ToThemePreset(string? atmosphere) =>
         atmosphere?.Trim() switch
         {
             Focus => "Focus",
             Dark => "Dark",
+            Light => "Light",
+            Soft => "Soft",
             Minimal => "Minimal",
             _ => "Atelier"
         };

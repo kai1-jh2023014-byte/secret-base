@@ -13,10 +13,11 @@
             <StackPanel Spacing="4">
                 <TextBlock x:Name="BrandText" Text="SECRET BASE" FontSize="12" LetterSpacing="3" Foreground="#FF7A9E86" />
                 <TextBlock x:Name="TitleText" Text="Atelier" FontSize="28" FontWeight="SemiBold" Foreground="#FFF3EFE6" />
-                <TextBlock x:Name="SubtitleText" Text="macOS workspace — Finder and Dock stay yours. Ctrl+Space for the command palette." FontSize="13" Foreground="#FF8B93A0" />
+                <TextBlock x:Name="SubtitleText" Text="A personal space on your Mac — Finder and Dock stay yours. Ctrl+Space for Command Center." FontSize="13" Foreground="#FF8B93A0" />
             </StackPanel>
             <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10" VerticalAlignment="Top">
                 <ToggleSwitch x:Name="AutoStartToggle" OffContent="Login" OnContent="Login" />
+                <Button x:Name="AppearanceButton" Content="Appearance" Click="AppearanceButton_OnClick" />
                 <Button x:Name="ExitButton" Content="Safe Exit" Click="ExitButton_OnClick" />
             </StackPanel>
         </Grid>
@@ -29,6 +30,7 @@
                         <TextBlock x:Name="ClockTimeText" Text="--" FontSize="42" FontWeight="Light" Foreground="#FFF3EFE6" />
                         <TextBlock x:Name="ClockDateText" Text="" FontSize="16" Foreground="#FF8B93A0" TextWrapping="Wrap" />
                         <TextBlock x:Name="GreetingText" Text="" FontSize="12" LetterSpacing="2" Foreground="#FF7A9E86" />
+                        <TextBlock x:Name="ClockNextText" Text="" FontSize="12" Foreground="#FF8B93A0" TextWrapping="Wrap" />
                     </StackPanel>
                 </Border>
 
@@ -58,7 +60,7 @@
             <Border Grid.Column="1" x:Name="ChatCard" Background="#D9181E28" CornerRadius="18" Padding="20">
                 <Grid RowDefinitions="Auto,*,Auto,Auto">
                     <Grid ColumnDefinitions="*,Auto">
-                        <TextBlock Text="SECRET BASE AI" FontSize="11" LetterSpacing="2" Foreground="#FF8B93A0" VerticalAlignment="Center" />
+                        <TextBlock Text="BASE AI" FontSize="11" LetterSpacing="2" Foreground="#FF8B93A0" VerticalAlignment="Center" />
                         <TextBlock Grid.Column="1" x:Name="ProviderText" Text="" FontSize="12" Foreground="#FF7A9E86" />
                     </Grid>
 
@@ -75,7 +77,7 @@
                     </StackPanel>
 
                     <Grid Grid.Row="3" ColumnDefinitions="*,Auto" Margin="0,0,0,0">
-                        <TextBox x:Name="InputBox" Watermark="Ask Secret Base AI…" KeyDown="InputBox_OnKeyDown" />
+                        <TextBox x:Name="InputBox" Watermark="Ask about today — or say continue" KeyDown="InputBox_OnKeyDown" />
                         <Button Grid.Column="1" x:Name="SendButton" Content="Send" Margin="10,0,0,0" Click="SendButton_OnClick" />
                     </Grid>
                 </Grid>

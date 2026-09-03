@@ -50,7 +50,7 @@
                         TextWrapping="WrapWholeWords" />
                     <TextBlock
                         x:Name="SubtitleText"
-                        Text="Context · Plan · Confirm · Action"
+                        Text="Understands your space · suggests, then asks"
                         FontSize="11"
                         Opacity="0.75"
                         TextWrapping="WrapWholeWords" />
@@ -79,12 +79,12 @@
                 Visibility="Collapsed">
                 <TextBlock
                     x:Name="OnboardingText"
-                    Text="Secret Base AI understands your schedule, projects, apps, and music, then suggests safe next steps. It does not control your PC freely."
+                    Text="Secret Base already sees your schedule, projects, and apps. Ask a question, or continue where you left off — launches still confirm."
                     FontSize="12"
                     TextWrapping="WrapWholeWords" />
                 <TextBlock
                     x:Name="CapabilitiesText"
-                    Text="Capabilities:&#x0a;✓ Calendar&#x0a;✓ Projects&#x0a;✓ Apps&#x0a;✓ Music&#x0a;✓ Cursor&#x0a;✓ Suggestions"
+                    Text="Capabilities: calendar, projects, apps, music, and named integrations. Never shell. Never arbitrary HTTP."
                     FontSize="11"
                     Opacity="0.9"
                     TextWrapping="WrapWholeWords" />
@@ -162,7 +162,7 @@
                 </Grid.ColumnDefinitions>
                 <TextBox
                     x:Name="InputBox"
-                    PlaceholderText="Ask about today, projects, apps…"
+                    PlaceholderText="Ask about today — or say continue"
                     KeyDown="InputBox_KeyDown" />
                 <Button
                     x:Name="SendButton"

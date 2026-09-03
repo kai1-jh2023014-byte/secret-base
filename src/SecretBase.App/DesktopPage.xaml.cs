@@ -299,7 +299,7 @@ public sealed partial class DesktopPage : Page
         _logger.Info("widget", "Widget hosts ready (Clock, Text, Calendar, Music, Creative, Workspace, Base, Apps, Base AI).");
         _logger.Info("assistant", "Taskbar AI chat bar ready (Ctrl+Shift+K). Command palette: Ctrl+Space. Does not replace Windows Search.");
         _logger.Info("block", "Block host ready (use Blk button to add; drop + drag icons inside a Block).");
-        _logger.Info("theme", "Theme editor ready (Aa button) — colors apply to all widgets and Blocks.");
+        _logger.Info("theme", "Appearance ready (Aa button) — theme, accent, density, and motion apply to all surfaces.");
         _logger.Info("layout", "Arrange ready (Grid button) — even placement for widgets and blocks.");
         _logger.Info("widget", "Add Widget (+) — grouped catalog (Information / Creative / AI / Apps). Classroom opens the existing Web Widget.");
     }
@@ -357,6 +357,22 @@ public sealed partial class DesktopPage : Page
         }
 
         TaskbarAiChat.ApplyTheme(theme);
+
+        if (PaletteChrome is not null)
+        {
+            PaletteChrome.Background = ThemePainter.Brush(theme.WidgetBackground, ThemePainter.EffectiveWidgetOpacity(theme));
+            PaletteChrome.BorderBrush = ThemePainter.Brush(theme.Border, 0.55);
+            PaletteChrome.CornerRadius = new CornerRadius(theme.CornerRadius);
+            PaletteHeading.Foreground = ThemePainter.Brush(theme.ForegroundMuted);
+            PaletteHeading.FontFamily = new FontFamily(theme.FontFamily);
+            PaletteHeading.Text = UxCopy.PaletteHeading.ToUpperInvariant();
+            PaletteHint.Foreground = ThemePainter.Brush(theme.ForegroundMuted);
+            PaletteHint.FontFamily = new FontFamily(theme.FontFamily);
+            PaletteHint.Text = UxCopy.PaletteHint;
+            PaletteQueryBox.PlaceholderText = UxCopy.PalettePlaceholder;
+            PaletteQueryBox.FontFamily = new FontFamily(theme.FontFamily);
+            PaletteQueryBox.BorderBrush = ThemePainter.Brush(theme.FocusRing, 0.55);
+            PaletteOverlay.Background = ThemePainter.Brush(theme.Background, 0.62);
     }
 
     private void RefreshDebugStatus()
@@ -848,7 +864,11 @@ public sealed partial class DesktopPage : Page
                 _assistantSettings,
                 _secretStore,
                 _assistantProviders,
-                TryApplyAssistantLaunch);
+                TryApplyAssistantLaunch,
+                presence: () => BaseAiPresence.Format(
+                    _assistant.ProviderStatus,
+                    _baseExperience?.ComposeUserState(),
+                    _baseExperience?.ComposeSituation()));
             if (_theme is not null)
             {
                 view.ApplyTheme(_theme);
@@ -1133,8 +1153,7 @@ public sealed partial class DesktopPage : Page
         var areaHeight = Math.Max(WidgetCanvas.ActualHeight, ActualHeight);
         areaWidth = Math.Max(320, areaWidth);
         areaHeight = Math.Max(240, areaHeight);
-        const double margin = 24;
-        const double gap = 24;
+        var (margin, gap, _) = DesktopWidgetLayout.MetricsFor(areaWidth, _theme?.Density);
 
         DesktopWidgetLayout.ArrangeEvenly(_layout.Widgets, areaWidth, areaHeight, margin, gap);
 
@@ -1624,94 +1643,43 @@ public sealed partial class DesktopPage : Page
             return;
         }
 
-        var ai = new CheckBox { Content = "AI", IsChecked = true };
-        var clock = new CheckBox { Content = "Clock", IsChecked = true };
-        var calendar = new CheckBox { Content = "Calendar", IsChecked = true };
-        var music = new CheckBox { Content = "Music", IsChecked = false };
-        var projects = new CheckBox { Content = "Projects", IsChecked = true };
-        var appsBox = new CheckBox { Content = "Apps", IsChecked = false };
-        var todo = new CheckBox { Content = "Todo / Workspace", IsChecked = true };
-        var dashboard = new CheckBox { Content = "Base status", IsChecked = true };
-        var atmosphere = new ComboBox
-        {
-            Header = "Atmosphere",
-            ItemsSource = BaseAtmosphere.All.ToList(),
-            SelectedItem = BaseAtmosphere.Calm,
-            HorizontalAlignment = HorizontalAlignment.Stretch
-        };
+        var ai = true;
         var intro = new TextBlock
         {
-            Text = "Welcome to Secret Base.\nThis is your personal space.\nConnect only what you want — nothing is required.",
+            Text = UxCopy.OnboardingBody,
             TextWrapping = TextWrapping.WrapWholeWords
         };
-        var panel = new StackPanel { Spacing = 8 };
+        var atmosphere = new ComboBox
+        {
+            Header = "Choose your style",
+            ItemsSource = new[] { BaseAtmosphere.Light, BaseAtmosphere.Dark, BaseAtmosphere.Soft, BaseAtmosphere.Minimal, BaseAtmosphere.Calm },
+            SelectedItem = BaseAtmosphere.Dark,
+            HorizontalAlignment = HorizontalAlignment.Stretch
+        };
+        var panel = new StackPanel { Spacing = 10 };
         panel.Children.Add(intro);
-        panel.Children.Add(ai);
-        panel.Children.Add(clock);
-        panel.Children.Add(calendar);
-        panel.Children.Add(music);
-        panel.Children.Add(projects);
-        panel.Children.Add(appsBox);
-        panel.Children.Add(todo);
-        panel.Children.Add(dashboard);
         panel.Children.Add(atmosphere);
 
         var dialog = new ContentDialog
         {
-            Title = "Welcome to Secret Base",
+            Title = UxCopy.OnboardingTitle,
             Content = panel,
-            PrimaryButtonText = "Enter",
+            PrimaryButtonText = "Let's begin",
             DefaultButton = ContentDialogButton.Primary,
             XamlRoot = XamlRoot
         };
         await dialog.ShowAsync();
 
-        var modules = new List<string>();
-        if (ai.IsChecked == true)
+        var modules = new List<string> { BaseModules.Clock, BaseModules.Ai, BaseModules.Calendar, BaseModules.Projects, BaseModules.Todo, BaseModules.Dashboard };
+        if (ai)
         {
-            modules.Add(BaseModules.Ai);
             await EnsureWidgetAsync(WidgetTypes.Assistant);
         }
 
-        if (clock.IsChecked == true)
-        {
-            modules.Add(BaseModules.Clock);
-        }
-
-        if (calendar.IsChecked == true)
-        {
-            modules.Add(BaseModules.Calendar);
-            await EnsureWidgetAsync(WidgetTypes.Calendar);
-        }
-
-        if (music.IsChecked == true)
-        {
-            modules.Add(BaseModules.Music);
-            await EnsureWidgetAsync(WidgetTypes.Music);
-        }
-
-        if (projects.IsChecked == true)
-        {
-            modules.Add(BaseModules.Projects);
-            await EnsureWidgetAsync(WidgetTypes.Creative);
-        }
-
-        if (appsBox.IsChecked == true)
-        {
-            await EnsureWidgetAsync(WidgetTypes.Apps);
-        }
-
-        if (todo.IsChecked == true)
-        {
-            modules.Add(BaseModules.Todo);
-            await EnsureWidgetAsync(WidgetTypes.Workspace);
-        }
-
-        if (dashboard.IsChecked == true)
-        {
-            modules.Add(BaseModules.Dashboard);
-            await EnsureWidgetAsync(WidgetTypes.Dashboard);
-        }
+        await EnsureWidgetAsync(WidgetTypes.Calendar);
+        await EnsureWidgetAsync(WidgetTypes.Creative);
+        await EnsureWidgetAsync(WidgetTypes.Workspace);
+        await EnsureWidgetAsync(WidgetTypes.Dashboard);
 
         var chosen = atmosphere.SelectedItem as string ?? BaseAtmosphere.Calm;
         ThemePresets.ApplyPreset(_theme, BaseAtmosphere.ToThemePreset(chosen));
@@ -1848,53 +1816,42 @@ public sealed partial class DesktopPage : Page
         draft.Id = _theme.Id;
         draft.WidgetMinWidth = _theme.WidgetMinWidth;
         draft.WidgetMinHeight = _theme.WidgetMinHeight;
+        ThemeMigrator.Normalize(draft);
 
-        var presetBox = new ComboBox
+        ComboBox Combo(string header, IEnumerable<string> items, string selected)
         {
-            Header = "Preset",
-            HorizontalAlignment = HorizontalAlignment.Stretch,
-            SelectedItem = ThemePresets.Names.Contains(draft.DisplayName) ? draft.DisplayName : "Atelier"
-        };
-        foreach (var name in ThemePresets.Names)
-        {
-            presetBox.Items.Add(name);
+            var box = new ComboBox { Header = header, HorizontalAlignment = HorizontalAlignment.Stretch };
+            foreach (var item in items)
+            {
+                box.Items.Add(item);
+            }
+
+            box.SelectedItem = box.Items.Contains(selected) ? selected : box.Items[0];
+            return box;
         }
+
+        var themeBox = Combo("Theme", ThemePresets.Names, ThemePresets.Names.Contains(draft.DisplayName) ? draft.DisplayName : "Atelier");
+        var accentBox = Combo("Accent", AccentPalette.Names, string.IsNullOrWhiteSpace(draft.AccentName) ? AccentPalette.Jade : draft.AccentName);
+        var densityBox = Combo("Density", AppearanceDensity.All, draft.Density);
+        var shapeBox = Combo("Shape", AppearanceShape.All, draft.Shape);
+        var motionBox = Combo("Motion", AppearanceMotion.All, draft.ReducedMotion ? AppearanceMotion.Reduced : draft.Motion);
 
         var widgetBg = CreateColorBox("Widget / Block background (#AARRGGBB)", draft.WidgetBackground);
         var widgetFg = CreateColorBox("Clock / Text / title color", draft.WidgetForeground);
         var mutedFg = CreateColorBox("Date / muted text", draft.ForegroundMuted);
-        var accent = CreateColorBox("Accent (buttons)", draft.Accent);
-        var fontBox = new ComboBox
-        {
-            Header = "Font",
-            HorizontalAlignment = HorizontalAlignment.Stretch
-        };
-        foreach (var font in new[]
-                 {
-                     "Segoe UI Variable Display",
-                     "Segoe UI",
-                     "Georgia",
-                     "Cascadia Mono",
-                     "Consolas",
-                     "Yu Gothic UI"
-                 })
-        {
-            fontBox.Items.Add(font);
-        }
+        var accent = CreateColorBox("Custom accent (#AARRGGBB)", draft.Accent);
+        var fontBox = Combo("Font", [
+            "Segoe UI Variable Display",
+            "Segoe UI",
+            "Georgia",
+            "Cascadia Mono",
+            "Consolas",
+            "Yu Gothic UI"
+        ], draft.FontFamily);
 
-        fontBox.SelectedItem = fontBox.Items.Contains(draft.FontFamily) ? draft.FontFamily : fontBox.Items[0];
-
-        var radiusBox = new NumberBox
-        {
-            Header = "Corner radius",
-            Value = draft.CornerRadius,
-            Minimum = 0,
-            Maximum = 40,
-            SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline
-        };
         var opacityBox = new NumberBox
         {
-            Header = "Surface opacity (0.35–1.0)",
+            Header = "Transparency",
             Value = draft.Transparency,
             Minimum = 0.35,
             Maximum = 1.0,
@@ -1912,7 +1869,7 @@ public sealed partial class DesktopPage : Page
         };
         var preview = new Border
         {
-            MinHeight = 88,
+            MinHeight = 108,
             CornerRadius = new CornerRadius(draft.CornerRadius),
             Padding = new Thickness(16, 12, 16, 12),
             BorderThickness = new Thickness(1)
@@ -1927,101 +1884,206 @@ public sealed partial class DesktopPage : Page
         };
         var previewTime = new TextBlock
         {
-            Text = "23:41",
+            Text = "10:30",
             FontSize = 28,
             FontWeight = Microsoft.UI.Text.FontWeights.SemiLight,
             CharacterSpacing = 80
         };
         var previewDate = new TextBlock
         {
-            Text = "Wednesday\nSeptember 2",
+            Text = "Now  mathematics\nNext  Secret Base",
             FontSize = 12,
             CharacterSpacing = 20,
             LineHeight = 18
         };
+        var previewStyle = new TextBlock { FontSize = 11, Opacity = 0.8, TextWrapping = TextWrapping.WrapWholeWords };
         var previewStack = new StackPanel { Spacing = 4 };
         previewStack.Children.Add(previewAccent);
         previewStack.Children.Add(previewTime);
         previewStack.Children.Add(previewDate);
+        previewStack.Children.Add(previewStyle);
         preview.Child = previewStack;
         previewOuter.Child = preview;
 
-        void RefreshPreview()
-        {
-            var opacity = Math.Clamp(opacityBox.Value, 0.35, 1.0);
-            var radius = Math.Clamp(radiusBox.Value, 0, 40);
-            previewOuter.Background = ThemePainter.Brush(draft.SurfaceSecondary, opacity * 0.55);
-            previewOuter.BorderBrush = ThemePainter.Brush(draft.Border, 0.28);
-            previewOuter.CornerRadius = new CornerRadius(radius + 2);
-            preview.Background = ThemePainter.Brush(widgetBg.Text, opacity);
-            preview.CornerRadius = new CornerRadius(Math.Max(8, radius - 2));
-            preview.BorderBrush = ThemePainter.Brush(draft.Border, 0.55);
-            previewAccent.Background = ThemePainter.Brush(accent.Text, 0.9);
-            previewTime.Foreground = ThemePainter.Brush(widgetFg.Text);
-            previewDate.Foreground = ThemePainter.Brush(mutedFg.Text);
-            var font = fontBox.SelectedItem as string ?? draft.FontFamily;
-            previewTime.FontFamily = new FontFamily(font);
-            previewDate.FontFamily = new FontFamily(font);
-        }
+        var composing = false;
 
-        presetBox.SelectionChanged += (_, _) =>
+        void SyncAdvancedFromDraft()
         {
-            if (presetBox.SelectedItem is not string preset)
-            {
-                return;
-            }
-
-            ThemePresets.ApplyPreset(draft, preset);
             widgetBg.Text = draft.WidgetBackground;
             widgetFg.Text = draft.WidgetForeground;
             mutedFg.Text = draft.ForegroundMuted;
             accent.Text = draft.Accent;
-            radiusBox.Value = draft.CornerRadius;
             opacityBox.Value = draft.Transparency;
             if (fontBox.Items.Contains(draft.FontFamily))
             {
                 fontBox.SelectedItem = draft.FontFamily;
             }
+        }
 
+        void RefreshPreview()
+        {
+            var opacity = Math.Clamp(opacityBox.Value, 0.35, 1.0);
+            previewOuter.Background = ThemePainter.Brush(draft.SurfaceElevated, opacity * 0.55);
+            previewOuter.BorderBrush = ThemePainter.Brush(draft.Border, 0.28);
+            previewOuter.CornerRadius = new CornerRadius(draft.CornerRadius + 2);
+            preview.Background = ThemePainter.Brush(widgetBg.Text, opacity);
+            preview.CornerRadius = new CornerRadius(Math.Max(4, draft.CornerRadius - 2));
+            preview.BorderBrush = ThemePainter.Brush(draft.Border, 0.55);
+            preview.Padding = new Thickness(Math.Max(10, draft.Spacing + 4));
+            previewAccent.Background = ThemePainter.Brush(accent.Text, 0.9);
+            previewTime.Foreground = ThemePainter.Brush(widgetFg.Text);
+            previewTime.FontSize = Math.Max(24, draft.TitleSize * 0.64);
+            previewDate.Foreground = ThemePainter.Brush(mutedFg.Text);
+            var font = fontBox.SelectedItem as string ?? draft.FontFamily;
+            previewTime.FontFamily = new FontFamily(font);
+            previewDate.FontFamily = new FontFamily(font);
+            previewStyle.FontFamily = new FontFamily(font);
+            previewStyle.Foreground = ThemePainter.Brush(draft.ForegroundMuted);
+            previewStyle.Text = AppearanceProfile.From(draft).Format();
+        }
+
+        void ComposeFromPickers(bool fromTheme)
+        {
+            if (composing)
+            {
+                return;
+            }
+
+            composing = true;
+            try
+            {
+                if (fromTheme)
+                {
+                    ThemePresets.ApplyPreset(draft, themeBox.SelectedItem as string ?? VisualThemeNames.Atelier);
+                    densityBox.SelectedItem = draft.Density;
+                    shapeBox.SelectedItem = draft.Shape;
+                    motionBox.SelectedItem = draft.Motion;
+                    if (accentBox.Items.Contains(draft.AccentName))
+                    {
+                        accentBox.SelectedItem = draft.AccentName;
+                    }
+
+                    if (fontBox.Items.Contains(draft.FontFamily))
+                    {
+                        fontBox.SelectedItem = draft.FontFamily;
+                    }
+                }
+                else
+                {
+                    AppearanceComposer.ApplyAccent(draft, accentBox.SelectedItem as string, accent.Text);
+                    AppearanceComposer.ApplyDensity(draft, densityBox.SelectedItem as string);
+                    AppearanceComposer.ApplyShape(draft, shapeBox.SelectedItem as string);
+                    AppearanceComposer.ApplyMotion(draft, motionBox.SelectedItem as string);
+                }
+
+                draft.Transparency = Math.Clamp(opacityBox.Value, 0.35, 1.0);
+                ThemeMigrator.Normalize(draft);
+                SyncAdvancedFromDraft();
+                RefreshPreview();
+            }
+            finally
+            {
+                composing = false;
+            }
+        }
+
+        themeBox.SelectionChanged += (_, _) => ComposeFromPickers(fromTheme: true);
+        accentBox.SelectionChanged += (_, _) =>
+        {
+            if (composing)
+            {
+                return;
+            }
+
+            AppearanceComposer.ApplyAccent(draft, accentBox.SelectedItem as string, accent.Text);
+            ThemeMigrator.Normalize(draft);
+            SyncAdvancedFromDraft();
             RefreshPreview();
         };
+        densityBox.SelectionChanged += (_, _) =>
+        {
+            if (composing)
+            {
+                return;
+            }
 
+            AppearanceComposer.ApplyDensity(draft, densityBox.SelectedItem as string);
+            SyncAdvancedFromDraft();
+            RefreshPreview();
+        };
+        shapeBox.SelectionChanged += (_, _) =>
+        {
+            if (composing)
+            {
+                return;
+            }
+
+            AppearanceComposer.ApplyShape(draft, shapeBox.SelectedItem as string);
+            RefreshPreview();
+        };
+        motionBox.SelectionChanged += (_, _) =>
+        {
+            if (composing)
+            {
+                return;
+            }
+
+            AppearanceComposer.ApplyMotion(draft, motionBox.SelectedItem as string);
+            RefreshPreview();
+        };
+        opacityBox.ValueChanged += (_, _) =>
+        {
+            draft.Transparency = Math.Clamp(opacityBox.Value, 0.35, 1.0);
+            RefreshPreview();
+        };
         widgetBg.TextChanged += (_, _) => RefreshPreview();
         widgetFg.TextChanged += (_, _) => RefreshPreview();
         mutedFg.TextChanged += (_, _) => RefreshPreview();
-        radiusBox.ValueChanged += (_, _) => RefreshPreview();
-        opacityBox.ValueChanged += (_, _) => RefreshPreview();
+        accent.TextChanged += (_, _) => RefreshPreview();
         fontBox.SelectionChanged += (_, _) => RefreshPreview();
+        SyncAdvancedFromDraft();
         RefreshPreview();
 
-        var panel = new StackPanel { Spacing = 8, Width = 360 };
+        var advancedPanel = new StackPanel { Spacing = 8 };
+        advancedPanel.Children.Add(widgetBg);
+        advancedPanel.Children.Add(widgetFg);
+        advancedPanel.Children.Add(mutedFg);
+        advancedPanel.Children.Add(accent);
+        advancedPanel.Children.Add(fontBox);
+        var advanced = new Expander
+        {
+            Header = "Advanced colors",
+            IsExpanded = false,
+            Content = advancedPanel
+        };
+
+        var panel = new StackPanel { Spacing = 8, Width = 380 };
         panel.Children.Add(new TextBlock
         {
-            Text = "Applies to Clock, Music, Calendar, Text, AI, and Blocks.",
+            Text = "Your style. Live preview on the card — Apply writes it for every surface.",
             TextWrapping = TextWrapping.Wrap,
             Opacity = 0.8,
             FontSize = 12
         });
-        panel.Children.Add(presetBox);
-        panel.Children.Add(previewOuter);
-        panel.Children.Add(widgetBg);
-        panel.Children.Add(widgetFg);
-        panel.Children.Add(mutedFg);
-        panel.Children.Add(accent);
-        panel.Children.Add(fontBox);
-        panel.Children.Add(radiusBox);
+        panel.Children.Add(themeBox);
+        panel.Children.Add(accentBox);
+        panel.Children.Add(densityBox);
+        panel.Children.Add(shapeBox);
+        panel.Children.Add(motionBox);
         panel.Children.Add(opacityBox);
+        panel.Children.Add(previewOuter);
+        panel.Children.Add(advanced);
 
         var dialog = new ContentDialog
         {
-            Title = "Theme",
+            Title = "Appearance",
             PrimaryButtonText = "Apply",
             CloseButtonText = "Cancel",
             DefaultButton = ContentDialogButton.Primary,
             Content = new ScrollViewer
             {
                 Content = panel,
-                MaxHeight = 520,
+                MaxHeight = 560,
                 VerticalScrollBarVisibility = ScrollBarVisibility.Auto
             },
             XamlRoot = XamlRoot
@@ -2042,12 +2104,13 @@ public sealed partial class DesktopPage : Page
             return;
         }
 
+        ComposeFromPickers(fromTheme: false);
         if (!TryNormalizeHex(widgetBg.Text, out var bg) ||
             !TryNormalizeHex(widgetFg.Text, out var fg) ||
             !TryNormalizeHex(mutedFg.Text, out var muted) ||
             !TryNormalizeHex(accent.Text, out var ac))
         {
-            _logger?.Warn("theme", "Theme apply cancelled — invalid color hex.");
+            _logger?.Warn("theme", "Appearance apply cancelled — invalid color hex.");
             if (_debugChromeVisible)
             {
                 StatusText.Text = "Invalid color. Use #RRGGBB or #AARRGGBB.";
@@ -2060,10 +2123,10 @@ public sealed partial class DesktopPage : Page
         draft.WidgetForeground = fg;
         draft.ForegroundMuted = muted;
         draft.Accent = ac;
-        draft.CornerRadius = Math.Clamp(radiusBox.Value, 0, 40);
+        draft.OnAccent = ThemeColor.ContrastOn(ac);
         draft.Transparency = Math.Clamp(opacityBox.Value, 0.35, 1.0);
         draft.FontFamily = fontBox.SelectedItem as string ?? draft.FontFamily;
-        if (presetBox.SelectedItem is string selectedPreset)
+        if (themeBox.SelectedItem is string selectedPreset)
         {
             draft.DisplayName = selectedPreset;
         }
@@ -2072,6 +2135,7 @@ public sealed partial class DesktopPage : Page
         _theme.Id = draft.Id;
         _theme.WidgetMinWidth = draft.WidgetMinWidth;
         _theme.WidgetMinHeight = draft.WidgetMinHeight;
+        ThemeMigrator.Normalize(_theme);
 
         try
         {
@@ -2080,11 +2144,11 @@ public sealed partial class DesktopPage : Page
             StyleFabButtons(_theme);
             RenderDesktopObjects();
             RefreshDebugStatus();
-            _logger?.Info("theme", $"Theme applied ({_theme.DisplayName}).");
+            _logger?.Info("theme", $"Appearance applied ({AppearanceProfile.From(_theme).Format()}).");
         }
         catch (Exception ex)
         {
-            _logger?.Error("theme", "Failed to save theme.", ex);
+            _logger?.Error("theme", "Failed to save appearance.", ex);
         }
     }
 

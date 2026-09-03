@@ -11,6 +11,8 @@ namespace SecretBase.Widgets.Theming;
 /// </summary>
 public static class WidgetSurfaceStyle
 {
+    public const double MinTouchTarget = 32;
+
     public static void ApplyChrome(Border border, ThemeDefinition theme, bool elevated = true)
     {
         ArgumentNullException.ThrowIfNull(border);
@@ -41,7 +43,7 @@ public static class WidgetSurfaceStyle
         outer.Padding = new Thickness(2);
 
         ApplyChrome(inner, theme, elevated: true);
-        inner.CornerRadius = new CornerRadius(Math.Max(8, theme.CornerRadius - 2));
+        inner.CornerRadius = new CornerRadius(Math.Max(4, theme.CornerRadius - 2));
     }
 
     public static void ApplyHeader(TextBlock header, TextBlock? subtitle, ThemeDefinition theme)
@@ -75,24 +77,30 @@ public static class WidgetSurfaceStyle
     public static void ApplyActionButton(Button button, ThemeDefinition theme, bool accent = false)
     {
         button.FontFamily = new FontFamily(theme.FontFamily);
+        button.MinHeight = MinTouchTarget;
+        button.MinWidth = Math.Max(button.MinWidth, 72);
         button.Background = accent
-            ? ThemePainter.Brush(theme.Accent, 0.88)
+            ? ThemePainter.Brush(theme.Accent, 0.92)
             : ThemePainter.Brush(theme.SurfaceSecondary, ThemePainter.EffectiveWidgetOpacity(theme));
-        button.Foreground = ThemePainter.Brush(theme.WidgetForeground);
+        button.Foreground = accent
+            ? ThemePainter.Brush(string.IsNullOrWhiteSpace(theme.OnAccent) ? theme.WidgetForeground : theme.OnAccent)
+            : ThemePainter.Brush(theme.WidgetForeground);
         button.BorderBrush = ThemePainter.Brush(theme.Border, accent ? 0.15 : 0.45);
         button.BorderThickness = new Thickness(1);
-        button.CornerRadius = new CornerRadius(Math.Max(8, theme.CornerRadius * 0.45));
-        button.Padding = new Thickness(12, 6, 12, 6);
+        button.CornerRadius = new CornerRadius(Math.Max(6, theme.CornerRadius * 0.45));
+        var padY = theme.Density == AppearanceDensity.Compact ? 4 : 6;
+        button.Padding = new Thickness(12, padY, 12, padY);
     }
 
     public static void ApplyGhostButton(Button button, ThemeDefinition theme)
     {
         button.FontFamily = new FontFamily(theme.FontFamily);
+        button.MinHeight = MinTouchTarget;
         button.Background = ThemePainter.Brush(theme.WidgetBackground, 0.15);
         button.Foreground = ThemePainter.Brush(theme.ForegroundMuted);
         button.BorderBrush = ThemePainter.Brush(theme.Border, 0.35);
         button.BorderThickness = new Thickness(1);
-        button.CornerRadius = new CornerRadius(Math.Max(8, theme.CornerRadius * 0.45));
+        button.CornerRadius = new CornerRadius(Math.Max(6, theme.CornerRadius * 0.45));
     }
 
     public static void ApplyProgress(ProgressBar bar, ThemeDefinition theme)
@@ -103,8 +111,14 @@ public static class WidgetSurfaceStyle
         bar.CornerRadius = new CornerRadius(2);
     }
 
-    public static void FadeOpacity(UIElement target, double to, double milliseconds = 180)
+    public static void FadeOpacity(UIElement target, double to, double milliseconds = 180, bool reducedMotion = false)
     {
+        if (reducedMotion || milliseconds <= 0)
+        {
+            target.Opacity = to;
+            return;
+        }
+
         var duration = milliseconds <= 0 ? 180 : milliseconds;
         var animation = new DoubleAnimation
         {
@@ -119,8 +133,19 @@ public static class WidgetSurfaceStyle
         board.Begin();
     }
 
-    public static void PulseScale(UIElement target)
+    public static void FadeOpacity(UIElement target, double to, ThemeDefinition? theme)
     {
+        var reduced = theme?.ReducedMotion == true || (theme?.MotionDurationMs ?? 1) <= 0;
+        FadeOpacity(target, to, theme?.MotionDurationMs ?? 160, reduced);
+    }
+
+    public static void PulseScale(UIElement target, ThemeDefinition? theme = null)
+    {
+        if (theme?.ReducedMotion == true || (theme?.MotionDurationMs ?? 1) <= 0)
+        {
+            return;
+        }
+
         if (target.RenderTransform is not ScaleTransform)
         {
             target.RenderTransform = new ScaleTransform { ScaleX = 1, ScaleY = 1 };

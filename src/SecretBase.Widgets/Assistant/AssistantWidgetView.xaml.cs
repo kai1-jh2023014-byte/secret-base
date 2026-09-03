@@ -21,6 +21,7 @@ public sealed partial class AssistantWidgetView : UserControl
     private ISecureSecretStore? _secrets;
     private IAiProviderFactory? _providers;
     private Func<AssistantTurnResult, string?>? _applyLaunch;
+    private Func<string>? _presence;
     private ThemeDefinition? _theme;
     private bool _busy;
     private string? _lastRetryUserText;
@@ -38,13 +39,15 @@ public sealed partial class AssistantWidgetView : UserControl
         IAiProviderFactory providers,
         Func<AssistantTurnResult, string?> applyLaunch,
         string? headerTitle = null,
-        string? headerSubtitle = null)
+        string? headerSubtitle = null,
+        Func<string>? presence = null)
     {
         _assistant = assistant;
         _settingsStore = settingsStore;
         _secrets = secrets;
         _providers = providers;
         _applyLaunch = applyLaunch;
+        _presence = presence;
         if (!string.IsNullOrWhiteSpace(headerTitle))
         {
             HeaderText.Text = headerTitle;
@@ -78,6 +81,7 @@ public sealed partial class AssistantWidgetView : UserControl
         WidgetSurfaceStyle.ApplyActionButton(ConfirmRunButton, theme, accent: true);
         WidgetSurfaceStyle.ApplyGhostButton(ConfirmCancelButton, theme);
         WidgetSurfaceStyle.ApplyGhostButton(RetryButton, theme);
+        RetryButton.Content = UxCopy.Retry;
         WidgetSurfaceStyle.ApplyGhostButton(OpenSettingsFromErrorButton, theme);
         RefreshProviderStatus();
         RenderTranscript();
@@ -129,6 +133,15 @@ public sealed partial class AssistantWidgetView : UserControl
                 message.Role == AiMessageRole.User ? "You" : "AI",
                 message.Content ?? string.Empty));
         }
+
+        if (_sessionLines.Count == 0)
+        {
+            var opening = _presence?.Invoke();
+            if (!string.IsNullOrWhiteSpace(opening))
+            {
+                _sessionLines.Add(("Presence", opening));
+            }
+        }
     }
 
     private void RenderTranscript()
@@ -138,7 +151,7 @@ public sealed partial class AssistantWidgetView : UserControl
         {
             Transcript.Children.Add(line.Kind is "You" or "AI"
                 ? CreateBubble(line.Kind, line.Text)
-                : CreateActivity(line.Text, error: line.Kind == "Error"));
+                : CreateActivity(line.Text, error: line.Kind == "Error", presence: line.Kind == "Presence"));
         }
 
         ScrollToEnd();
@@ -173,19 +186,24 @@ public sealed partial class AssistantWidgetView : UserControl
         return panel;
     }
 
-    private UIElement CreateActivity(string text, bool error)
+    private UIElement CreateActivity(string text, bool error, bool presence = false)
     {
         var line = new TextBlock
         {
             Text = text,
-            FontSize = 11,
-            Opacity = error ? 1.0 : 0.8,
+            FontSize = presence ? 13 : 11,
+            Opacity = error || presence ? 1.0 : 0.8,
             TextWrapping = TextWrapping.WrapWholeWords
         };
         if (_theme is not null)
         {
             line.FontFamily = new FontFamily(_theme.FontFamily);
-            line.Foreground = ThemePainter.Brush(error ? _theme.Accent : _theme.ForegroundMuted);
+            line.Foreground = ThemePainter.Brush(
+                error
+                    ? (string.IsNullOrWhiteSpace(_theme.StatusError) ? _theme.Accent : _theme.StatusError)
+                    : presence
+                        ? _theme.WidgetForeground
+                        : _theme.ForegroundMuted);
         }
 
         return line;
@@ -228,6 +246,7 @@ public sealed partial class AssistantWidgetView : UserControl
         }
 
         InputBox.Text = string.Empty;
+        _sessionLines.RemoveAll(line => line.Kind == "Presence");
         _sessionLines.Add(("You", text));
         RenderTranscript();
         await RunTurnAsync(() => _assistant.SendAsync(text)).ConfigureAwait(true);
@@ -323,9 +342,9 @@ public sealed partial class AssistantWidgetView : UserControl
 
             if (!result.Succeeded)
             {
-                var error = result.ErrorMessage ?? AssistantUserMessages.Unavailable;
+                var error = UxCopy.FriendlyAiError(result.ErrorMessage ?? AssistantUserMessages.Unavailable);
                 _sessionLines.Add(("Error", error));
-                StatusLabel.Text = error;
+                StatusLabel.Text = UxCopy.FirstLine(error);
                 ShowErrorActions(result);
                 if (result.NeedsConfiguration)
                 {
@@ -379,8 +398,8 @@ public sealed partial class AssistantWidgetView : UserControl
         }
         catch (Exception)
         {
-            StatusLabel.Text = AssistantUserMessages.Unavailable;
-            _sessionLines.Add(("Error", AssistantUserMessages.Unavailable));
+            StatusLabel.Text = UxCopy.FirstLine(UxCopy.AiUnavailable);
+            _sessionLines.Add(("Error", UxCopy.AiUnavailable));
             ShowErrorActions(new AssistantTurnResult
             {
                 Succeeded = false,

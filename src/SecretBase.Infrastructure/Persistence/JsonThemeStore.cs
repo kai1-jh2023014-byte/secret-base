@@ -55,7 +55,7 @@ public sealed class JsonThemeStore : IThemeStore
             }
 
             theme.Id = themeId;
-            return theme;
+            return ThemeMigrator.Normalize(theme);
         }
         catch (JsonException ex)
         {
@@ -79,7 +79,7 @@ public sealed class JsonThemeStore : IThemeStore
 
     private ThemeDefinition CreateAndSaveDefault(string themeId)
     {
-        var created = ThemeDefinition.CreateDefault();
+        var created = ThemeMigrator.Normalize(ThemeDefinition.CreateDefault());
         created.Id = themeId;
         _logger?.Info("theme", "Default theme restored.");
         Save(created);

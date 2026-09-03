@@ -4,6 +4,7 @@ using SecretBase.Core.Intent;
 using SecretBase.Core.Session;
 using SecretBase.Core.Situation;
 using SecretBase.Core.State;
+using SecretBase.Core.Themes;
 using SecretBase.Core.Todo;
 using SecretBase.Core.Workspace;
 
@@ -34,7 +35,7 @@ public sealed class DailyBriefingSnapshot
         var lines = new List<string> { Greeting.ToUpperInvariant(), string.Empty, "Today", "──────────────" };
         if (CalendarLines.Count == 0)
         {
-            lines.Add("Calendar  Quiet");
+            lines.Add(UxCopy.FirstLine(UxCopy.CalendarQuiet));
         }
         else
         {
@@ -46,7 +47,7 @@ public sealed class DailyBriefingSnapshot
         lines.Add("Tasks");
         if (TaskLines.Count == 0)
         {
-            lines.Add("Clear");
+            lines.Add(UxCopy.FirstLine(UxCopy.TasksEmpty));
         }
         else
         {

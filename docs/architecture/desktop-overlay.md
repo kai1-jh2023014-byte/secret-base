@@ -6,13 +6,15 @@ It does **not** replace Explorer, the Taskbar, or the Windows shell.
 
 ## Goal
 
+The overlay is a **personal space** on the wallpaper: Now / Next / Context / Action. It is not a widget tray and not a shell replacement.
+
 ```text
 Desktop
   ├── Wallpaper / Desktop icons     ← receive input outside widget regions
   ├── Secret Base Overlay           ← HWND shaped to widgets + FABs (SetWindowRgn)
-  │     ├── Widgets (Clock, Text, Web, Calendar, Music, Creative, AI, …)
-  │     ├── Blocks
-  │     └── FABs (+ Add Widget, Blk, Aa, Grid) + Secret Base AI command bar
+  │     ├── Personal Space (Clock Base, Text, optional Base card / Base AI)
+  │     ├── Other widgets & Blocks
+  │     └── FABs (+ Add Widget, Blk, Aa Appearance, Grid) + Base AI command bar
   └── Other application windows / Taskbar / Windows Search (unchanged)
 ```
 

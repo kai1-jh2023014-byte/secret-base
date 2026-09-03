@@ -13,7 +13,7 @@ Secret Base accelerators require the overlay window to have focus.
 | **Ctrl+Shift+M** | Add Music Widget |
 | **Ctrl+Shift+E** | Add Creative Workspace (Projects) |
 | **Ctrl+Shift+A** | Add AI Workspace |
-| **Ctrl+Shift+T** | Theme editor |
+| **Ctrl+Shift+T** | Appearance (theme, accent, density, shape, motion) |
 | **Ctrl+Shift+D** | Toggle debug chrome |
 | **Ctrl+Shift+Q** | Safe Exit (save layout, exit process) |
 
@@ -23,7 +23,7 @@ Secret Base accelerators require the overlay window to have focus.
 |-----|--------|
 | **+** | Add Widget catalog |
 | **Blk** | Add Block |
-| **Aa** | Theme |
+| **Aa** | Appearance |
 | **Grid** | Arrange widgets & blocks evenly |
 
 ## Notes

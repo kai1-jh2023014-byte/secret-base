@@ -57,6 +57,9 @@ public sealed partial class DashboardWidgetView : UserControl
         WidgetSurfaceStyle.ApplyBody(AiValue, theme);
         WidgetSurfaceStyle.ApplyActionButton(ContinueButton, theme, accent: true);
         WidgetSurfaceStyle.ApplyGhostButton(NotNowButton, theme);
+        ContinuationCard.Background = ThemePainter.Brush(theme.SurfaceSecondary, ThemePainter.EffectiveWidgetOpacity(theme) * 0.85);
+        ContinuationCard.BorderBrush = ThemePainter.Brush(theme.Border, 0.35);
+        ContinuationCard.CornerRadius = new CornerRadius(Math.Max(8, theme.CornerRadius - 4));
         Refresh();
     }
 
@@ -72,7 +75,7 @@ public sealed partial class DashboardWidgetView : UserControl
         GreetingText.Text = card.Greeting;
         ReadyText.Text = card.ReadyLine;
         ProjectText.Text = string.IsNullOrWhiteSpace(card.ContinuationTitle)
-            ? "Nothing prepared yet"
+            ? UxCopy.FirstLine(UxCopy.WorkspaceEmpty)
             : card.ContinuationTitle;
         SessionText.Text = card.ContinuationDetail;
         NextText.Text = card.NextTaskLine;
@@ -105,7 +108,7 @@ public sealed partial class DashboardWidgetView : UserControl
         Refresh();
         if (_theme is not null)
         {
-            WidgetSurfaceStyle.PulseScale(RootBorder);
+            WidgetSurfaceStyle.PulseScale(RootBorder, _theme);
         }
     }
 

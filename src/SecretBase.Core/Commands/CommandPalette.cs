@@ -15,7 +15,8 @@ public sealed record PaletteItem(
     string Kind,
     string Action,
     double Score,
-    string? ProjectName = null);
+    string? ProjectName = null,
+    string Group = "Actions");
 
 public static class CommandPalette
 {
@@ -37,15 +38,15 @@ public static class CommandPalette
         var items = new List<PaletteItem>
         {
             new("continue", "Continue " + (situation.ProjectName ?? "where you left off"),
-                situation.NextTask ?? intent.Rationale, "command", "continue", 1.1, situation.ProjectName),
-            new("briefing", "Today's schedule", state.UpcomingCalendarTitle ?? "Daily briefing", "command", "briefing", 0.95),
-            new("focus", "Start 30 minute focus", "Safe Auto — no apps launch", "command", "focus", 0.9),
-            new("capture", "Quick capture", "Save an idea, todo, or note", "command", "capture", 0.85),
-            new("search-memory", "Search memory", "What Secret Base remembers", "command", "memory", 0.8),
-            new("timeline", "Today's activity", "Meaningful timeline", "command", "timeline", 0.78),
-            new("explain", "Why this suggestion?", "Evidence and confidence", "command", "explain", 0.7),
-            new("cleanup", "Review unused files", "Candidates only — never deletes", "command", "cleanup", 0.65),
-            new("integrations", "My Integrations", "Registered apps and APIs", "command", "integrations", 0.6)
+                situation.NextTask ?? intent.Rationale, "command", "continue", 1.1, situation.ProjectName, "Actions"),
+            new("briefing", "Today's schedule", state.UpcomingCalendarTitle ?? "Daily briefing", "command", "briefing", 0.95, Group: "Calendar"),
+            new("focus", "Start 30 minute focus", "Safe Auto — no apps launch", "command", "focus", 0.9, Group: "Actions"),
+            new("capture", "Quick capture", "Save an idea, todo, or note", "command", "capture", 0.85, Group: "Actions"),
+            new("search-memory", "Search memory", "What Secret Base remembers", "command", "memory", 0.8, Group: "Memory"),
+            new("timeline", "Today's activity", "Meaningful timeline", "command", "timeline", 0.78, Group: "Actions"),
+            new("explain", "Why this suggestion?", "Evidence and confidence", "command", "explain", 0.7, Group: "Actions"),
+            new("cleanup", "Review unused files", "Candidates only — never deletes", "command", "cleanup", 0.65, Group: "Actions"),
+            new("integrations", "My Integrations", "Registered apps and APIs", "command", "integrations", 0.6, Group: "Apps")
         };
 
         foreach (var project in projects.Take(8))
@@ -57,7 +58,8 @@ public static class CommandPalette
                 "project",
                 "open-project",
                 Match(query, project.Name) + 0.2,
-                project.Name));
+                project.Name,
+                "Projects"));
         }
 
         foreach (var app in apps.Take(8))
@@ -68,17 +70,18 @@ public static class CommandPalette
                 "Registered app — confirmation required",
                 "app",
                 "open-app",
-                Match(query, app.Name) + 0.15));
+                Match(query, app.Name) + 0.15,
+                Group: "Apps"));
         }
 
         foreach (var todo in todos.Items.Where(item => !item.IsDone).Take(6))
         {
-            items.Add(new PaletteItem("t-" + todo.Id, todo.Title, "Open task", "todo", "todo", Match(query, todo.Title) + 0.1));
+            items.Add(new PaletteItem("t-" + todo.Id, todo.Title, "Open task", "todo", "todo", Match(query, todo.Title) + 0.1, Group: "Tasks"));
         }
 
         foreach (var hit in search.Take(8))
         {
-            items.Add(new PaletteItem("s-" + hit.Kind + hit.Title, hit.Title, hit.Kind + " · " + hit.Detail, hit.Kind, "search", hit.Score));
+            items.Add(new PaletteItem("s-" + hit.Kind + hit.Title, hit.Title, hit.Kind + " · " + hit.Detail, hit.Kind, "search", hit.Score, Group: GroupFor(hit.Kind)));
         }
 
         var q = query.Trim();
@@ -112,4 +115,18 @@ public static class CommandPalette
 
         return text.Contains(query, StringComparison.OrdinalIgnoreCase) ? 0.55 : 0;
     }
+
+    public static string FormatLine(PaletteItem item) =>
+        item.Group + "  ·  " + item.Title + "    " + item.Subtitle;
+
+    private static string GroupFor(string kind) =>
+        kind.ToLowerInvariant() switch
+        {
+            "project" or "creative" => "Projects",
+            "app" or "integration" or "capability" => "Apps",
+            "todo" or "task" => "Tasks",
+            "calendar" or "event" => "Calendar",
+            "memory" => "Memory",
+            _ => "Actions"
+        };
 }
