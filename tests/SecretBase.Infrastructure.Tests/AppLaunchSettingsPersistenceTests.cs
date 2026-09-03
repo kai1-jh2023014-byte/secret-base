@@ -18,7 +18,32 @@ public class AppLaunchSettingsPersistenceTests
 
             var restored = store.LoadOrCreate();
             Assert.True(restored.LaunchAtWindowsLogin);
+            Assert.True(restored.TaskbarAiChatEnabled);
             Assert.Equal(AppLaunchSettings.CurrentSchemaVersion, restored.SchemaVersion);
+        }
+        finally
+        {
+            var dir = Path.GetDirectoryName(path);
+            if (!string.IsNullOrWhiteSpace(dir) && Directory.Exists(dir))
+            {
+                Directory.Delete(dir, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public void SaveAndLoad_PreservesTaskbarAiChatEnabled()
+    {
+        var path = Path.Combine(CreateTempDir(), "launch.json");
+        try
+        {
+            var store = new JsonAppLaunchSettingsStore(path);
+            var settings = store.LoadOrCreate();
+            settings.TaskbarAiChatEnabled = false;
+            store.Save(settings);
+
+            var restored = store.LoadOrCreate();
+            Assert.False(restored.TaskbarAiChatEnabled);
         }
         finally
         {

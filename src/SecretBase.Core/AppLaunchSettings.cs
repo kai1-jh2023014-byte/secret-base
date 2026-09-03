@@ -5,7 +5,7 @@ namespace SecretBase.Core;
 /// </summary>
 public sealed class AppLaunchSettings
 {
-    public const int CurrentSchemaVersion = 1;
+    public const int CurrentSchemaVersion = 2;
 
     public int SchemaVersion { get; set; } = CurrentSchemaVersion;
 
@@ -13,4 +13,9 @@ public sealed class AppLaunchSettings
     /// When true, Secret Base should be registered in the current user's Windows startup list.
     /// </summary>
     public bool LaunchAtWindowsLogin { get; set; }
+
+    /// <summary>
+    /// Overlay AI command bar above the Windows taskbar (not Windows Search).
+    /// </summary>
+    public bool TaskbarAiChatEnabled { get; set; } = true;
 }

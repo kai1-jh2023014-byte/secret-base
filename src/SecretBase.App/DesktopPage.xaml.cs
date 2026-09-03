@@ -189,8 +189,10 @@ public sealed partial class DesktopPage : Page
         ShowDebugChrome(forceVisible: false);
 
         RenderDesktopObjects();
+        InitializeTaskbarAiChat();
         _logger.Info("desktop", $"Overlay desktop shown for room '{_layout.RoomId}' with {_layout.Widgets.Count} widget(s), {_layout.Blocks.Count} block(s).");
         _logger.Info("widget", "Widget hosts ready (Clock, Text, Web, Calendar, Music, Creative, AI Workspace, Apps, Secret Base AI).");
+        _logger.Info("assistant", "Taskbar AI chat bar ready (Ctrl+Shift+K). Does not replace Windows Search.");
         _logger.Info("block", "Block host ready (use Blk button to add; drop + drag icons inside a Block).");
         _logger.Info("theme", "Theme editor ready (Aa button) — colors apply to all widgets and Blocks.");
         _logger.Info("layout", "Arrange ready (Grid button) — even placement for widgets and blocks.");
@@ -223,6 +225,7 @@ public sealed partial class DesktopPage : Page
         StyleSecondary(AddBlockFab);
         StyleSecondary(ThemeFab);
         StyleSecondary(ArrangeFab);
+        TaskbarAiChat.ApplyTheme(theme);
 
         if (HostStatusLabel is not null)
         {
@@ -247,6 +250,8 @@ public sealed partial class DesktopPage : Page
             HostStatusLabel.Foreground = ThemePainter.Brush(theme.ForegroundMuted);
             HostStatusLabel.FontFamily = new FontFamily(theme.FontFamily);
         }
+
+        TaskbarAiChat.ApplyTheme(theme);
     }
 
     private void RefreshDebugStatus()
@@ -258,6 +263,25 @@ public sealed partial class DesktopPage : Page
 
         StatusText.Text =
             $"{AppInfo.Name} · {_layout.Widgets.Count}w / {_layout.Blocks.Count}b · v{_compatibility.AppVersion}";
+    }
+
+    private void InitializeTaskbarAiChat()
+    {
+        var enabled = _launchSettingsStore?.LoadOrCreate().TaskbarAiChatEnabled ?? true;
+        if (!enabled || _assistant is null)
+        {
+            TaskbarAiChat.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        TaskbarAiChat.Initialize(_assistant, TryApplyAssistantLaunch);
+        TaskbarAiChat.LayoutChanged += SyncInteractiveInputRegions;
+        if (_theme is not null)
+        {
+            TaskbarAiChat.ApplyTheme(_theme);
+        }
+
+        TaskbarAiChat.Loaded += (_, _) => SyncInteractiveInputRegions();
     }
 
     private void InitializeAutoStartToggle()
@@ -448,6 +472,18 @@ public sealed partial class DesktopPage : Page
         if (TryCreateClientRect(ArrangeFab, scale, out var arrangeFabRect))
         {
             rects.Add(arrangeFabRect);
+        }
+
+        if (TaskbarAiChat.Visibility == Visibility.Visible
+            && TryCreateClientRect(TaskbarAiChat, scale, out var chatRect))
+        {
+            rects.Add(chatRect);
+        }
+
+        if (HostStatusLabel.Visibility == Visibility.Visible
+            && TryCreateClientRect(HostStatusLabel, scale, out var statusRect))
+        {
+            rects.Add(statusRect);
         }
 
         _overlay.UpdateInteractiveInputRegions(_overlayTarget, rects);
@@ -1022,6 +1058,17 @@ public sealed partial class DesktopPage : Page
     {
         args.Handled = true;
         await AddWidgetByTypeAsync(WidgetTypes.Ai);
+    }
+
+    private void TaskbarAiChatAccelerator_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        args.Handled = true;
+        if (TaskbarAiChat.Visibility != Visibility.Visible)
+        {
+            return;
+        }
+
+        TaskbarAiChat.FocusInput();
     }
 
     private async Task ShowAddWidgetCatalogAsync()

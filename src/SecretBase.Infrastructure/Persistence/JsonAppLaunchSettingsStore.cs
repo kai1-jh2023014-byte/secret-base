@@ -62,6 +62,12 @@ public sealed class JsonAppLaunchSettingsStore : IAppLaunchSettingsStore
 
     private static AppLaunchSettings Normalize(AppLaunchSettings settings)
     {
+        if (settings.SchemaVersion < 2)
+        {
+            settings.TaskbarAiChatEnabled = true;
+            settings.SchemaVersion = 2;
+        }
+
         settings.SchemaVersion = AppLaunchSettings.CurrentSchemaVersion;
         return settings;
     }
