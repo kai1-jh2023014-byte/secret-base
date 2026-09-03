@@ -563,6 +563,86 @@ public sealed class BuiltinAssistantToolRegistry : IAiToolRegistry
         },
         new()
         {
+            Name = AssistantToolNames.DailyBriefing,
+            Description =
+                "Structured daily briefing from calendar, todos, and sessions. Not an LLM summary. Read-only.",
+            RiskLevel = ActionPrivilege.Observation,
+            Capability = AssistantToolCapability.ReadOnly
+        },
+        new()
+        {
+            Name = AssistantToolNames.CommandPalette,
+            Description = "Ranked command palette (continue, briefing, focus, capture, search). Read-only.",
+            Parameters =
+            [
+                new AssistantToolParameter
+                {
+                    Name = "query",
+                    Type = "string",
+                    Description = "Optional filter text.",
+                    Required = false
+                }
+            ],
+            RiskLevel = ActionPrivilege.Observation,
+            Capability = AssistantToolCapability.ReadOnly
+        },
+        new()
+        {
+            Name = AssistantToolNames.QuickCapture,
+            Description =
+                "Classify and save a capture as idea, todo, note, memory, or project. Refuses secrets. Safe Auto — does not launch apps.",
+            Parameters =
+            [
+                new AssistantToolParameter
+                {
+                    Name = "text",
+                    Type = "string",
+                    Description = "What to remember. Not a path or secret.",
+                    Required = true
+                },
+                new AssistantToolParameter
+                {
+                    Name = "kind",
+                    Type = "string",
+                    Description = "Optional destination: idea, todo, note, memory, project.",
+                    Required = false
+                }
+            ],
+            RiskLevel = ActionPrivilege.Observation,
+            Capability = AssistantToolCapability.SafeAuto
+        },
+        new()
+        {
+            Name = AssistantToolNames.IntentExplain,
+            Description =
+                "Explain the current intent with evidence and confidence. Never a hard claim. Read-only.",
+            RiskLevel = ActionPrivilege.Observation,
+            Capability = AssistantToolCapability.ReadOnly
+        },
+        new()
+        {
+            Name = AssistantToolNames.ActivityTimeline,
+            Description = "Today's meaningful activity timeline (aggregated, not raw events). Read-only.",
+            RiskLevel = ActionPrivilege.Observation,
+            Capability = AssistantToolCapability.ReadOnly
+        },
+        new()
+        {
+            Name = AssistantToolNames.PrivacyManifest,
+            Description =
+                "What Secret Base observes, remembers, allows, confirms, and never collects. Read-only.",
+            RiskLevel = ActionPrivilege.Observation,
+            Capability = AssistantToolCapability.ReadOnly
+        },
+        new()
+        {
+            Name = AssistantToolNames.AttentionNow,
+            Description = "Quiet attention items (overdue todos, upcoming events, continue). Read-only.",
+            RiskLevel = ActionPrivilege.Observation,
+            Capability = AssistantToolCapability.ReadOnly
+        },
+        new()
+        {
             Name = AssistantToolNames.AutomationFeedback,
             Description =
                 "Record whether the user accepted or dismissed the last quiet suggestion. Safe Auto. Does not raise safety.",

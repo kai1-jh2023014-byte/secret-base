@@ -48,6 +48,7 @@ Highest principle:
 - ✅ Provider fallback: preferred remote → Local → graceful unavailable
 - ✅ v0.7 Personal AI OS: Memory, Activity, User State, Intent, Automation Engine (quiet), Project Continuation, Base dashboard Mini App, File Intelligence 2.0, Universal Search
 - ✅ v0.8: Observation layer (Windows foreground/idle, privacy-first), Situation model with evidence, ranked Memory recall, work Sessions, evidence-based Intent (including ResumePreviousSession), Automation pipeline + intervention modes, learning without privilege escalation, Base situation-first UX, session search
+- ✅ v1.0: Command Center (LLM last), Ctrl+Space palette, Quick Capture, Daily Briefing, Attention Center, Activity Timeline, Memory/Privacy/Automation UIs, persisted rules + scheduler, intent explainability
 - ⏭ Gemini tool-calling, YouTube Music official API (when available), autonomous agents — out of scope
 
 ## v0.8 Personal AI OS completion
@@ -108,6 +109,8 @@ Web Widget: WebView2 with **no Host Bridge**. Dangerous URL schemes rejected.
 - [Assistant Context](assistant-context.md)
 - [Assistant Tools](assistant-tools.md)
 - [Personal AI OS](personal-ai-os.md)
+- [Privacy](privacy.md)
+- [Windows manual QA v1.0](../guides/windows-manual-qa-v10.md)
 - [Assistant Planning](assistant-planning.md)
 - [Assistant Security](assistant-security.md)
 - [Assistant Context](assistant-context.md)

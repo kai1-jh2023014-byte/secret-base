@@ -60,6 +60,10 @@
                 Key="N"
                 Modifiers="Control,Shift"
                 Invoked="AddWidgetAccelerator_Invoked" />
+            <KeyboardAccelerator
+                Key="Space"
+                Modifiers="Control"
+                Invoked="PaletteAccelerator_Invoked" />
         </Grid.KeyboardAccelerators>
 
         <Canvas
@@ -188,5 +192,45 @@
                     ToolTipService.ToolTip="Register Secret Base in Windows Startup apps (per-user)" />
             </StackPanel>
         </Border>
+
+        <Grid
+            x:Name="PaletteOverlay"
+            Visibility="Collapsed"
+            Background="#990E1218"
+            PointerPressed="PaletteOverlay_PointerPressed">
+            <Border
+                HorizontalAlignment="Center"
+                VerticalAlignment="Top"
+                Margin="0,72,0,0"
+                Width="560"
+                Padding="18"
+                CornerRadius="18"
+                Background="#E2181E28"
+                BorderBrush="#3DFFFFFF"
+                BorderThickness="1">
+                <StackPanel Spacing="10">
+                    <TextBlock
+                        Text="WHAT DO YOU WANT TO DO?"
+                        FontSize="11"
+                        CharacterSpacing="80"
+                        Opacity="0.7" />
+                    <TextBox
+                        x:Name="PaletteQueryBox"
+                        PlaceholderText="Continue, briefing, search, capture…"
+                        TextChanged="PaletteQueryBox_TextChanged"
+                        KeyDown="PaletteQueryBox_KeyDown" />
+                    <ListView
+                        x:Name="PaletteList"
+                        MaxHeight="360"
+                        SelectionMode="Single"
+                        IsItemClickEnabled="True"
+                        ItemClick="PaletteList_ItemClick" />
+                    <TextBlock
+                        Text="Enter to run · Esc to close · Continue still asks for confirmation"
+                        FontSize="11"
+                        Opacity="0.65" />
+                </StackPanel>
+            </Border>
+        </Grid>
     </Grid>
 </Page>

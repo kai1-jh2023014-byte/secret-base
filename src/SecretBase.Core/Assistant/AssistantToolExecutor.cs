@@ -5,12 +5,17 @@ using SecretBase.Core.Apps;
 using SecretBase.Core.Base;
 using SecretBase.Core.Calendar;
 using SecretBase.Core.Creative;
+using SecretBase.Core.Capture;
+using SecretBase.Core.Commands;
 using SecretBase.Core.Files;
 using SecretBase.Core.Focus;
 using SecretBase.Core.Integration;
 using SecretBase.Core.Memory;
 using SecretBase.Core.Music;
+using SecretBase.Core.Privacy;
 using SecretBase.Core.Search;
+using SecretBase.Core.Timeline;
+using SecretBase.Core.Attention;
 using SecretBase.Core.Todo;
 using SecretBase.Core.Workspace;
 
@@ -118,6 +123,13 @@ public sealed class AssistantToolExecutor : IAiToolExecutor
             AssistantToolNames.UserState => UserState(),
             AssistantToolNames.SituationNow => SituationNow(),
             AssistantToolNames.SessionRecent => SessionRecent(),
+            AssistantToolNames.DailyBriefing => DailyBriefingNow(),
+            AssistantToolNames.CommandPalette => CommandPaletteNow(root),
+            AssistantToolNames.QuickCapture => QuickCaptureNow(root),
+            AssistantToolNames.IntentExplain => IntentExplainNow(),
+            AssistantToolNames.ActivityTimeline => ActivityTimelineNow(),
+            AssistantToolNames.PrivacyManifest => PrivacyNow(),
+            AssistantToolNames.AttentionNow => AttentionNow(),
             AssistantToolNames.AutomationFeedback => AutomationFeedback(root),
             _ => AssistantToolResult.Fail(AssistantUserMessages.ToolUnavailable)
         };
@@ -1396,4 +1408,86 @@ public sealed class AssistantToolExecutor : IAiToolExecutor
             activity: "Session ✓",
             activityDomain: AssistantActivityDomains.Session);
     }
+
+    private AssistantToolResult DailyBriefingNow()
+        => _base is null
+            ? AssistantToolResult.Fail(AssistantUserMessages.ToolUnavailable, activityDomain: AssistantActivityDomains.State)
+            : AssistantToolResult.Ok(_base.Briefing().Format(), activity: "Briefing ✓", activityDomain: AssistantActivityDomains.State);
+
+    private AssistantToolResult CommandPaletteNow(JsonElement root)
+    {
+        if (_base is null)
+        {
+            return AssistantToolResult.Fail(AssistantUserMessages.ToolUnavailable, activityDomain: AssistantActivityDomains.Search);
+        }
+
+        AssistantToolArgumentValidator.TryGetString(root, "query", required: false, out var query, out _);
+        var items = _base.Palette(query ?? string.Empty);
+        var body = string.Join(
+            Environment.NewLine,
+            items.Select(item => $"{item.Title} — {item.Subtitle}"));
+        return AssistantToolResult.Ok(
+            string.IsNullOrWhiteSpace(body) ? "Nothing ranked yet." : body,
+            activity: "Palette ✓",
+            activityDomain: AssistantActivityDomains.Search);
+    }
+
+    private AssistantToolResult QuickCaptureNow(JsonElement root)
+    {
+        if (_base is null)
+        {
+            return AssistantToolResult.Fail(AssistantUserMessages.ToolUnavailable, activityDomain: AssistantActivityDomains.Memory);
+        }
+
+        if (!AssistantToolArgumentValidator.TryGetString(root, "text", required: true, out var text, out var error))
+        {
+            return AssistantToolResult.Fail(error);
+        }
+
+        AssistantToolArgumentValidator.TryGetString(root, "kind", required: false, out var kind, out _);
+        var draft = _base.ClassifyCapture(text);
+        CaptureDestination? force = kind?.Trim().ToLowerInvariant() switch
+        {
+            "idea" => CaptureDestination.Idea,
+            "todo" => CaptureDestination.Todo,
+            "note" => CaptureDestination.Note,
+            "memory" => CaptureDestination.Memory,
+            "project" => CaptureDestination.Project,
+            _ => null
+        };
+        var saved = _base.CommitCapture(draft, force);
+        return saved is null
+            ? AssistantToolResult.Fail("Capture was empty or contained a secret.", activityDomain: AssistantActivityDomains.Memory)
+            : AssistantToolResult.Ok(
+                $"Saved as {saved.Kind}: {saved.Summary}",
+                activity: "Capture ✓",
+                activityDomain: AssistantActivityDomains.Memory);
+    }
+
+    private AssistantToolResult IntentExplainNow()
+        => _base is null
+            ? AssistantToolResult.Fail(AssistantUserMessages.ToolUnavailable, activityDomain: AssistantActivityDomains.Situation)
+            : AssistantToolResult.Ok(_base.ExplainIntent(), activity: "Explain ✓", activityDomain: AssistantActivityDomains.Situation);
+
+    private AssistantToolResult ActivityTimelineNow()
+        => _base is null
+            ? AssistantToolResult.Fail(AssistantUserMessages.ToolUnavailable, activityDomain: AssistantActivityDomains.Activity)
+            : AssistantToolResult.Ok(
+                ActivityTimeline.Format(_base.Timeline()),
+                activity: "Timeline ✓",
+                activityDomain: AssistantActivityDomains.Activity);
+
+    private AssistantToolResult PrivacyNow()
+        => AssistantToolResult.Ok(
+            _base?.Privacy() ?? PrivacyManifest.Format(),
+            activity: "Privacy ✓",
+            activityDomain: AssistantActivityDomains.Context);
+
+    private AssistantToolResult AttentionNow()
+        => _base is null
+            ? AssistantToolResult.Fail(AssistantUserMessages.ToolUnavailable, activityDomain: AssistantActivityDomains.State)
+            : AssistantToolResult.Ok(
+                AttentionCenter.Format(_base.Attention()),
+                activity: "Attention ✓",
+                activityDomain: AssistantActivityDomains.State);
 }

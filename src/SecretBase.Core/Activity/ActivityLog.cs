@@ -20,7 +20,22 @@ public enum ActivityKind
     SessionEnded = 15,
     IdleStarted = 16,
     IdleEnded = 17,
-    SystemObserved = 18
+    SystemObserved = 18,
+    ApplicationClosed = 19,
+    ApplicationChanged = 20,
+    ProjectClosed = 21,
+    ProjectChanged = 22,
+    WorkspaceOpened = 23,
+    WorkspaceClosed = 24,
+    FileChanged = 25,
+    FileCreated = 26,
+    FileRemoved = 27,
+    TodoUpdated = 28,
+    SecretBaseOpened = 29,
+    CommandExecuted = 30,
+    ConfirmationRequested = 31,
+    ConfirmationAccepted = 32,
+    ConfirmationRejected = 33
 }
 
 /// <summary>Normalized Base event. Not an OS hook. Names only — no paths or secrets.</summary>
@@ -37,6 +52,14 @@ public sealed class ActivityEvent
     public string? ProjectName { get; set; }
 
     public string? Detail { get; set; }
+
+    public string Source { get; set; } = "base";
+
+    public string? CorrelationId { get; set; }
+
+    public double Confidence { get; set; } = 1;
+
+    public string SafePayload => Title;
 }
 
 public sealed class MeaningfulActivity
@@ -120,7 +143,10 @@ public static class ActivityNormalizer
             or ActivityKind.WorkspaceChanged
             or ActivityKind.ApplicationOpened
             or ActivityKind.FocusStarted
-            or ActivityKind.GitStateNoted;
+            or ActivityKind.GitStateNoted
+            or ActivityKind.ApplicationChanged
+            or ActivityKind.ProjectChanged
+            or ActivityKind.WorkspaceOpened;
 
     private static MeaningfulActivity Summarize(List<ActivityEvent> group)
     {

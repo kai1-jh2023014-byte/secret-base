@@ -24,9 +24,9 @@ RequiresConfirmation
   → Command → Service → Host launch (if ShouldLaunch / ShouldOpenCursorAtFolder)
 ```
 
-## Tool catalog (v0.8)
+## Tool catalog (v1.0)
 
-36 registered tools. Unknown names (including `shell.run`) are rejected.
+43 registered tools. Unknown names (including `shell.run`) are rejected.
 
 ### ReadOnly
 
@@ -47,6 +47,12 @@ RequiresConfirmation
 | `user_state` | Heuristic user state + intent + continuation |
 | `situation_now` | Current situation with evidence |
 | `session_recent` | Deterministic work-session summaries |
+| `daily_briefing` | Structured briefing (calendar, todos, session) |
+| `command_palette` | Ranked palette items |
+| `intent_explain` | Evidence + confidence, never a hard claim |
+| `activity_timeline` | Meaningful day view |
+| `privacy_manifest` | Observed / remembered / never collected |
+| `attention_now` | Quiet attention items |
 
 ### SafeAuto
 
@@ -55,6 +61,7 @@ RequiresConfirmation
 | `workspace_prepare` | Build a workspace card from registered data. No launch. |
 | `focus_start` | Local Pomodoro. No launch. |
 | `memory_remember` | Store a short fact. Refuses secrets/paths. |
+| `quick_capture` | Classify and save an idea/todo/note. Refuses secrets. |
 | `automation_feedback` | Record accept/dismiss. Never raises safety. |
 
 ### Suggest

@@ -33,6 +33,10 @@ public sealed class BaseDashboardSnapshot
     public string? SuggestionTitle { get; init; }
 
     public string? SuggestionDetail { get; init; }
+
+    public string AttentionLine { get; init; } = string.Empty;
+
+    public string BriefingHeadline { get; init; } = string.Empty;
 }
 
 public static class BaseDashboardComposer
@@ -77,7 +81,11 @@ public static class BaseDashboardComposer
             MusicLine = string.IsNullOrWhiteSpace(state.MusicLine) ? "Silent" : "Now Playing",
             AiLine = state.ProviderLine,
             SuggestionTitle = suggestion?.Title,
-            SuggestionDetail = suggestion?.Detail
+            SuggestionDetail = suggestion?.Detail,
+            AttentionLine = situation?.WorkingState == "focus"
+                ? "Quiet — focus is on"
+                : situation?.NextLikelyAction ?? string.Empty,
+            BriefingHeadline = situation?.Calendar ?? continuation?.LastSession ?? string.Empty
         };
     }
 }

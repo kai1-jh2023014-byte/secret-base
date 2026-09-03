@@ -1,9 +1,10 @@
-# Keyboard shortcuts (v0.1 / v0.2)
+# Keyboard shortcuts
 
 Secret Base accelerators require the overlay window to have focus.
 
 | Shortcut | Action |
 |----------|--------|
+| **Ctrl+Space** | **Command palette** — continue, briefing, focus, capture, search. Does not replace Windows Search. |
 | **Ctrl+Shift+K** | Focus **Secret Base AI** command bar (work area, above the taskbar) |
 | **Ctrl+Shift+N** | Open **Add Widget** catalog (grouped: Information / Creative / AI / Apps) |
 | **Ctrl+Shift+B** | Add Block |

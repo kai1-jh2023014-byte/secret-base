@@ -27,12 +27,14 @@ public static class BaseSearch
         IReadOnlyList<CalendarEvent> events,
         TodoList? todos,
         WorkspaceSession? workspace,
-        IReadOnlyList<WorkSession>? sessions = null)
+        IReadOnlyList<WorkSession>? sessions = null,
+        IReadOnlyList<SearchHit>? extra = null)
     {
-        var q = (query ?? string.Empty).Trim();
+        var parsed = SearchQuery.Parse(query);
+        var q = parsed.Text;
         if (q.Length == 0)
         {
-            return [];
+            return extra is { Count: > 0 } ? extra : [];
         }
 
         var hits = new List<SearchHit>();
@@ -87,14 +89,38 @@ public static class BaseSearch
         {
             foreach (var item in activities.TakeLast(8).Reverse())
             {
-                hits.Add(new SearchHit("activity", item.Title, item.Detail ?? item.ProjectName ?? string.Empty, 0.4));
+                hits.Add(new SearchHit("activity", item.Title, item.Detail ?? item.ProjectName ?? string.Empty, 0.4, item.At, "activity"));
             }
         }
 
-        return hits
+        if (extra is { Count: > 0 })
+        {
+            hits.AddRange(extra);
+        }
+
+        IEnumerable<SearchHit> ranked = hits
             .GroupBy(hit => hit.Kind + "|" + hit.Title, StringComparer.OrdinalIgnoreCase)
-            .Select(group => group.OrderByDescending(hit => hit.Score).First())
+            .Select(group => group.OrderByDescending(hit => hit.Score).First());
+        if (!string.IsNullOrWhiteSpace(parsed.Kind))
+        {
+            ranked = ranked.Where(hit => hit.Kind.Equals(parsed.Kind, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (!string.IsNullOrWhiteSpace(parsed.ProjectName))
+        {
+            ranked = ranked.Where(hit =>
+                hit.Title.Contains(parsed.ProjectName, StringComparison.OrdinalIgnoreCase)
+                || hit.Detail.Contains(parsed.ProjectName, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (parsed.Since is not null)
+        {
+            ranked = ranked.Where(hit => hit.At is null || hit.At >= parsed.Since);
+        }
+
+        return ranked
             .OrderByDescending(hit => hit.Score)
+            .ThenByDescending(hit => hit.At ?? DateTimeOffset.MinValue)
             .Take(16)
             .ToList();
     }
@@ -142,6 +168,11 @@ public static class BaseSearch
             return 1;
         }
 
+        if (query.Contains(text, StringComparison.OrdinalIgnoreCase) && text.Length >= 3)
+        {
+            return 0.6;
+        }
+
         if (text.Contains(query, StringComparison.OrdinalIgnoreCase))
         {
             return 0.8;
@@ -156,6 +187,7 @@ public static class BaseSearch
         query.Contains("昨日", StringComparison.Ordinal)
         || query.Contains("前回", StringComparison.Ordinal)
         || query.Contains("最近", StringComparison.Ordinal)
+        || query.Contains("この前", StringComparison.Ordinal)
         || query.Contains("yesterday", StringComparison.OrdinalIgnoreCase)
         || query.Contains("last time", StringComparison.OrdinalIgnoreCase)
         || query.Contains("recent", StringComparison.OrdinalIgnoreCase);

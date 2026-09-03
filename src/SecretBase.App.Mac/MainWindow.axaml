@@ -13,7 +13,7 @@
             <StackPanel Spacing="4">
                 <TextBlock x:Name="BrandText" Text="SECRET BASE" FontSize="12" LetterSpacing="3" Foreground="#FF7A9E86" />
                 <TextBlock x:Name="TitleText" Text="Atelier" FontSize="28" FontWeight="SemiBold" Foreground="#FFF3EFE6" />
-                <TextBlock x:Name="SubtitleText" Text="macOS workspace — Finder and Dock stay yours." FontSize="13" Foreground="#FF8B93A0" />
+                <TextBlock x:Name="SubtitleText" Text="macOS workspace — Finder and Dock stay yours. Ctrl+Space for the command palette." FontSize="13" Foreground="#FF8B93A0" />
             </StackPanel>
             <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10" VerticalAlignment="Top">
                 <ToggleSwitch x:Name="AutoStartToggle" OffContent="Login" OnContent="Login" />
@@ -44,6 +44,12 @@
                             <Button x:Name="NotNowButton" Content="Not now" Click="NotNowButton_OnClick" />
                         </StackPanel>
                         <TextBlock x:Name="MetaText" Text="" FontSize="12" Foreground="#FF8B93A0" TextWrapping="Wrap" />
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <Button Content="Palette" Click="PaletteButton_OnClick" />
+                            <Button Content="Capture" Click="CaptureButton_OnClick" />
+                            <Button Content="Memory" Click="MemoryButton_OnClick" />
+                            <Button Content="Privacy" Click="PrivacyButton_OnClick" />
+                        </StackPanel>
                     </StackPanel>
                 </Border>
             </Grid>

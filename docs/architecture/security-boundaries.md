@@ -78,6 +78,10 @@ Confirmation required before:
 
 Not required for read-only calendar / project / app lists.
 
+Learning never turns Confirmation into Auto Action (`LearningPolicy.MayEscalatePrivilege = false`). Continue / app launch always confirm, even after many accepts.
+
+See [privacy.md](privacy.md).
+
 API keys stay in Credential Manager (`ISecureSecretStore`). Never log secret values.
 
 ## Safe Mode / Reset (designed, not fully implemented)

@@ -2,7 +2,7 @@
 
 > Make your PC feel like *your* secret base — a Personal Creative Desktop Environment for Windows and macOS.
 
-**v0.1** is the daily-usable overlay. **v0.2–v0.5** add Integration Hub and **Secret Base AI** as a Personal AI Workspace: Context → Plan → Confirmation → Action → Result over existing Commands — still without replacing Explorer or the Taskbar.
+**v1.0** is a Personal AI OS: observe, understand, remember, search, predict, prepare, suggest, confirm, act, and learn — still without replacing Explorer or the Taskbar.
 
 ## What you can do
 
@@ -13,7 +13,7 @@
 | **Projects** | Create a Project → Dashboard → Open Folder / Cursor / ChatGPT |
 | **Apps** | Register your own exe / folder / https URL and launch it (no Shell, no admin) |
 | **Classroom** | Opens official Google Classroom in the **existing Web Widget** (no new Classroom UI) |
-| **AI** | **Base AI** understands Calendar, Projects, Todo, Workspace, Memory, Activity, Situation, Intent, and Sessions; prepares a workspace quietly; confirms before launch. Remote AI falls back to Local. |
+| **AI** | **Base AI** is the intelligence layer (Command Center, not a chatbot). Briefing, search, focus, and continue work without an LLM. Remote AI falls back to Local. Continue still confirms. |
 | **Theme** | Shared colors, fonts, corner radius, transparency |
 | **Safe Exit** | **Ctrl+Shift+Q** — process end only; Windows / macOS shell untouched |
 
@@ -35,6 +35,8 @@ Details: [docs/architecture/macos.md](docs/architecture/macos.md)
 
 | Shortcut | Action |
 |----------|--------|
+| **Ctrl+Space** | Command palette (continue, briefing, focus, capture, search) |
+| **Ctrl+Shift+K** | Focus **Secret Base AI** command bar |
 | **Ctrl+Shift+N** | Add Widget (catalog) |
 | **Ctrl+Shift+B** | Add Block |
 | **Ctrl+Shift+W** | Add Web |
@@ -110,9 +112,10 @@ Remote (OpenAI / Gemini) is optional. With no API key, Base AI uses **Local** (O
 - [AI Workspace](docs/architecture/ai-workspace.md)
 - [Secret Base AI](docs/architecture/ai-assistant.md)
 - [Personal AI OS](docs/architecture/personal-ai-os.md)
+- [Privacy](docs/architecture/privacy.md)
 - [Assistant Context](docs/architecture/assistant-context.md)
-- [Personal AI OS](docs/architecture/personal-ai-os.md)
 - [Assistant Tools](docs/architecture/assistant-tools.md)
+- [Windows manual QA v1.0](docs/guides/windows-manual-qa-v10.md)
 - [AI Planning](docs/architecture/ai-planning.md)
 - [AI Security](docs/architecture/ai-security.md)
 - [Integration Hub (v0.2)](docs/architecture/integration-hub.md)

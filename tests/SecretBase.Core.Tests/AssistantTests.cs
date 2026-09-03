@@ -22,7 +22,7 @@ public class AssistantToolRegistryTests
     public void BuiltinRegistry_ListsMvpTools_WithConfirmationPolicy()
     {
         var registry = BuiltinAssistantToolRegistry.Instance;
-        Assert.Equal(36, registry.Tools.Count);
+        Assert.Equal(43, registry.Tools.Count);
         Assert.NotNull(registry.Find(AssistantToolNames.MemoryRecall));
         Assert.NotNull(registry.Find(AssistantToolNames.SearchBase));
         Assert.NotNull(registry.Find(AssistantToolNames.UserState));

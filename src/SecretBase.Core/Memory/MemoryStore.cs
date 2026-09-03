@@ -51,6 +51,12 @@ public sealed class MemoryEntry
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
 
     public DateTimeOffset? ExpiresAt { get; set; }
+
+    public MemoryKind Kind { get; set; } = MemoryKind.Fact;
+
+    public MemoryRetention Retention { get; set; } = MemoryRetention.LongTerm;
+
+    public List<string> Tags { get; set; } = [];
 }
 
 public sealed class MemoryDocument
@@ -78,6 +84,26 @@ public static class MemoryPolicy
             MemoryScope.Preference => null,
             MemoryScope.Decision => now + DefaultDecisionTtl,
             _ => now + DefaultProjectTtl
+        };
+
+    public static MemoryRetention RetentionFor(MemoryScope scope) =>
+        scope switch
+        {
+            MemoryScope.Preference or MemoryScope.Decision => MemoryRetention.Permanent,
+            MemoryScope.Session => MemoryRetention.Session,
+            MemoryScope.Workspace => MemoryRetention.LongTerm,
+            _ => MemoryRetention.LongTerm
+        };
+
+    public static MemoryKind KindFor(MemoryScope scope) =>
+        scope switch
+        {
+            MemoryScope.Preference => MemoryKind.Preference,
+            MemoryScope.Project => MemoryKind.Project,
+            MemoryScope.Workflow => MemoryKind.Workflow,
+            MemoryScope.Decision => MemoryKind.Decision,
+            MemoryScope.Session => MemoryKind.Session,
+            _ => MemoryKind.Fact
         };
 
     public static bool LooksSensitive(string? text)
@@ -111,6 +137,8 @@ public static class MemoryPolicy
 public interface IMemoryStore : IMemoryWriter, IMemoryRetriever
 {
     MemoryDocument Snapshot();
+
+    int Expire(DateTimeOffset now);
 }
 
 public interface IMemoryWriter
@@ -118,6 +146,10 @@ public interface IMemoryWriter
     MemoryEntry Remember(MemoryEntry entry);
 
     void Forget(string id);
+
+    MemoryEntry Update(string id, string? summary = null, string? detail = null, MemoryImportance? importance = null);
+
+    MemoryEntry Merge(MemoryEntry incoming);
 }
 
 public interface IMemoryRetriever
@@ -170,6 +202,16 @@ public sealed class MemoryStore : IMemoryStore
             entry.Confidence = Math.Clamp(entry.Confidence, 0, 1);
             entry.UpdatedAt = entry.UpdatedAt == default ? DateTimeOffset.UtcNow : entry.UpdatedAt;
             entry.LastAccessedAt = entry.CreatedAt == default ? DateTimeOffset.UtcNow : entry.LastAccessedAt;
+            entry.Tags ??= [];
+            if (entry.Kind == MemoryKind.Fact && entry.Scope != MemoryScope.ActivitySummary)
+            {
+                entry.Kind = MemoryPolicy.KindFor(entry.Scope);
+            }
+
+            if (entry.Retention == MemoryRetention.LongTerm && entry.Scope is MemoryScope.Preference or MemoryScope.Session)
+            {
+                entry.Retention = MemoryPolicy.RetentionFor(entry.Scope);
+            }
             var existing = _entries.FindIndex(item =>
                 item.Scope == entry.Scope
                 && string.Equals(item.Key, entry.Key, StringComparison.OrdinalIgnoreCase)
@@ -196,6 +238,49 @@ public sealed class MemoryStore : IMemoryStore
         {
             _entries.RemoveAll(item => string.Equals(item.Id, id, StringComparison.Ordinal));
         }
+    }
+
+    public MemoryEntry Update(string id, string? summary = null, string? detail = null, MemoryImportance? importance = null)
+    {
+        lock (_gate)
+        {
+            var item = _entries.FirstOrDefault(entry => string.Equals(entry.Id, id, StringComparison.Ordinal))
+                       ?? throw new InvalidOperationException("Memory entry not found.");
+            if (summary is not null)
+            {
+                if (MemoryPolicy.LooksSensitive(summary) || MemoryPolicy.LooksLikePath(summary))
+                {
+                    throw new InvalidOperationException("Memory refused a sensitive or path-like payload.");
+                }
+
+                item.Summary = summary;
+            }
+
+            if (detail is not null)
+            {
+                if (MemoryPolicy.LooksSensitive(detail) || MemoryPolicy.LooksLikePath(detail))
+                {
+                    throw new InvalidOperationException("Memory refused a sensitive or path-like payload.");
+                }
+
+                item.Detail = detail;
+            }
+
+            if (importance is not null)
+            {
+                item.Importance = importance.Value;
+            }
+
+            item.UpdatedAt = DateTimeOffset.UtcNow;
+            return item;
+        }
+    }
+
+    public MemoryEntry Merge(MemoryEntry incoming)
+    {
+        ArgumentNullException.ThrowIfNull(incoming);
+        incoming.Key = string.IsNullOrWhiteSpace(incoming.Key) ? incoming.Summary : incoming.Key;
+        return Remember(incoming);
     }
 
     public IReadOnlyList<MemoryEntry> Recall(
@@ -272,6 +357,16 @@ public sealed class MemoryStore : IMemoryStore
         }
     }
 
+    public int Expire(DateTimeOffset now)
+    {
+        lock (_gate)
+        {
+            var before = _entries.Count;
+            PruneUnlocked(now);
+            return before - _entries.Count;
+        }
+    }
+
     public void ReplaceAll(IEnumerable<MemoryEntry> entries)
     {
         lock (_gate)
@@ -318,6 +413,9 @@ public sealed class MemoryStore : IMemoryStore
         CreatedAt = item.CreatedAt,
         LastAccessedAt = item.LastAccessedAt,
         UpdatedAt = item.UpdatedAt,
-        ExpiresAt = item.ExpiresAt
+        ExpiresAt = item.ExpiresAt,
+        Kind = item.Kind,
+        Retention = item.Retention,
+        Tags = item.Tags?.ToList() ?? []
     };
 }
