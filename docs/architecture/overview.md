@@ -49,7 +49,8 @@ Highest principle:
 - ✅ v0.7 Personal AI OS: Memory, Activity, User State, Intent, Automation Engine (quiet), Project Continuation, Base dashboard Mini App, File Intelligence 2.0, Universal Search
 - ✅ v0.8: Observation layer (Windows foreground/idle, privacy-first), Situation model with evidence, ranked Memory recall, work Sessions, evidence-based Intent (including ResumePreviousSession), Automation pipeline + intervention modes, learning without privilege escalation, Base situation-first UX, session search
 - ✅ v1.0: Command Center (LLM last), Ctrl+Space palette, Quick Capture, Daily Briefing, Attention Center, Activity Timeline, Memory/Privacy/Automation UIs, persisted rules + scheduler, intent explainability
-- ✅ v1.1: Universal Integration Platform (manifest, registry, capabilities, permissions, HTTP policy, events/webhooks, Base AI tools, My Integrations UI)
+- ✅ v1.1: Universal Integration Platform (manifest, registry, capabilities, permissions, HTTP policy, events as inbound *payloads*, Base AI tools, My Integrations UI). Working transport is HTTP(S) / loopback + confirmed `app.open` of My Apps. MCP / OAuth UI / webhook HTTP listeners are not shipped.
+- ✅ Appearance Center: visual themes (not hue-only), accent, density, shape, motion / reduced motion, live preview. Design language: [../design/language.md](../design/language.md)
 - ⏭ Gemini tool-calling, YouTube Music official API (when available), autonomous agents, unrestricted MCP servers — out of scope
 
 ## v0.8 Personal AI OS completion
@@ -106,7 +107,9 @@ Web Widget: WebView2 with **no Host Bridge**. Dangerous URL schemes rejected.
 - [Security boundaries](security-boundaries.md)
 - [Creative Workspace](creative-workspace.md)
 - [AI Workspace](ai-workspace.md)
-- [Secret Base AI](ai-assistant.md)
+- [Appearance / theme editor](theme-editor.md)
+- [Design language](../design/language.md)
+- [Screenshot capture list](../design/screenshots.md)
 - [Assistant Context](assistant-context.md)
 - [Assistant Tools](assistant-tools.md)
 - [Personal AI OS](personal-ai-os.md)

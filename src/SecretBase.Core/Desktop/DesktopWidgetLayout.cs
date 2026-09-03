@@ -1,3 +1,4 @@
+using SecretBase.Core.Themes;
 using SecretBase.Core.Widgets;
 
 namespace SecretBase.Core.Desktop;
@@ -8,6 +9,30 @@ namespace SecretBase.Core.Desktop;
 /// </summary>
 public static class DesktopWidgetLayout
 {
+    public const string BandLarge = "Large";
+    public const string BandMedium = "Medium";
+    public const string BandSmall = "Small";
+    public const string BandOverlay = "Overlay";
+
+    /// <summary>Adaptive margin/gap from work-area width and density. Does not change widget sizes.</summary>
+    public static (double Margin, double Gap, string Band) MetricsFor(double areaWidth, string? density = null)
+    {
+        var band = areaWidth >= 1400 ? BandLarge
+            : areaWidth >= 960 ? BandMedium
+            : areaWidth >= 640 ? BandSmall
+            : BandOverlay;
+        var compact = string.Equals(density, AppearanceDensity.Compact, StringComparison.OrdinalIgnoreCase);
+        var spacious = string.Equals(density, AppearanceDensity.Spacious, StringComparison.OrdinalIgnoreCase);
+        var margin = band switch
+        {
+            BandLarge => spacious ? 32 : compact ? 16 : 24,
+            BandMedium => spacious ? 24 : compact ? 14 : 20,
+            BandSmall => spacious ? 18 : compact ? 10 : 16,
+            _ => spacious ? 14 : compact ? 8 : 12
+        };
+        return (margin, margin, band);
+    }
+
     public static void ArrangeEvenly(
         IReadOnlyList<WidgetInstance> widgets,
         double areaWidth,

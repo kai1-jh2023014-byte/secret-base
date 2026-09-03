@@ -29,7 +29,7 @@ public sealed partial class AiWorkspaceView : UserControl
             providers,
             applyLaunch,
             headerTitle: "AI Workspace",
-            headerSubtitle: "Chat · Context · Tools");
+            headerSubtitle: "Context first · tools still confirm");
     }
 
     public void ApplyTheme(ThemeDefinition theme) => ChatHost.ApplyTheme(theme);

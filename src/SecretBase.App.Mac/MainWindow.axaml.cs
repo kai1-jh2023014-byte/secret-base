@@ -1,4 +1,5 @@
 using System.Text;
+using Avalonia.Media;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
@@ -97,15 +98,23 @@ public partial class MainWindow : Window
 
         TitleText.Text = string.IsNullOrWhiteSpace(_theme.DisplayName) ? AppInfo.Name : _theme.DisplayName;
         StatusText.Text = $"v{AppInfo.Version} · {_session.Compatibility.OsDescription}";
+        ApplyAppearance();
         _session.Base.EvaluateAutomation(AutomationTriggerKind.Startup);
         RefreshDashboard();
     }
 
     private void RefreshClock()
     {
-        var (time, date) = ClockDisplayFormatter.Format(_session.TimeProvider, _clock);
+        var status = ClockBaseStatusComposer.Compose(
+            _session.Base.Now,
+            _session.Base.ListUpcomingEvents(),
+            _session.Base.CurrentWorkspace,
+            _session.Base.Focus.Current,
+            _session.Assistant.ProviderStatus);
+        var (time, date, next, statusLine) = ClockDisplayFormatter.FormatBase(_session.TimeProvider, _clock, status);
         ClockTimeText.Text = time;
         ClockDateText.Text = date.Replace('\n', ' ');
+        ClockNextText.Text = string.IsNullOrWhiteSpace(next) ? statusLine : next;
     }
 
     private void RefreshProvider()
@@ -127,7 +136,7 @@ public partial class MainWindow : Window
         GreetingText.Text = card.Greeting;
         ReadyText.Text = card.ReadyLine;
         ProjectText.Text = string.IsNullOrWhiteSpace(card.ContinuationTitle)
-            ? "Nothing prepared yet"
+            ? UxCopy.FirstLine(UxCopy.WorkspaceEmpty)
             : card.ContinuationTitle;
         SessionText.Text = string.Join(
             Environment.NewLine,
@@ -335,7 +344,17 @@ public partial class MainWindow : Window
     private void RefreshHistory()
     {
         var builder = new StringBuilder();
-        foreach (var message in _session.Assistant.VisibleHistory)
+        var history = _session.Assistant.VisibleHistory;
+        if (history.Count == 0)
+        {
+            HistoryText.Text = BaseAiPresence.Format(
+                _session.Assistant.ProviderStatus,
+                _session.Base.ComposeUserState(),
+                _session.Base.ComposeSituation());
+            return;
+        }
+
+        foreach (var message in history)
         {
             var role = message.Role == AiMessageRole.User ? "You" : "AI";
             builder.AppendLine($"{role}: {message.Content}");
@@ -398,6 +417,119 @@ public partial class MainWindow : Window
         RefreshProvider();
     }
 
+    private void ApplyAppearance()
+    {
+        if (_theme is null)
+        {
+            return;
+        }
+
+        ThemeMigrator.Normalize(_theme);
+        Background = Brush(_theme.Background);
+        BrandText.Foreground = Brush(_theme.Accent);
+        TitleText.Foreground = Brush(_theme.Foreground);
+        SubtitleText.Foreground = Brush(_theme.ForegroundMuted);
+        ClockCard.Background = Brush(_theme.WidgetBackground, _theme.Transparency);
+        ClockCard.CornerRadius = new Avalonia.CornerRadius(_theme.CornerRadius);
+        ClockTimeText.Foreground = Brush(_theme.WidgetForeground);
+        ClockTimeText.FontSize = Math.Max(32, _theme.TitleSize);
+        ClockDateText.Foreground = Brush(_theme.ForegroundMuted);
+        ClockNextText.Foreground = Brush(_theme.ForegroundMuted);
+        GreetingText.Foreground = Brush(_theme.Accent);
+        DashboardCard.Background = Brush(_theme.WidgetBackground, _theme.Transparency);
+        DashboardCard.CornerRadius = new Avalonia.CornerRadius(_theme.CornerRadius);
+        ChatCard.Background = Brush(_theme.WidgetBackground, _theme.Transparency);
+        ChatCard.CornerRadius = new Avalonia.CornerRadius(_theme.CornerRadius);
+        ReadyText.Foreground = Brush(_theme.WidgetForeground);
+        ProjectText.Foreground = Brush(_theme.WidgetForeground);
+        SessionText.Foreground = Brush(_theme.ForegroundMuted);
+        SuggestionText.Foreground = Brush(_theme.Accent);
+        MetaText.Foreground = Brush(_theme.ForegroundMuted);
+        HistoryText.Foreground = Brush(_theme.WidgetForeground);
+        ProviderText.Foreground = Brush(_theme.Accent);
+        TitleText.Text = string.IsNullOrWhiteSpace(_theme.DisplayName) ? AppInfo.Name : _theme.DisplayName;
+    }
+
+    private static Avalonia.Media.IBrush Brush(string hex, double opacity = 1)
+    {
+        if (!ThemeColor.TryParse(hex, out var a, out var r, out var g, out var b))
+        {
+            return new SolidColorBrush(Color.FromRgb(14, 18, 24));
+        }
+
+        a = (byte)Math.Clamp((int)Math.Round(a * Math.Clamp(opacity, 0.35, 1)), 0, 255);
+        return new SolidColorBrush(Color.FromArgb(a, r, g, b));
+    }
+
+    private async void AppearanceButton_OnClick(object? sender, RoutedEventArgs e)
+    {
+        if (_theme is null)
+        {
+            return;
+        }
+
+        var themeBox = new ComboBox { ItemsSource = ThemePresets.Names.ToList(), SelectedItem = _theme.DisplayName };
+        var accentBox = new ComboBox { ItemsSource = AccentPalette.Names.ToList(), SelectedItem = _theme.AccentName };
+        var densityBox = new ComboBox { ItemsSource = AppearanceDensity.All.ToList(), SelectedItem = _theme.Density };
+        var shapeBox = new ComboBox { ItemsSource = AppearanceShape.All.ToList(), SelectedItem = _theme.Shape };
+        var motionBox = new ComboBox { ItemsSource = AppearanceMotion.All.ToList(), SelectedItem = _theme.Motion };
+        var apply = new Button { Content = "Apply" };
+        var panel = new StackPanel { Margin = new Avalonia.Thickness(16), Spacing = 8 };
+        var preview = new TextBlock { TextWrapping = Avalonia.Media.TextWrapping.Wrap, Opacity = 0.8 };
+        void RefreshPreview()
+        {
+            preview.Text = new AppearanceProfile
+            {
+                VisualTheme = themeBox.SelectedItem as string ?? VisualThemeNames.Atelier,
+                AccentName = accentBox.SelectedItem as string ?? AccentPalette.Jade,
+                Density = densityBox.SelectedItem as string ?? AppearanceDensity.Comfortable,
+                Shape = shapeBox.SelectedItem as string ?? AppearanceShape.Balanced,
+                Motion = motionBox.SelectedItem as string ?? AppearanceMotion.Subtle
+            }.Format();
+        }
+
+        themeBox.SelectionChanged += (_, _) => RefreshPreview();
+        accentBox.SelectionChanged += (_, _) => RefreshPreview();
+        densityBox.SelectionChanged += (_, _) => RefreshPreview();
+        shapeBox.SelectionChanged += (_, _) => RefreshPreview();
+        motionBox.SelectionChanged += (_, _) => RefreshPreview();
+        RefreshPreview();
+
+        panel.Children.Add(new TextBlock { Text = "Your style — applied to this workspace." });
+        panel.Children.Add(themeBox);
+        panel.Children.Add(accentBox);
+        panel.Children.Add(densityBox);
+        panel.Children.Add(shapeBox);
+        panel.Children.Add(motionBox);
+        panel.Children.Add(preview);
+        panel.Children.Add(apply);
+        var window = new Window
+        {
+            Title = "Appearance",
+            Width = 420,
+            Height = 420,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Content = panel
+        };
+        apply.Click += (_, _) =>
+        {
+            AppearanceComposer.Apply(_theme, new AppearanceProfile
+            {
+                VisualTheme = themeBox.SelectedItem as string ?? VisualThemeNames.Atelier,
+                AccentName = accentBox.SelectedItem as string ?? AccentPalette.Jade,
+                CustomAccent = _theme.Accent,
+                Density = densityBox.SelectedItem as string ?? AppearanceDensity.Comfortable,
+                Shape = shapeBox.SelectedItem as string ?? AppearanceShape.Balanced,
+                Motion = motionBox.SelectedItem as string ?? AppearanceMotion.Subtle,
+                Transparency = _theme.Transparency
+            });
+            _session.ThemeStore.Save(_theme);
+            ApplyAppearance();
+            window.Close();
+        };
+        await window.ShowDialog(this);
+    }
+
     private void ExitButton_OnClick(object? sender, RoutedEventArgs e) => _session.SafeExit.RequestExit();
 
     private void OnWindowKeyDown(object? sender, KeyEventArgs e)
@@ -452,25 +584,40 @@ public partial class MainWindow : Window
 
     private async Task ShowCaptureAsync()
     {
-        var box = new TextBox { Watermark = "An idea, todo, or note…" };
+        var box = new TextBox { Watermark = UxCopy.CapturePlaceholder };
+        var destinations = new ComboBox
+        {
+            ItemsSource = new[] { "Auto", "Idea", "Todo", "Note", "Memory", "Project" },
+            SelectedIndex = 0
+        };
         var panel = new StackPanel { Spacing = 8, Margin = new Avalonia.Thickness(16) };
-        panel.Children.Add(new TextBlock { Text = "Quick capture" });
+        panel.Children.Add(new TextBlock { Text = UxCopy.CapturePrompt });
         panel.Children.Add(box);
+        panel.Children.Add(destinations);
         var save = new Button { Content = "Save" };
         panel.Children.Add(save);
         var window = new Window
         {
             Title = "Quick capture",
             Width = 420,
-            Height = 220,
+            Height = 280,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             Content = panel
         };
         save.Click += (_, _) =>
         {
             var draft = _session.Base.ClassifyCapture(box.Text ?? string.Empty);
-            var saved = _session.Base.CommitCapture(draft);
-            StatusText.Text = saved is null ? "Capture refused." : "Saved as " + saved.Kind;
+            CaptureDestination? force = (destinations.SelectedItem as string) switch
+            {
+                "Idea" => CaptureDestination.Idea,
+                "Todo" => CaptureDestination.Todo,
+                "Note" => CaptureDestination.Note,
+                "Memory" => CaptureDestination.Memory,
+                "Project" => CaptureDestination.Project,
+                _ => null
+            };
+            var saved = _session.Base.CommitCapture(draft, force);
+            StatusText.Text = saved is null ? UxCopy.FirstLine(UxCopy.CaptureRefused) : "Saved as " + saved.Kind;
             window.Close();
         };
         await window.ShowDialog(this);

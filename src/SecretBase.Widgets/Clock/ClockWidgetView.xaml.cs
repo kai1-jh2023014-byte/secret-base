@@ -51,6 +51,7 @@ public sealed partial class ClockWidgetView : UserControl, IDisposable
         StatusText.Foreground = ThemePainter.Brush(theme.Accent);
         NextText.Foreground = ThemePainter.Brush(theme.ForegroundMuted);
         TimeText.FontFamily = new FontFamily(theme.FontFamily);
+        TimeText.FontSize = Math.Max(28, theme.TitleSize);
         DateText.FontFamily = new FontFamily(theme.FontFamily);
         StatusText.FontFamily = new FontFamily(theme.FontFamily);
         NextText.FontFamily = new FontFamily(theme.FontFamily);
@@ -73,7 +74,7 @@ public sealed partial class ClockWidgetView : UserControl, IDisposable
         }
 
         RefreshDisplay();
-        WidgetSurfaceStyle.FadeOpacity(this, 1, _theme?.MotionDurationMs ?? 220);
+        WidgetSurfaceStyle.FadeOpacity(this, 1, _theme);
         if (!_timer.IsEnabled)
         {
             _timer.Start();
@@ -238,7 +239,7 @@ public sealed partial class ClockWidgetView : UserControl, IDisposable
         _configuration.ShowDate = showDate.IsChecked == true;
         _configuration.SizeScale = sizeBox.Value;
         _onConfigurationChanged?.Invoke(_configuration);
-        WidgetSurfaceStyle.PulseScale(RootBorder);
+        WidgetSurfaceStyle.PulseScale(RootBorder, _theme);
         RefreshDisplay();
     }
 

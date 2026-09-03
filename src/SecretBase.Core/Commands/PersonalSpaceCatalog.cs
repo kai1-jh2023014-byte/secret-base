@@ -1,6 +1,7 @@
 using SecretBase.Core.Automation;
 using SecretBase.Core.Connectors;
 using SecretBase.Core.Memory;
+using SecretBase.Core.Themes;
 
 namespace SecretBase.Core.Commands;
 
@@ -13,7 +14,7 @@ public static class PersonalSpaceCatalog
         var items = store.RecallRanked(now, query, project, take: 40);
         if (items.Count == 0)
         {
-            return "Secret Base is not holding any memories right now.";
+            return UxCopy.MemoryEmpty;
         }
 
         return string.Join(
@@ -34,7 +35,7 @@ public static class PersonalSpaceCatalog
         var rules = store.List();
         if (rules.Count == 0)
         {
-            return "No automation rules.";
+            return UxCopy.AutomationEmpty;
         }
 
         return string.Join(
@@ -50,8 +51,8 @@ public static class PersonalSpaceCatalog
     }
 
     public static string Integrations(IntegrationHost? host) =>
-        host is null
-            ? "No integrations registered."
+        host is null || host.Registry.List().Count == 0
+            ? UxCopy.IntegrationsEmpty
             : host.CatalogText();
 
     public static string UtteranceFor(PaletteItem item) =>

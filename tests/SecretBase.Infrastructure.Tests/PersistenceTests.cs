@@ -672,7 +672,8 @@ public class ThemePersistenceTests
             Assert.Equal(20, restored.CornerRadius);
             Assert.Equal(0.7, restored.Transparency);
             Assert.Equal("#AA112233", restored.WidgetBackground);
-            Assert.Equal(1, restored.SchemaVersion);
+            Assert.Equal(ThemeMigrator.CurrentSchema, restored.SchemaVersion);
+            Assert.False(string.IsNullOrWhiteSpace(restored.Density));
         }
         finally
         {

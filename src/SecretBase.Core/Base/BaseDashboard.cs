@@ -1,6 +1,7 @@
 using SecretBase.Core.Automation;
 using SecretBase.Core.Situation;
 using SecretBase.Core.State;
+using SecretBase.Core.Themes;
 using SecretBase.Core.Workspace;
 
 namespace SecretBase.Core.Base;
@@ -74,9 +75,9 @@ public static class BaseDashboardComposer
             ShowContinue = showContinue,
             CalendarLine = calendarCount > 0
                 ? $"{calendarCount} event{(calendarCount == 1 ? string.Empty : "s")}"
-                : calendarHeadline ?? "Quiet",
+                : calendarHeadline ?? UxCopy.FirstLine(UxCopy.CalendarQuiet),
             TasksLine = state.OpenTodoCount == 0
-                ? "Clear"
+                ? UxCopy.FirstLine(UxCopy.TasksEmpty)
                 : $"{state.OpenTodoCount} remaining",
             MusicLine = string.IsNullOrWhiteSpace(state.MusicLine) ? "Silent" : "Now Playing",
             AiLine = state.ProviderLine,

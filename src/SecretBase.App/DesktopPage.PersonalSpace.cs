@@ -5,6 +5,7 @@ using SecretBase.Core.Capture;
 using SecretBase.Core.Commands;
 using SecretBase.Core.Connectors;
 using SecretBase.Core.Memory;
+using SecretBase.Core.Themes;
 
 namespace SecretBase.App;
 
@@ -57,6 +58,30 @@ public sealed partial class DesktopPage
             return;
         }
 
+        if (e.Key == Windows.System.VirtualKey.Down)
+        {
+            e.Handled = true;
+            if (_paletteItems.Count == 0)
+            {
+                return;
+            }
+
+            PaletteList.SelectedIndex = Math.Min(_paletteItems.Count - 1, Math.Max(0, PaletteList.SelectedIndex) + 1);
+            return;
+        }
+
+        if (e.Key == Windows.System.VirtualKey.Up)
+        {
+            e.Handled = true;
+            if (_paletteItems.Count == 0)
+            {
+                return;
+            }
+
+            PaletteList.SelectedIndex = Math.Max(0, PaletteList.SelectedIndex - 1);
+            return;
+        }
+
         if (e.Key == Windows.System.VirtualKey.Enter)
         {
             e.Handled = true;
@@ -96,9 +121,7 @@ public sealed partial class DesktopPage
         }
 
         _paletteItems = _baseExperience.Palette(query ?? string.Empty);
-        PaletteList.ItemsSource = _paletteItems
-            .Select(item => item.Title + "  —  " + item.Subtitle)
-            .ToList();
+        PaletteList.ItemsSource = _paletteItems.Select(CommandPalette.FormatLine).ToList();
         PaletteList.Tag = _paletteItems;
         if (_paletteItems.Count > 0)
         {
@@ -191,8 +214,8 @@ public sealed partial class DesktopPage
         AllowFullWindowInput();
         var box = new TextBox
         {
-            Header = "Capture",
-            PlaceholderText = "An idea, todo, or note…",
+            Header = UxCopy.CapturePrompt,
+            PlaceholderText = UxCopy.CapturePlaceholder,
             AcceptsReturn = true,
             Height = 96
         };
@@ -231,7 +254,7 @@ public sealed partial class DesktopPage
             _ => null
         };
         var saved = _baseExperience.CommitCapture(draft, force);
-        ShowHostStatus(saved is null ? "Capture refused (empty or secret-like)." : "Saved as " + saved.Kind);
+        ShowHostStatus(saved is null ? UxCopy.FirstLine(UxCopy.CaptureRefused) : "Saved as " + saved.Kind);
     }
 
     private async Task ShowMemoryDialogAsync()
@@ -247,9 +270,11 @@ public sealed partial class DesktopPage
         void Refresh()
         {
             var items = _baseExperience.Memory.RecallRanked(_baseExperience.Now, search.Text, take: 40);
-            list.ItemsSource = items
-                .Select(item => $"{item.Kind} · {item.Importance} · {item.Summary} [{item.Id}]")
-                .ToList();
+            list.ItemsSource = items.Count == 0
+                ? new[] { UxCopy.FirstLine(UxCopy.MemoryEmpty) }
+                : items
+                    .Select(item => $"{item.Kind} · {item.Importance} · {item.Summary} [{item.Id}]")
+                    .ToList();
             list.Tag = items;
         }
 
@@ -347,12 +372,16 @@ public sealed partial class DesktopPage
         var list = new ListBox
         {
             Height = 220,
-            ItemsSource = items.Select(IntegrationHost.FormatRegistration).ToList()
+            ItemsSource = items.Count == 0
+                ? new[] { UxCopy.FirstLine(UxCopy.IntegrationsEmpty) }
+                : items.Select(IntegrationHost.FormatRegistration).ToList()
         };
         var panel = new StackPanel { Spacing = 8 };
         panel.Children.Add(new TextBlock
         {
-            Text = _baseExperience.IntegrationPermissions(),
+            Text = items.Count == 0
+                ? UxCopy.IntegrationsEmpty
+                : _baseExperience.IntegrationPermissions(),
             TextWrapping = TextWrapping.WrapWholeWords
         });
         panel.Children.Add(list);
@@ -411,7 +440,7 @@ public sealed partial class DesktopPage
         var items = _integrationHost.Registry.List().Where(item => item.Approved).ToList();
         if (items.Count == 0)
         {
-            await ShowTextDialogAsync("Permissions", _baseExperience?.IntegrationPermissions() ?? "No integrations.");
+            await ShowTextDialogAsync("Permissions", _baseExperience?.IntegrationPermissions() ?? UxCopy.IntegrationsEmpty);
             return;
         }
 

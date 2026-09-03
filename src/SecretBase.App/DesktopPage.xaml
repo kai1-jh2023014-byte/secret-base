@@ -122,7 +122,7 @@
                     Padding="0"
                     CornerRadius="14"
                     Click="ThemeButton_Click"
-                    ToolTipService.ToolTip="Theme (Ctrl+Shift+T)" />
+                    ToolTipService.ToolTip="Appearance (Ctrl+Shift+T)" />
                 <Button
                     x:Name="ArrangeFab"
                     Width="48"
@@ -199,9 +199,12 @@
             Background="#990E1218"
             PointerPressed="PaletteOverlay_PointerPressed">
             <Border
+                x:Name="PaletteChrome"
                 HorizontalAlignment="Center"
                 VerticalAlignment="Top"
                 Margin="0,72,0,0"
+                MinWidth="420"
+                MaxWidth="640"
                 Width="560"
                 Padding="18"
                 CornerRadius="18"
@@ -210,23 +213,27 @@
                 BorderThickness="1">
                 <StackPanel Spacing="10">
                     <TextBlock
-                        Text="WHAT DO YOU WANT TO DO?"
+                        x:Name="PaletteHeading"
+                        Text="Search anything"
                         FontSize="11"
                         CharacterSpacing="80"
                         Opacity="0.7" />
                     <TextBox
                         x:Name="PaletteQueryBox"
-                        PlaceholderText="Continue, briefing, search, capture…"
+                        PlaceholderText="Projects, apps, calendar, tasks, memory…"
                         TextChanged="PaletteQueryBox_TextChanged"
-                        KeyDown="PaletteQueryBox_KeyDown" />
+                        KeyDown="PaletteQueryBox_KeyDown"
+                        AutomationProperties.Name="Command Center search" />
                     <ListView
                         x:Name="PaletteList"
                         MaxHeight="360"
                         SelectionMode="Single"
                         IsItemClickEnabled="True"
-                        ItemClick="PaletteList_ItemClick" />
+                        ItemClick="PaletteList_ItemClick"
+                        AutomationProperties.Name="Command Center results" />
                     <TextBlock
-                        Text="Enter to run · Esc to close · Continue still asks for confirmation"
+                        x:Name="PaletteHint"
+                        Text="↑↓ to move · Enter to run · Esc to close · Continue still confirms"
                         FontSize="11"
                         Opacity="0.65" />
                 </StackPanel>
