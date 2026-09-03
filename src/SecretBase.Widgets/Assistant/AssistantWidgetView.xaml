@@ -43,7 +43,7 @@
                 <StackPanel Spacing="2">
                     <TextBlock
                         x:Name="HeaderText"
-                        Text="Secret Base AI"
+                        Text="Base AI"
                         FontSize="15"
                         FontWeight="SemiBold"
                         CharacterSpacing="40"

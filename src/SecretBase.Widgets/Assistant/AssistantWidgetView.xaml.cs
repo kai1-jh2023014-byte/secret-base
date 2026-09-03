@@ -92,10 +92,12 @@ public sealed partial class AssistantWidgetView : UserControl
             var hasKey = _secrets is not null
                          && _secrets.TryGetSecret(AssistantSecretKeys.OpenAiApiKey, out var key)
                          && !string.IsNullOrWhiteSpace(key);
-            ProviderStatusText.Text = hasKey
-                ? $"● Connected · {settings.ProviderId} · {settings.Model} · max {settings.MaxSteps} steps · key {(hasKey ? "••••••••" : "(not set)")}"
-                : $"○ Not configured · {settings.ProviderId} · {settings.Model}";
-            OnboardingPanel.Visibility = hasKey ? Visibility.Collapsed : Visibility.Visible;
+            ProviderStatusText.Text = BaseAiStatusFormatter.Format(new AssistantProviderStatusInfo
+            {
+                ProviderId = settings.ProviderId,
+                IsConfigured = hasKey
+            });
+            OnboardingPanel.Visibility = Visibility.Collapsed;
             return;
         }
 
@@ -106,13 +108,9 @@ public sealed partial class AssistantWidgetView : UserControl
             return;
         }
 
-        var mark = status.IsConfigured ? "● Connected" : "○ " + status.StatusLabel;
-        ProviderStatusText.Text = string.IsNullOrWhiteSpace(status.FallbackNote)
-            ? $"{mark} · {status.DisplayName} · {status.Model} · max {status.MaxSteps} steps · key {status.ApiKeyDisplay}"
-            : $"{mark} · {status.DisplayName} · {status.Model} · {status.FallbackNote}";
-        OnboardingPanel.Visibility = status.IsConfigured || !string.IsNullOrWhiteSpace(status.FallbackNote)
-            ? Visibility.Collapsed
-            : Visibility.Visible;
+        ProviderStatusText.Text = BaseAiStatusFormatter.Format(status)
+                                  + (string.IsNullOrWhiteSpace(status.FallbackNote) ? string.Empty : " · " + status.FallbackNote);
+        OnboardingPanel.Visibility = Visibility.Collapsed;
     }
 
     private static void StyleActionButton(Button button, ThemeDefinition theme, bool accent = false) =>

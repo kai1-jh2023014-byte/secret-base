@@ -78,12 +78,7 @@ public partial class MainWindow : Window
 
     private void RefreshProvider()
     {
-        var status = _session.Assistant.ProviderStatus;
-        ProviderText.Text = status is null
-            ? "Local fallback when cloud keys are missing"
-            : string.IsNullOrWhiteSpace(status.FallbackNote)
-                ? $"{status.DisplayName} · {status.StatusLabel}"
-                : status.FallbackNote;
+        ProviderText.Text = BaseAiStatusFormatter.Format(_session.Assistant.ProviderStatus);
     }
 
     private void InitializeAutoStartToggle()

@@ -39,9 +39,25 @@ public static class AssistantPlanner
             return Clamp(BuildOpenNamedPlan(), maxSteps);
         }
 
-        if (LooksLikeStartProject(text) || (intent == AssistantIntentKind.ActionRequest && LooksLikeProject(text)))
+        if (LooksLikeContinue(text) || LooksLikeStartProject(text)
+            || (intent == AssistantIntentKind.ActionRequest && LooksLikeProject(text)))
         {
-            return Clamp(BuildStartProjectPlan(text, snapshot), maxSteps);
+            return Clamp(BuildContinueWorkspacePlan(text, snapshot), maxSteps);
+        }
+
+        if (LooksLikeFocus(text))
+        {
+            return Clamp(BuildFocusPlan(), maxSteps);
+        }
+
+        if (LooksLikeCleanup(text))
+        {
+            return Clamp(BuildCleanupPlan(), maxSteps);
+        }
+
+        if (LooksLikeTodo(text))
+        {
+            return Clamp(BuildTodoPlan(text), maxSteps);
         }
 
         if (intent is AssistantIntentKind.Suggestion or AssistantIntentKind.Question
@@ -120,38 +136,99 @@ public static class AssistantPlanner
             ]
         };
 
-    private static AssistantPlan BuildStartProjectPlan(string text, AssistantContextSnapshot? snapshot)
+    private static AssistantPlan BuildContinueWorkspacePlan(string text, AssistantContextSnapshot? snapshot)
     {
         var projectName = ResolveProjectHint(text, snapshot) ?? "対象プロジェクト";
         return new AssistantPlan
         {
-            Summary = $"{projectName}の作業を始める準備をします。",
+            Summary = $"{projectName}の Workspace を準備します。開く操作は確認が必要です。",
             Steps =
             [
                 new AssistantPlanStep
                 {
                     Index = 1,
-                    Title = "今日の予定を確認",
+                    Title = "Workspace を準備",
                     Kind = AssistantPlanStepKind.Read,
-                    ToolName = AssistantToolNames.CalendarGetToday
+                    ToolName = AssistantToolNames.WorkspacePrepare
                 },
                 new AssistantPlanStep
                 {
                     Index = 2,
-                    Title = $"{projectName}を確認",
-                    Kind = AssistantPlanStepKind.Read,
-                    ToolName = AssistantToolNames.CreativeListProjects
-                },
-                new AssistantPlanStep
-                {
-                    Index = 3,
-                    Title = "Cursorで開く（確認が必要）",
+                    Title = "プロジェクトを開く（確認が必要）",
                     Kind = AssistantPlanStepKind.ConfirmAction,
-                    ToolName = AssistantToolNames.CursorOpenProject,
+                    ToolName = AssistantToolNames.WorkspaceContinue,
                     RequiresConfirmation = true
                 }
             ]
         };
+    }
+
+    private static AssistantPlan BuildFocusPlan() =>
+        new()
+        {
+            Summary = "Pomodoro を開始します。",
+            Steps =
+            [
+                new AssistantPlanStep
+                {
+                    Index = 1,
+                    Title = "Focus timer",
+                    Kind = AssistantPlanStepKind.Read,
+                    ToolName = AssistantToolNames.FocusStart
+                }
+            ]
+        };
+
+    private static AssistantPlan BuildCleanupPlan() =>
+        new()
+        {
+            Summary = "使っていない登録ファイルの候補を提示します。削除はしません。",
+            Steps =
+            [
+                new AssistantPlanStep
+                {
+                    Index = 1,
+                    Title = "Cleanup candidates",
+                    Kind = AssistantPlanStepKind.Suggest,
+                    ToolName = AssistantToolNames.FilesSuggestCleanup
+                }
+            ]
+        };
+
+    private static AssistantPlan BuildTodoPlan(string text)
+    {
+        var adding = text.Contains("追加", StringComparison.Ordinal)
+                     || text.Contains("add", StringComparison.OrdinalIgnoreCase);
+        return adding
+            ? new AssistantPlan
+            {
+                Summary = "Todo を追加します（確認が必要）。",
+                Steps =
+                [
+                    new AssistantPlanStep
+                    {
+                        Index = 1,
+                        Title = "Add todo（確認が必要）",
+                        Kind = AssistantPlanStepKind.ConfirmAction,
+                        ToolName = AssistantToolNames.TodoAdd,
+                        RequiresConfirmation = true
+                    }
+                ]
+            }
+            : new AssistantPlan
+            {
+                Summary = "Todo を確認します。",
+                Steps =
+                [
+                    new AssistantPlanStep
+                    {
+                        Index = 1,
+                        Title = "List todos",
+                        Kind = AssistantPlanStepKind.Read,
+                        ToolName = AssistantToolNames.TodoList
+                    }
+                ]
+            };
     }
 
     private static AssistantPlan BuildPlayMusicPlan() =>
@@ -322,6 +399,34 @@ public static class AssistantPlanner
         || text.Contains("what should", StringComparison.OrdinalIgnoreCase)
         || text.Contains("today", StringComparison.OrdinalIgnoreCase);
 
+    private static bool LooksLikeContinue(string text) =>
+        text.Contains("続け", StringComparison.Ordinal)
+        || text.Contains("再開", StringComparison.Ordinal)
+        || text.Contains("continue", StringComparison.OrdinalIgnoreCase)
+        || text.Contains("resume", StringComparison.OrdinalIgnoreCase)
+        || (text.Contains("開発", StringComparison.Ordinal)
+            && (text.Contains("したい", StringComparison.Ordinal) || text.Contains("続け", StringComparison.Ordinal)));
+
+    private static bool LooksLikeFocus(string text) =>
+        text.Contains("ポモドーロ", StringComparison.Ordinal)
+        || text.Contains("pomodoro", StringComparison.OrdinalIgnoreCase)
+        || ((text.Contains("focus", StringComparison.OrdinalIgnoreCase)
+             || text.Contains("集中", StringComparison.Ordinal))
+            && (text.Contains("開始", StringComparison.Ordinal)
+                || text.Contains("start", StringComparison.OrdinalIgnoreCase)
+                || text.Contains("始めて", StringComparison.Ordinal)));
+
+    private static bool LooksLikeCleanup(string text) =>
+        text.Contains("cleanup", StringComparison.OrdinalIgnoreCase)
+        || text.Contains("使ってない", StringComparison.Ordinal)
+        || (text.Contains("ファイル", StringComparison.Ordinal)
+            && (text.Contains("整理", StringComparison.Ordinal) || text.Contains("不要", StringComparison.Ordinal)));
+
+    private static bool LooksLikeTodo(string text) =>
+        text.Contains("todo", StringComparison.OrdinalIgnoreCase)
+        || text.Contains("タスク", StringComparison.Ordinal)
+        || text.Contains("やること", StringComparison.Ordinal);
+
     private static bool LooksLikeStartProject(string text) =>
         (text.Contains("始め", StringComparison.Ordinal) || text.Contains("開始", StringComparison.Ordinal)
                                                          || text.Contains("start", StringComparison.OrdinalIgnoreCase)
@@ -332,7 +437,8 @@ public static class AssistantPlanner
         text.Contains("プロジェクト", StringComparison.Ordinal)
         || text.Contains("project", StringComparison.OrdinalIgnoreCase)
         || text.Contains("Pokemon", StringComparison.OrdinalIgnoreCase)
-        || text.Contains("Cursor", StringComparison.OrdinalIgnoreCase);
+        || text.Contains("Cursor", StringComparison.OrdinalIgnoreCase)
+        || text.Contains("Secret Base", StringComparison.OrdinalIgnoreCase);
 
     private static AssistantPlan Clamp(AssistantPlan plan, int maxSteps) =>
         new()

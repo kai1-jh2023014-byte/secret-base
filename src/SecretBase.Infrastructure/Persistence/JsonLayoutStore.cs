@@ -11,6 +11,7 @@ public interface ILayoutStore
 {
     DesktopLayout LoadOrCreateDefault(RoomId roomId);
     void Save(DesktopLayout layout);
+    bool Exists(RoomId roomId);
 }
 
 public sealed class JsonLayoutStore : ILayoutStore
@@ -29,6 +30,8 @@ public sealed class JsonLayoutStore : ILayoutStore
         _logger = logger;
         Directory.CreateDirectory(_directory);
     }
+
+    public bool Exists(RoomId roomId) => File.Exists(GetPath(roomId));
 
     public DesktopLayout LoadOrCreateDefault(RoomId roomId)
     {

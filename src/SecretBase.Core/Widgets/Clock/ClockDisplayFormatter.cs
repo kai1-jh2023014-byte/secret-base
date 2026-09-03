@@ -43,4 +43,27 @@ public static class ClockDisplayFormatter
         var now = timeProvider.GetLocalNow();
         return (FormatTime(now, configuration), FormatDate(now, configuration));
     }
+
+    public static (string Time, string Date, string Next, string Status) FormatBase(
+        ITimeProvider timeProvider,
+        ClockWidgetConfiguration configuration,
+        ClockBaseStatus? status)
+    {
+        var (time, date) = Format(timeProvider, configuration);
+        if (configuration.ShowSeconds
+            && string.Equals(configuration.DisplayStyle, ClockWidgetConfiguration.StyleBase, StringComparison.Ordinal))
+        {
+            var noSeconds = new ClockWidgetConfiguration
+            {
+                DisplayStyle = configuration.DisplayStyle,
+                Use24HourFormat = configuration.Use24HourFormat,
+                ShowSeconds = false,
+                ShowDate = configuration.ShowDate,
+                SizeScale = configuration.SizeScale
+            };
+            time = FormatTime(timeProvider.GetLocalNow(), noSeconds);
+        }
+
+        return (time, date, status?.NextLine ?? string.Empty, status?.StatusLine ?? string.Empty);
+    }
 }

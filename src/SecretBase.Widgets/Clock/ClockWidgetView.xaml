@@ -74,6 +74,24 @@
                             HorizontalAlignment="Left"
                             TextAlignment="Left"
                             TextWrapping="WrapWholeWords" />
+                        <TextBlock
+                            x:Name="StatusText"
+                            Text=""
+                            FontSize="11"
+                            FontWeight="SemiBold"
+                            CharacterSpacing="40"
+                            Foreground="#FF7A9E86"
+                            HorizontalAlignment="Left"
+                            TextWrapping="WrapWholeWords"
+                            Visibility="Collapsed" />
+                        <TextBlock
+                            x:Name="NextText"
+                            Text=""
+                            FontSize="12"
+                            Foreground="#FF8B93A0"
+                            HorizontalAlignment="Left"
+                            TextWrapping="WrapWholeWords"
+                            Visibility="Collapsed" />
                     </StackPanel>
                 </Grid>
 

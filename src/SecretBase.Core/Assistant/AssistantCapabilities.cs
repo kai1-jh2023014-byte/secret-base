@@ -16,7 +16,10 @@ public enum AssistantToolCapability
     RequiresConfirmation = 2,
 
     /// <summary>OS/host-only. Must not appear as an LLM-callable tool.</summary>
-    HostAction = 3
+    HostAction = 3,
+
+    /// <summary>Safe Auto: display, context, timer, workspace prepare. Auto-run; never launches OS.</summary>
+    SafeAuto = 4
 }
 
 /// <summary>Thin response classification. Not a workflow engine.</summary>

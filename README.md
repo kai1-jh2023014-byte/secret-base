@@ -9,11 +9,11 @@
 | Area | Experience |
 |------|------------|
 | **Overlay** | Wallpaper shows through; click outside widgets → normal Desktop |
-| **Widgets** | Clock, Text, Web, Calendar, Music, AI Workspace, Secret Base AI, Creative (Projects), My Apps |
+| **Widgets** | Clock (Base status), Text, Web, Calendar, Music, Workspace, AI Workspace, Base AI, Creative (Projects), My Apps |
 | **Projects** | Create a Project → Dashboard → Open Folder / Cursor / ChatGPT |
 | **Apps** | Register your own exe / folder / https URL and launch it (no Shell, no admin) |
 | **Classroom** | Opens official Google Classroom in the **existing Web Widget** (no new Classroom UI) |
-| **AI** | **Secret Base AI** (Personal AI Workspace: context, plan, confirm, action) plus AI Workspace (Cursor / official ChatGPT / Claude / Gemini websites) |
+| **AI** | **Base AI** understands Calendar, Projects, Todo, Workspace, Music, and Apps; prepares a workspace quietly; confirms before launch. Remote AI falls back to Local. |
 | **Theme** | Shared colors, fonts, corner radius, transparency |
 | **Safe Exit** | **Ctrl+Shift+Q** — process end only; Windows / macOS shell untouched |
 
@@ -78,22 +78,16 @@ macOS:   ~/Library/Application Support/SecretBase\
   layouts\
   themes\
   logs\
-  settings\     # assistant.json (provider/model/maxSteps; API keys in Credential Manager / Keychain)
+  settings\     # assistant.json, base.json (onboarding/workspace), todos.json
 ```
 
-## Secret Base AI in one paragraph
+## Base AI in one paragraph
 
-Secret Base AI is an in-app **Personal AI Workspace**. It can read your Calendar, Creative Projects, My Apps, Music state, and integration status, then suggest next steps or ask for confirmation before opening Cursor, apps, or integrations. It is **not** a PC-controlling autonomous agent: no shell, no arbitrary exe, no arbitrary file operations, and no Host Bridge.
+Base AI is Secret Base's quiet intelligence — not a ChatGPT clone. It observes local context (calendar, projects, todos, registered files/apps, music, focus), can **prepare a workspace** without launching anything, and asks for confirmation before opening a project or app. File cleanup is suggestion-only. `files_delete` never calls OS `File.Delete`. Missing API keys fall back to Local AI.
 
 ## Provider setup
 
-1. Add the **Secret Base AI** widget.
-2. Open **AI Settings**.
-3. Select **OpenAI**.
-4. Enter your model and API key.
-5. Use **Test Connection**.
-
-API keys are stored in **Credential Manager (Windows) / Keychain (macOS) / SecureSecretStore only** — never in Git, layout JSON, widget state, or logs.
+Remote (OpenAI / Gemini) is optional. With no API key, Base AI uses **Local** (Ollama) when available, otherwise shows a calm unavailable state. Keys stay in Credential Manager / Keychain.
 
 ## Tech stack
 

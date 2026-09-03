@@ -367,6 +367,99 @@ public sealed class BuiltinAssistantToolRegistry : IAiToolRegistry
             ],
             RiskLevel = ActionPrivilege.UserConfirmationRequired,
             Capability = AssistantToolCapability.RequiresConfirmation
+        },
+        new()
+        {
+            Name = AssistantToolNames.WorkspacePrepare,
+            Description =
+                "Prepare a Secret Base workspace from registered projects, apps, todos, and calendar. Display only — does not launch apps, open files, or run git. Safe Auto.",
+            Parameters =
+            [
+                new AssistantToolParameter
+                {
+                    Name = "intent",
+                    Type = "string",
+                    Description = "What the user wants to continue, e.g. Secret Base development. Not a file path.",
+                    Required = false
+                }
+            ],
+            RiskLevel = ActionPrivilege.Observation,
+            Capability = AssistantToolCapability.SafeAuto
+        },
+        new()
+        {
+            Name = AssistantToolNames.WorkspaceContinue,
+            Description =
+                "After confirmation: open the prepared workspace's registered Creative Project. Does not run git or launch arbitrary executables.",
+            Parameters =
+            [
+                new AssistantToolParameter
+                {
+                    Name = "intent",
+                    Type = "string",
+                    Description = "Optional intent if a workspace is not already prepared.",
+                    Required = false
+                }
+            ],
+            RiskLevel = ActionPrivilege.SafeAction,
+            Capability = AssistantToolCapability.RequiresConfirmation
+        },
+        new()
+        {
+            Name = AssistantToolNames.TodoList,
+            Description = "List local Secret Base todos. Read-only. Not Google Tasks.",
+            RiskLevel = ActionPrivilege.Observation,
+            Capability = AssistantToolCapability.ReadOnly
+        },
+        new()
+        {
+            Name = AssistantToolNames.TodoAdd,
+            Description = "Add a local Secret Base todo. Requires confirmation. Does not write to Google.",
+            Parameters =
+            [
+                new AssistantToolParameter
+                {
+                    Name = "title",
+                    Type = "string",
+                    Description = "Todo title. Not a file path.",
+                    Required = true
+                }
+            ],
+            RiskLevel = ActionPrivilege.SafeAction,
+            Capability = AssistantToolCapability.RequiresConfirmation
+        },
+        new()
+        {
+            Name = AssistantToolNames.FocusStart,
+            Description =
+                "Start a local Pomodoro / focus timer in Secret Base. Safe Auto — does not launch apps.",
+            Parameters =
+            [
+                new AssistantToolParameter
+                {
+                    Name = "minutes",
+                    Type = "integer",
+                    Description = "Duration 5-90. Default 25.",
+                    Required = false
+                },
+                new AssistantToolParameter
+                {
+                    Name = "label",
+                    Type = "string",
+                    Description = "Optional label such as Pomodoro.",
+                    Required = false
+                }
+            ],
+            RiskLevel = ActionPrivilege.Observation,
+            Capability = AssistantToolCapability.SafeAuto
+        },
+        new()
+        {
+            Name = AssistantToolNames.FilesSuggestCleanup,
+            Description =
+                "Suggest unused registered files for review. Never deletes. Suggestion only.",
+            RiskLevel = ActionPrivilege.Observation,
+            Capability = AssistantToolCapability.Suggest
         }
     ];
 

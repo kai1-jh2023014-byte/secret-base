@@ -44,7 +44,19 @@ Highest principle:
 - ✅ Secret Base AI (`IAiProvider` + tool registry over existing Commands; OpenAI HTTP MVP)
 - ✅ Secret Base AI v0.3 Context Layer (read-only snapshot + suggest vs confirm)
 - ✅ Secret Base AI v0.4 Personal AI Workspace (Plan / Confirm / Action / Result; AI MVP complete)
-- ⏭ Gemini / Local LLM HTTP, long-term memory, autonomous agents — see [v0.2 roadmap](../guides/v0.2-roadmap.md)
+- ✅ v0.6 Base Experience: Base AI, context aggregator, Workspace session, Todo, Focus, time-aware suggestions, File Intelligence (suggest-only), onboarding that does not wipe existing layouts, Clock Base style, design tokens (`SurfaceElevated`, `MotionDurationMs`)
+- ✅ Provider fallback: preferred remote → Local → graceful unavailable
+- ⏭ Gemini tool-calling, YouTube Music official API (when available), autonomous agents — out of scope
+
+## v0.6 Base Experience
+
+Secret Base is one Personal Space. Blocks (Clock, Calendar, Music, Workspace, Base AI, Apps) share context instead of duplicating it.
+
+```
+Observe → Understand → Plan → Confirmation (if needed) → Action → Result → Context update
+```
+
+Safety lanes: **Safe Auto** (prepare, focus timer, suggestions) / **Confirmation** (launch, open, calendar write) / **Explicit** (delete/unregister). No arbitrary shell. No disk crawl. No OS file delete.
 
 ## Security spine
 

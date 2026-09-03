@@ -8,6 +8,7 @@ using SecretBase.Core.Widgets.Creative;
 using SecretBase.Core.Widgets.Music;
 using SecretBase.Core.Widgets.Text;
 using SecretBase.Core.Widgets.Web;
+using SecretBase.Core.Widgets.Workspace;
 
 namespace SecretBase.Core.Widgets;
 
@@ -20,12 +21,14 @@ public static class DefaultWidgetFactory
     {
         var room = roomId ?? RoomId.DefaultRoomId;
         var config = ClockWidgetConfiguration.CreateDefault();
+        config.DisplayStyle = ClockWidgetConfiguration.StyleBase;
+        config.ShowSeconds = false;
         return new WidgetInstance
         {
             Id = Guid.Parse("11111111-1111-1111-1111-111111111111"),
             Type = WidgetTypes.Clock,
             Position = new WidgetPosition(48, 48),
-            Size = new WidgetSize(280, 160),
+            Size = new WidgetSize(280, 200),
             RoomId = room,
             Configuration = config.ToDictionary()
         };
@@ -41,12 +44,14 @@ public static class DefaultWidgetFactory
     {
         var room = roomId ?? RoomId.DefaultRoomId;
         var config = ClockWidgetConfiguration.CreateDefault();
+        config.DisplayStyle = ClockWidgetConfiguration.StyleBase;
+        config.ShowSeconds = false;
         return new WidgetInstance
         {
             Id = Guid.NewGuid(),
             Type = WidgetTypes.Clock,
             Position = new WidgetPosition(x ?? 48, y ?? 48),
-            Size = new WidgetSize(width ?? 280, height ?? 160),
+            Size = new WidgetSize(width ?? 280, height ?? 200),
             RoomId = room,
             Configuration = config.ToDictionary()
         };
@@ -257,6 +262,28 @@ public static class DefaultWidgetFactory
             Type = WidgetTypes.Assistant,
             Position = new WidgetPosition(x ?? 320, y ?? 60),
             Size = new WidgetSize(width ?? 360, height ?? 480),
+            RoomId = room,
+            Configuration = config.ToDictionary()
+        };
+    }
+
+    /// <summary>Creates a Workspace widget. Not seeded into default layout — add explicitly or via onboarding.</summary>
+    public static WidgetInstance CreateWorkspace(
+        RoomId? roomId = null,
+        double? x = null,
+        double? y = null,
+        double? width = null,
+        double? height = null,
+        WorkspaceWidgetConfiguration? configuration = null)
+    {
+        var room = roomId ?? RoomId.DefaultRoomId;
+        var config = configuration ?? WorkspaceWidgetConfiguration.CreateDefault();
+        return new WidgetInstance
+        {
+            Id = Guid.NewGuid(),
+            Type = WidgetTypes.Workspace,
+            Position = new WidgetPosition(x ?? 360, y ?? 80),
+            Size = new WidgetSize(width ?? 340, height ?? 420),
             RoomId = room,
             Configuration = config.ToDictionary()
         };

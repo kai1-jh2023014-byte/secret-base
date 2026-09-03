@@ -92,7 +92,7 @@
                     Spacing="0">
                     <TextBlock
                         x:Name="BrandText"
-                        Text="Secret Base"
+                        Text="Base"
                         FontSize="10"
                         CharacterSpacing="40"
                         FontWeight="SemiBold" />

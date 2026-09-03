@@ -233,6 +233,8 @@ public static class ThemePresets
                     transparency: 0.9,
                     spacing: 10);
                 break;
+            case "Calm":
+                goto default;
             default:
                 // Atelier — match ThemeDefinition.CreateDefault()
                 Apply(
@@ -282,6 +284,8 @@ public static class ThemePresets
         target.WidgetMinWidth = source.WidgetMinWidth;
         target.WidgetMinHeight = source.WidgetMinHeight;
         target.DisplayName = source.DisplayName;
+        target.SurfaceElevated = source.SurfaceElevated;
+        target.MotionDurationMs = source.MotionDurationMs;
     }
 
     private static void Apply(
@@ -315,5 +319,7 @@ public static class ThemePresets
         theme.Transparency = Math.Clamp(transparency, 0.35, 1.0);
         theme.Spacing = spacing;
         theme.BlurAmount = blur;
+        theme.SurfaceElevated = widgetBackground;
+        theme.MotionDurationMs = 180;
     }
 }
