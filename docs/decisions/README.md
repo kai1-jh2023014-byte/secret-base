@@ -225,3 +225,9 @@ See [2026-09-03-macos-host.md](2026-09-03-macos-host.md).
 **Decision:** Close the observe→understand→remember→intent→prepare→suggest→safety→act→learn loop without weakening Confirmation, Allowlist, Step Budget, or Safe Auto / Confirmation / Explicit. Add a privacy-first Observation abstraction (`IComputerObservationService`) implemented on Windows with documented user32 APIs only (process name + idle; browser titles dropped unless they name a registered project). Core gains Situation (evidence), ranked Memory recall, WorkSession persistence, evidence-based Intent including ResumePreviousSession, an Automation pipeline with Silent/Passive/Suggest/Confirm, and learning that may change ranking but never Confirmation→Auto Action. Base AI tools `situation_now` and `session_recent` are read-only. Default layouts stay Clock+Text.
 
 **Why:** v0.7 understood Secret Base internals. v0.8 understands the user's computer just enough to continue yesterday's work — and still asks before acting.
+
+## 2026-09-03 — Personal AI OS v1.0 (Command Center)
+
+**Decision:** Finish the Personal AI OS product loop with a deterministic Command Center (LLM last), Ctrl+Space command palette, Quick Capture, Daily Briefing, Attention Center, Activity Timeline, Memory management UI, Privacy Center, persisted Automation rules + event-driven scheduler, intent explainability, and learning that still cannot escalate Confirmation to Auto Action. Default layouts remain Clock+Text. macOS observation stays an honest Unsupported no-op.
+
+**Why:** The killer experience is opening the PC and continuing yesterday's work — quietly, with confirmation — not chatting with a dashboard.

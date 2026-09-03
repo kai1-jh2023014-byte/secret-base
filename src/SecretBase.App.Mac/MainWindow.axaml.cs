@@ -7,6 +7,9 @@ using SecretBase.Core;
 using SecretBase.Core.Assistant;
 using SecretBase.Core.Automation;
 using SecretBase.Core.Base;
+using SecretBase.Core.Capture;
+using SecretBase.Core.Commands;
+using SecretBase.Core.Memory;
 using SecretBase.Core.Workspace;
 using SecretBase.Core.Blocks;
 using SecretBase.Core.Desktop;
@@ -134,7 +137,8 @@ public partial class MainWindow : Window
             : card.SuggestionTitle + (string.IsNullOrWhiteSpace(card.SuggestionDetail)
                 ? string.Empty
                 : " " + card.SuggestionDetail);
-        MetaText.Text = $"Calendar {card.CalendarLine} · Tasks {card.TasksLine} · {card.AiLine}";
+        MetaText.Text = $"Calendar {card.CalendarLine} · Tasks {card.TasksLine} · {card.AiLine}"
+                        + (string.IsNullOrWhiteSpace(card.AttentionLine) ? string.Empty : " · " + card.AttentionLine);
         ContinueButton.IsEnabled = card.ShowContinue || !string.IsNullOrWhiteSpace(card.SuggestionTitle);
         NotNowButton.IsVisible = !string.IsNullOrWhiteSpace(card.SuggestionTitle);
     }
@@ -401,6 +405,107 @@ public partial class MainWindow : Window
         {
             e.Handled = true;
             _session.SafeExit.RequestExit();
+            return;
         }
+
+        if (e.Key == Key.Space && e.KeyModifiers.HasFlag(KeyModifiers.Control))
+        {
+            e.Handled = true;
+            _ = ShowPaletteAsync();
+        }
+    }
+
+    private async void PaletteButton_OnClick(object? sender, RoutedEventArgs e) => await ShowPaletteAsync();
+
+    private async void CaptureButton_OnClick(object? sender, RoutedEventArgs e) => await ShowCaptureAsync();
+
+    private async void MemoryButton_OnClick(object? sender, RoutedEventArgs e) => await ShowMemoryAsync();
+
+    private async void PrivacyButton_OnClick(object? sender, RoutedEventArgs e) => await ShowPrivacyAsync();
+
+    private async Task ShowPaletteAsync()
+    {
+        var items = _session.Base.Palette(string.Empty);
+        var body = string.Join(Environment.NewLine, items.Take(8).Select(item => item.Title + " — " + item.Subtitle));
+        var window = new Window
+        {
+            Title = "Command palette",
+            Width = 520,
+            Height = 420,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Content = new ScrollViewer
+            {
+                Content = new TextBlock
+                {
+                    Text = body + Environment.NewLine + Environment.NewLine + "Type the same phrases in Base AI. Continue still confirms.",
+                    TextWrapping = Avalonia.Media.TextWrapping.Wrap,
+                    Margin = new Avalonia.Thickness(16)
+                }
+            }
+        };
+        await window.ShowDialog(this);
+        StatusText.Text = "Command palette · Ctrl+Space";
+    }
+
+    private async Task ShowCaptureAsync()
+    {
+        var box = new TextBox { Watermark = "An idea, todo, or note…" };
+        var panel = new StackPanel { Spacing = 8, Margin = new Avalonia.Thickness(16) };
+        panel.Children.Add(new TextBlock { Text = "Quick capture" });
+        panel.Children.Add(box);
+        var save = new Button { Content = "Save" };
+        panel.Children.Add(save);
+        var window = new Window
+        {
+            Title = "Quick capture",
+            Width = 420,
+            Height = 220,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Content = panel
+        };
+        save.Click += (_, _) =>
+        {
+            var draft = _session.Base.ClassifyCapture(box.Text ?? string.Empty);
+            var saved = _session.Base.CommitCapture(draft);
+            StatusText.Text = saved is null ? "Capture refused." : "Saved as " + saved.Kind;
+            window.Close();
+        };
+        await window.ShowDialog(this);
+    }
+
+    private async Task ShowMemoryAsync()
+    {
+        var body = PersonalSpaceCatalog.Memories(_session.Base.Memory, _session.Base.Now);
+        await ShowInfoAsync("What does Secret Base remember?", body);
+    }
+
+    private async Task ShowPrivacyAsync()
+    {
+        var body = _session.Base.Privacy()
+                   + Environment.NewLine
+                   + Environment.NewLine
+                   + PersonalSpaceCatalog.Rules(_session.Base.Rules);
+        await ShowInfoAsync("Privacy & automation", body);
+    }
+
+    private async Task ShowInfoAsync(string title, string body)
+    {
+        var window = new Window
+        {
+            Title = title,
+            Width = 560,
+            Height = 480,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Content = new ScrollViewer
+            {
+                Content = new TextBlock
+                {
+                    Text = body,
+                    TextWrapping = Avalonia.Media.TextWrapping.Wrap,
+                    Margin = new Avalonia.Thickness(16)
+                }
+            }
+        };
+        await window.ShowDialog(this);
     }
 }

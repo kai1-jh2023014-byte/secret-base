@@ -84,7 +84,9 @@ public sealed partial class DashboardWidgetView : UserControl
         CalendarValue.Text = card.CalendarLine;
         TasksValue.Text = card.TasksLine;
         MusicValue.Text = card.MusicLine;
-        AiValue.Text = card.AiLine;
+        AiValue.Text = string.IsNullOrWhiteSpace(card.AttentionLine)
+            ? card.AiLine
+            : card.AiLine + Environment.NewLine + card.AttentionLine;
         ContinueButton.IsEnabled = card.ShowContinue || !string.IsNullOrWhiteSpace(card.SuggestionTitle);
         NotNowButton.Visibility = string.IsNullOrWhiteSpace(card.SuggestionTitle)
             ? Visibility.Collapsed

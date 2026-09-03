@@ -14,6 +14,8 @@ using SecretBase.Core.Automation;
 using SecretBase.Core.Base;
 using SecretBase.Core.Blocks;
 using SecretBase.Core.Calendar;
+using SecretBase.Core.Capture;
+using SecretBase.Core.Commands;
 using SecretBase.Core.Creative;
 using SecretBase.Core.Desktop;
 using SecretBase.Core.Focus;
@@ -191,6 +193,7 @@ public sealed partial class DesktopPage : Page
         var activityStore = new JsonActivityStore();
         var feedbackStore = new JsonAutomationFeedbackStore();
         var sessionStore = new JsonWorkSessionStore();
+        var ruleStore = new JsonAutomationRuleStore();
         var layoutExisted = _layoutStore.Exists(RoomId.DefaultRoomId);
         _baseSettingsStore = new JsonBaseSettingsStore();
         _baseSettings = _baseSettingsStore.LoadOrCreate(layoutExisted);
@@ -236,8 +239,10 @@ public sealed partial class DesktopPage : Page
             memoryStore,
             activityStore,
             feedbackStore,
-            sessionStore);
+            sessionStore,
+            ruleStore);
         _baseExperience.CurrentWorkspace = _baseSettings.LastWorkspace;
+        _baseExperience.Preferences = _baseSettings;
         _assistant = new AssistantService(
             assistantRegistry,
             new AssistantToolExecutor(
@@ -256,7 +261,8 @@ public sealed partial class DesktopPage : Page
             () => _assistantSettings.LoadOrCreate(),
             assistantContext);
 
-        _theme = _themeStore.LoadOrCreateDefault();
+        _assistant.CommandContext = _baseExperience;
+        _baseExperience.RecordOpened();
         _layout = _layoutStore.LoadOrCreateDefault(RoomId.DefaultRoomId);
         EnsureSeedTextWidget(_layout);
 
@@ -274,7 +280,7 @@ public sealed partial class DesktopPage : Page
         DispatcherQueue.TryEnqueue(async () => await MaybeShowOnboardingAsync());
         _logger.Info("desktop", $"Overlay desktop shown for room '{_layout.RoomId}' with {_layout.Widgets.Count} widget(s), {_layout.Blocks.Count} block(s).");
         _logger.Info("widget", "Widget hosts ready (Clock, Text, Calendar, Music, Creative, Workspace, Base, Apps, Base AI).");
-        _logger.Info("assistant", "Taskbar AI chat bar ready (Ctrl+Shift+K). Does not replace Windows Search.");
+        _logger.Info("assistant", "Taskbar AI chat bar ready (Ctrl+Shift+K). Command palette: Ctrl+Space. Does not replace Windows Search.");
         _logger.Info("block", "Block host ready (use Blk button to add; drop + drag icons inside a Block).");
         _logger.Info("theme", "Theme editor ready (Aa button) — colors apply to all widgets and Blocks.");
         _logger.Info("layout", "Arrange ready (Grid button) — even placement for widgets and blocks.");
@@ -1606,6 +1612,7 @@ public sealed partial class DesktopPage : Page
         var calendar = new CheckBox { Content = "Calendar", IsChecked = true };
         var music = new CheckBox { Content = "Music", IsChecked = false };
         var projects = new CheckBox { Content = "Projects", IsChecked = true };
+        var appsBox = new CheckBox { Content = "Apps", IsChecked = false };
         var todo = new CheckBox { Content = "Todo / Workspace", IsChecked = true };
         var dashboard = new CheckBox { Content = "Base status", IsChecked = true };
         var atmosphere = new ComboBox
@@ -1617,7 +1624,7 @@ public sealed partial class DesktopPage : Page
         };
         var intro = new TextBlock
         {
-            Text = "This is your personal computing space.\nChoose what you want in your base.",
+            Text = "Welcome to Secret Base.\nThis is your personal space.\nConnect only what you want — nothing is required.",
             TextWrapping = TextWrapping.WrapWholeWords
         };
         var panel = new StackPanel { Spacing = 8 };
@@ -1627,13 +1634,14 @@ public sealed partial class DesktopPage : Page
         panel.Children.Add(calendar);
         panel.Children.Add(music);
         panel.Children.Add(projects);
+        panel.Children.Add(appsBox);
         panel.Children.Add(todo);
         panel.Children.Add(dashboard);
         panel.Children.Add(atmosphere);
 
         var dialog = new ContentDialog
         {
-            Title = "Welcome to your Base",
+            Title = "Welcome to Secret Base",
             Content = panel,
             PrimaryButtonText = "Enter",
             DefaultButton = ContentDialogButton.Primary,
@@ -1669,6 +1677,11 @@ public sealed partial class DesktopPage : Page
         {
             modules.Add(BaseModules.Projects);
             await EnsureWidgetAsync(WidgetTypes.Creative);
+        }
+
+        if (appsBox.IsChecked == true)
+        {
+            await EnsureWidgetAsync(WidgetTypes.Apps);
         }
 
         if (todo.IsChecked == true)

@@ -128,11 +128,11 @@ Prefer Core / Infrastructure / Platform.Mac unit tests for new domain logic. Win
 
 ---
 
-## Current status (v0.8 Personal AI OS)
+## Current status (v1.0 Personal AI OS)
 
-Working: overlay desktop, Clock (Base status), Calendar, Music, Creative Projects, My Apps allowlist, Workspace, Base dashboard (situation-first), Base AI (context + memory + situation + intent → plan → confirm → action, remote→local fallback), persistent Memory with ranked recall, Activity aggregation, privacy-first Windows foreground/idle observation, Situation model with evidence, User State + confidence, evidence-based Intent Engine, work sessions, Automation pipeline (quiet-by-default intervention modes), learning that never escalates privilege, File Intelligence 2.0 (classify, never delete), Universal Search including sessions, first-run onboarding that does not wipe existing users.
+Working: overlay desktop, Clock (Base status), Calendar, Music, Creative Projects, My Apps allowlist, Workspace, Base dashboard (situation-first), Command Center + Ctrl+Space palette, Quick Capture, Daily Briefing, Attention Center, Activity Timeline, Memory management UI, Privacy Center, Automation rules + scheduler (cooldown, quiet hours), Base AI (deterministic-first, remote→local fallback), persistent Memory (Remember/Recall/Update/Merge/Expire/Forget), ranked search, privacy-first Windows foreground/idle observation, Situation + evidence, Intent explainability, work sessions, learning that never escalates privilege, File Intelligence (candidates only), first-run onboarding that does not wipe existing users.
 
-Not built: Rooms UI, plugins, marketplace, YouTube Music official API (open-web only), Google Tasks write, unrestricted filesystem/shell, always-on LLM. WinUI overlay cannot be executed on Linux CI — use the Windows manual QA checklist.
+Not built: Rooms UI, plugins, marketplace, YouTube Music official API, Google Tasks write, unrestricted filesystem/shell, always-on LLM, macOS foreground observation (honest Unsupported). WinUI overlay cannot be executed on Linux CI — use [docs/guides/windows-manual-qa-v10.md](docs/guides/windows-manual-qa-v10.md).
 
 ---
 

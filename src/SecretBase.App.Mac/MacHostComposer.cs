@@ -45,6 +45,8 @@ public sealed class MacHostSession
     public required IAssistantService Assistant { get; init; }
     public required IBaseExperienceServices Base { get; init; }
     public required IPathPickService PathPicker { get; init; }
+    public required IBaseSettingsStore SettingsStore { get; init; }
+    public required BaseSettings Preferences { get; init; }
 }
 
 public static class MacHostComposer
@@ -122,8 +124,10 @@ public static class MacHostComposer
         var activityStore = new JsonActivityStore();
         var feedbackStore = new JsonAutomationFeedbackStore();
         var sessionStore = new JsonWorkSessionStore();
+        var ruleStore = new JsonAutomationRuleStore();
         var layoutExisted = new JsonLayoutStore(logger: logger).Exists(RoomId.DefaultRoomId);
-        var baseSettings = new JsonBaseSettingsStore().LoadOrCreate(layoutExisted);
+        var settingsStore = new JsonBaseSettingsStore();
+        var baseSettings = settingsStore.LoadOrCreate(layoutExisted);
         var baseExperience = new BaseExperienceServices(
             todoStore,
             focus,
@@ -142,8 +146,10 @@ public static class MacHostComposer
             memoryStore,
             activityStore,
             feedbackStore,
-            sessionStore);
+            sessionStore,
+            ruleStore);
         baseExperience.CurrentWorkspace = baseSettings.LastWorkspace;
+        baseExperience.Preferences = baseSettings;
         logger.Info("observation", new NullComputerObservationService().CapabilityNote);
         var assistant = new AssistantService(
             assistantRegistry,
@@ -162,6 +168,8 @@ public static class MacHostComposer
             () => assistantProviders.Create(assistantSettings.LoadOrCreate()),
             () => assistantSettings.LoadOrCreate(),
             assistantContext);
+        assistant.CommandContext = baseExperience;
+        baseExperience.RecordOpened();
 
         return new MacHostSession
         {
@@ -179,7 +187,9 @@ public static class MacHostComposer
             AssistantSettings = assistantSettings,
             Assistant = assistant,
             Base = baseExperience,
-            PathPicker = new MacPathPickService()
+            PathPicker = new MacPathPickService(),
+            SettingsStore = settingsStore,
+            Preferences = baseSettings
         };
     }
 }

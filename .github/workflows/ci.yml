@@ -1,0 +1,39 @@
+name: ci
+
+on:
+  push:
+    branches: ["main", "cursor/**"]
+  pull_request:
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+      - name: Test Core
+        run: dotnet test tests/SecretBase.Core.Tests/SecretBase.Core.Tests.csproj --nologo --configuration Release
+      - name: Test Infrastructure
+        run: dotnet test tests/SecretBase.Infrastructure.Tests/SecretBase.Infrastructure.Tests.csproj --nologo --configuration Release
+      - name: Test Platform.Mac
+        run: dotnet test tests/SecretBase.Platform.Mac.Tests/SecretBase.Platform.Mac.Tests.csproj --nologo --configuration Release
+      - name: Build App.Mac
+        run: dotnet build src/SecretBase.App.Mac/SecretBase.App.Mac.csproj --nologo --configuration Release
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+      - name: Test Core
+        run: dotnet test tests/SecretBase.Core.Tests/SecretBase.Core.Tests.csproj --nologo --configuration Release
+      - name: Test Infrastructure
+        run: dotnet test tests/SecretBase.Infrastructure.Tests/SecretBase.Infrastructure.Tests.csproj --nologo --configuration Release
+      - name: Test Platform.Windows
+        run: dotnet test tests/SecretBase.Platform.Windows.Tests/SecretBase.Platform.Windows.Tests.csproj --nologo --configuration Release
+      - name: Build App (WinUI)
+        run: dotnet build src/SecretBase.App/SecretBase.App.csproj -c Release -p:Platform=x64 --nologo
