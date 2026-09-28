@@ -393,7 +393,7 @@ public sealed partial class DesktopPage : Page
 
     private async Task ShowSetupDialogAsync()
     {
-        using var _ = _dialogInput?.Enter();
+        using var dialogScope = _dialogInput?.Enter();
 
         var intro = new TextBlock
         {
@@ -408,23 +408,22 @@ public sealed partial class DesktopPage : Page
             Opacity = 0.85,
             TextWrapping = TextWrapping.WrapWholeWords
         };
-        if (_autoStart is not null && _autoStart.TryGetStartupExecutablePath(out var exePath, out var resolveError))
-        {
-            exeNote.Text = "App host:\n" + exePath;
-        }
-        else
-        {
-            exeNote.Text = resolveError
-                ?? "Build Secret Base once (build.ps1 / run.ps1) so SecretBase.App.exe exists, then open Setup again.";
-        }
+        string? resolvedExe = null;
+        string? resolveError = null;
+        var hasExe = _autoStart is not null
+                     && _autoStart.TryGetStartupExecutablePath(out resolvedExe, out resolveError);
+        exeNote.Text = hasExe && !string.IsNullOrWhiteSpace(resolvedExe)
+            ? "App host:\n" + resolvedExe
+            : resolveError
+              ?? "Build Secret Base once (build.ps1 / run.ps1) so SecretBase.App.exe exists, then open Setup again.";
 
+        var canRegister = _autoStart?.IsSupported == true
+                          && (hasExe || _autoStart.GetStatus().IsRegistered);
         var loginToggle = new ToggleSwitch
         {
             OffContent = "Start at login: Off",
             OnContent = "Start at login: On",
-            IsEnabled = _autoStart?.IsSupported == true
-                        && (_autoStart.TryGetStartupExecutablePath(out _, out _)
-                            || _autoStart.GetStatus().IsRegistered)
+            IsEnabled = canRegister
         };
         if (_launchSettingsStore is not null && _autoStart is not null)
         {
@@ -457,9 +456,16 @@ public sealed partial class DesktopPage : Page
         var shortcutButton = new Button { Content = "Create Start Menu + Desktop shortcuts", HorizontalAlignment = HorizontalAlignment.Stretch };
         shortcutButton.Click += (_, _) =>
         {
-            if (_autoStart is null || !_autoStart.TryGetStartupExecutablePath(out var path, out var error))
+            if (_autoStart is null)
             {
-                shortcutStatus.Text = error ?? "SecretBase.App.exe not found.";
+                shortcutStatus.Text = "SecretBase.App.exe not found.";
+                return;
+            }
+
+            if (!_autoStart.TryGetStartupExecutablePath(out var path, out var pathError)
+                || string.IsNullOrWhiteSpace(path))
+            {
+                shortcutStatus.Text = pathError ?? "SecretBase.App.exe not found.";
                 return;
             }
 
