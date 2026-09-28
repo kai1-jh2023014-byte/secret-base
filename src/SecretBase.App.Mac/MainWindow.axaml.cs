@@ -294,17 +294,53 @@ public partial class MainWindow : Window
 
     private void SaveKeyButton_OnClick(object? sender, RoutedEventArgs e)
     {
+        var settings = AssistantSettingsMigrator.MigrateToCurrent(_session.AssistantSettings.LoadOrCreate());
+        var providerId = settings.ProviderId;
+        var secretKey = string.Equals(providerId, AssistantProviderIds.Gemini, StringComparison.OrdinalIgnoreCase)
+            ? AssistantSecretKeys.GeminiApiKey
+            : AssistantSecretKeys.OpenAiApiKey;
+        var label = string.Equals(providerId, AssistantProviderIds.Gemini, StringComparison.OrdinalIgnoreCase)
+            ? "Gemini"
+            : "OpenAI";
+
         var typed = ApiKeyBox.Text?.Trim();
+        // If the typed key clearly belongs to the other provider, route it correctly.
+        if (!string.IsNullOrWhiteSpace(typed))
+        {
+            if (typed.StartsWith("AIza", StringComparison.Ordinal))
+            {
+                secretKey = AssistantSecretKeys.GeminiApiKey;
+                label = "Gemini";
+                if (!string.Equals(settings.ProviderId, AssistantProviderIds.Gemini, StringComparison.OrdinalIgnoreCase))
+                {
+                    settings.ProviderId = AssistantProviderIds.Gemini;
+                    settings.Model = AssistantSettings.DefaultGeminiModel;
+                    _session.AssistantSettings.Save(settings);
+                }
+            }
+            else if (typed.StartsWith("sk-", StringComparison.Ordinal))
+            {
+                secretKey = AssistantSecretKeys.OpenAiApiKey;
+                label = "OpenAI";
+                if (!string.Equals(settings.ProviderId, AssistantProviderIds.OpenAi, StringComparison.OrdinalIgnoreCase))
+                {
+                    settings.ProviderId = AssistantProviderIds.OpenAi;
+                    settings.Model = AssistantSettings.DefaultOpenAiModel;
+                    _session.AssistantSettings.Save(settings);
+                }
+            }
+        }
+
         if (string.IsNullOrWhiteSpace(typed))
         {
-            _session.Secrets.DeleteSecret(AssistantSecretKeys.OpenAiApiKey);
-            StatusText.Text = "OpenAI key removed.";
+            _session.Secrets.DeleteSecret(secretKey);
+            StatusText.Text = $"{label} key removed.";
         }
         else
         {
-            _session.Secrets.SetSecret(AssistantSecretKeys.OpenAiApiKey, typed);
+            _session.Secrets.SetSecret(secretKey, typed);
             ApiKeyBox.Text = string.Empty;
-            StatusText.Text = "OpenAI key saved in the OS secret store.";
+            StatusText.Text = $"{label} key saved in the OS secret store.";
         }
 
         RefreshProvider();

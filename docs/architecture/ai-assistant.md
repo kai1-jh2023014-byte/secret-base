@@ -104,7 +104,7 @@ Session-only (in-memory), capped (`MaxVisibleMessages = 20`). Secrets rejected/s
 
 | Case | Copy |
 |------|------|
-| No API key | `OpenAI API Key is not configured.` `Open AI Settings.` |
+| No API key | `AI API key is not configured.` `Open AI Settings.` (OpenAI and Gemini keys are stored in separate Credential Manager / Keychain slots.) |
 | Provider stub / down | `AI provider is unavailable.` |
 | Timeout | `AI response timed out.` |
 | Calendar/tool failure | Honest domain message |

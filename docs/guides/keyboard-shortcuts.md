@@ -24,6 +24,7 @@ Secret Base accelerators require the overlay window to have focus.
 | **Blk** | Add Block |
 | **Aa** | Theme |
 | **Grid** | Arrange widgets & blocks evenly |
+| **⚙** | Setup — Start Menu / Desktop shortcuts, Start at login |
 
 ## Notes
 

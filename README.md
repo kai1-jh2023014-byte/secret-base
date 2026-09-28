@@ -22,8 +22,13 @@
 ```powershell
 .\build.ps1
 .\test.ps1
-.\run.ps1
+.\install-launchers.ps1   # Start Menu + Desktop shortcuts (no terminal next time)
+.\run.ps1 -ExeOnly        # launch SecretBase.App.exe (needed for Start at login)
 ```
+
+Or for a quick dev loop: `.\run.ps1`
+
+In the overlay, open **Setup (⚙)** → create shortcuts / enable **Start at login**. AI Settings saves OpenAI and Gemini keys to **separate** Credential Manager slots — use **Test Connection** after saving.
 
 **macOS** (workspace window — does not replace Finder or Dock):
 
@@ -31,7 +36,7 @@
 ./run-mac.sh
 ```
 
-Details: [docs/architecture/macos.md](docs/architecture/macos.md)
+Details: [docs/architecture/macos.md](docs/architecture/macos.md) · [windows-autostart.md](docs/architecture/windows-autostart.md)
 
 | Shortcut | Action |
 |----------|--------|

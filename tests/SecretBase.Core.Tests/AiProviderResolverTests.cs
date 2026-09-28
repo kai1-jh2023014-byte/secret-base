@@ -43,11 +43,32 @@ public class AiProviderResolverTests
         Assert.Equal("Local AI", resolution.ActiveDisplayName);
     }
 
+    [Fact]
+    public async Task Fallback_UsesConfiguredLocalModel_NotRemoteModelName()
+    {
+        var factory = new StubProviderFactory();
+        var provider = new AiProviderResolver(factory).Resolve(new AssistantSettings
+        {
+            ProviderId = AssistantProviderIds.OpenAi,
+            Model = "gpt-4o-mini",
+            LocalModel = "llama3.2"
+        }).Provider;
+
+        await provider.ChatAsync(
+            [new AiMessage { Role = AiMessageRole.User, Content = "hi" }],
+            [],
+            "gpt-4o-mini");
+
+        Assert.Equal("llama3.2", factory.LastLocalModel);
+    }
+
     private sealed class StubProviderFactory : IAiProviderFactory
     {
         private readonly bool _localAvailable;
 
         public StubProviderFactory(bool localAvailable = true) => _localAvailable = localAvailable;
+
+        public string? LastLocalModel { get; private set; }
 
         public IAiProvider Create(AssistantSettings settings) =>
             new AiProviderResolver(this).Resolve(settings).Provider;
@@ -56,7 +77,7 @@ public class AiProviderResolverTests
             providerId switch
             {
                 AssistantProviderIds.Local => _localAvailable
-                    ? new LocalOkProvider()
+                    ? new LocalOkProvider(model => LastLocalModel = model)
                     : new UnavailableAiProvider(AssistantProviderIds.Local, "Local AI", "down"),
                 AssistantProviderIds.Gemini => new UnconfiguredAiProvider(AssistantProviderIds.Gemini, "Gemini"),
                 _ => new UnconfiguredAiProvider(AssistantProviderIds.OpenAi, "OpenAI")
@@ -68,6 +89,10 @@ public class AiProviderResolverTests
 
     private sealed class LocalOkProvider : IAiProvider
     {
+        private readonly Action<string> _onModel;
+
+        public LocalOkProvider(Action<string> onModel) => _onModel = onModel;
+
         public string ProviderId => AssistantProviderIds.Local;
 
         public string DisplayName => "Local AI";
@@ -76,7 +101,10 @@ public class AiProviderResolverTests
             IReadOnlyList<AiMessage> messages,
             IReadOnlyList<AssistantToolDefinition> tools,
             string model,
-            CancellationToken cancellationToken = default) =>
-            Task.FromResult(AiProviderResponse.Text("local-ok"));
+            CancellationToken cancellationToken = default)
+        {
+            _onModel(model);
+            return Task.FromResult(AiProviderResponse.Text("local-ok"));
+        }
     }
 }

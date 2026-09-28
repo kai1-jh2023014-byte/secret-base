@@ -130,6 +130,17 @@
                     CornerRadius="14"
                     Click="ArrangeButton_Click"
                     ToolTipService.ToolTip="Arrange widgets &amp; blocks evenly" />
+                <Button
+                    x:Name="SetupFab"
+                    Width="48"
+                    Height="48"
+                    Content="⚙"
+                    FontSize="18"
+                    FontWeight="SemiBold"
+                    Padding="0"
+                    CornerRadius="14"
+                    Click="SetupButton_Click"
+                    ToolTipService.ToolTip="Setup — Start Menu, Desktop shortcut, Start at login" />
             </StackPanel>
         </StackPanel>
 

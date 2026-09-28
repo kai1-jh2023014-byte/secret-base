@@ -13,8 +13,8 @@ public interface IAutoStartService
     AutoStartStatus GetStatus();
 
     /// <summary>
-    /// Registers the current application executable for logon startup.
-    /// Fails when running under <c>dotnet run</c> (no stable app exe path).
+    /// Registers the application host executable for logon startup.
+    /// Under <c>dotnet run</c>, implementations may resolve the built apphost beside the output folder.
     /// </summary>
     bool TryEnable(out string? errorMessage);
 

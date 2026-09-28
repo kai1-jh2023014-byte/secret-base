@@ -7,6 +7,7 @@ using SecretBase.Core.Creative;
 using SecretBase.Core.Themes;
 using SecretBase.Core.Widgets.Creative;
 using SecretBase.Core.Widgets.Web;
+using SecretBase.Widgets.Hosting;
 using SecretBase.Widgets.Theming;
 using Windows.System;
 
@@ -27,6 +28,7 @@ public sealed partial class CreativeWorkspaceView : UserControl
     private Func<Task<(bool ok, bool cancelled, string? path, string? error)>>? _pickFile;
     private Func<Task<(bool ok, bool cancelled, string? path, string? error)>>? _pickFolder;
     private Action<CreativeWorkspaceWidgetConfiguration>? _onConfigurationChanged;
+    private OverlayDialogInput? _dialogInput;
     private ThemeDefinition? _theme;
     private string _filter = string.Empty;
     private string? _detailProjectId;
@@ -44,10 +46,12 @@ public sealed partial class CreativeWorkspaceView : UserControl
         Func<Task<(bool ok, bool cancelled, string? path, string? error)>> pickFolder,
         Action<CreativeWorkspaceWidgetConfiguration>? onConfigurationChanged = null,
         Func<string, bool, string?>? tryLaunchTarget = null,
-        Func<string?, bool, string?>? tryLaunchCursor = null)
+        Func<string?, bool, string?>? tryLaunchCursor = null,
+        OverlayDialogInput? dialogInput = null)
     {
         _commands = commands;
         _configuration = configuration;
+        _dialogInput = dialogInput;
         _tryLaunchItem = tryLaunch;
         _tryLaunchTarget = tryLaunchTarget;
         _tryLaunchCursor = tryLaunchCursor;
@@ -355,7 +359,7 @@ public sealed partial class CreativeWorkspaceView : UserControl
                         DefaultButton = ContentDialogButton.Primary,
                         XamlRoot = XamlRoot
                     };
-                    if (await dialog.ShowAsync() == ContentDialogResult.Primary
+                    if (await ShowDialogAsync(dialog) == ContentDialogResult.Primary
                         && _tryLaunchTarget is not null
                         && WebUrlValidator.TryNormalize(AiBuiltinTools.CursorWebsite, out var url, out _)
                         && url is not null)
@@ -1075,7 +1079,7 @@ public sealed partial class CreativeWorkspaceView : UserControl
             XamlRoot = XamlRoot
         };
 
-        if (await dialog.ShowAsync() != ContentDialogResult.Primary)
+        if (await ShowDialogAsync(dialog) != ContentDialogResult.Primary)
         {
             return;
         }
@@ -1143,7 +1147,7 @@ public sealed partial class CreativeWorkspaceView : UserControl
             XamlRoot = XamlRoot
         };
 
-        if (await dialog.ShowAsync() != ContentDialogResult.Primary)
+        if (await ShowDialogAsync(dialog) != ContentDialogResult.Primary)
         {
             return;
         }
@@ -1220,7 +1224,7 @@ public sealed partial class CreativeWorkspaceView : UserControl
             XamlRoot = XamlRoot
         };
 
-        if (await dialog.ShowAsync() != ContentDialogResult.Primary)
+        if (await ShowDialogAsync(dialog) != ContentDialogResult.Primary)
         {
             return;
         }
@@ -1265,7 +1269,7 @@ public sealed partial class CreativeWorkspaceView : UserControl
             XamlRoot = XamlRoot
         };
 
-        if (await dialog.ShowAsync() != ContentDialogResult.Primary)
+        if (await ShowDialogAsync(dialog) != ContentDialogResult.Primary)
         {
             return;
         }
@@ -1340,7 +1344,7 @@ public sealed partial class CreativeWorkspaceView : UserControl
             XamlRoot = XamlRoot
         };
 
-        var choice = await dialog.ShowAsync();
+        var choice = await ShowDialogAsync(dialog);
         if (choice == ContentDialogResult.None)
         {
             return;
@@ -1419,5 +1423,11 @@ public sealed partial class CreativeWorkspaceView : UserControl
         }
 
         return block;
+    }
+
+    private async Task<ContentDialogResult> ShowDialogAsync(ContentDialog dialog)
+    {
+        using var _ = _dialogInput?.Enter();
+        return await dialog.ShowAsync();
     }
 }

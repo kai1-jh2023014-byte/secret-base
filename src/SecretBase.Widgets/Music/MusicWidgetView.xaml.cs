@@ -6,6 +6,7 @@ using SecretBase.Core.Integration;
 using SecretBase.Core.Music;
 using SecretBase.Core.Themes;
 using SecretBase.Core.Widgets.Music;
+using SecretBase.Widgets.Hosting;
 using SecretBase.Widgets.Theming;
 using Windows.System;
 
@@ -30,6 +31,7 @@ public sealed partial class MusicWidgetView : UserControl
 
     private bool _connectDismissed;
     private IIntegrationMemory? _integrations;
+    private OverlayDialogInput? _dialogInput;
 
     public MusicWidgetView()
     {
@@ -42,12 +44,14 @@ public sealed partial class MusicWidgetView : UserControl
         Action<MusicWidgetConfiguration>? onConfigurationChanged = null,
         Func<string, bool>? openUrl = null,
         MusicService? musicService = null,
-        IIntegrationMemory? integrations = null)
+        IIntegrationMemory? integrations = null,
+        OverlayDialogInput? dialogInput = null)
     {
         _configuration = configuration;
         _onConfigurationChanged = onConfigurationChanged;
         _openUrl = openUrl;
         _integrations = integrations;
+        _dialogInput = dialogInput;
         if (musicService is not null)
         {
             _musicService = musicService;
@@ -428,6 +432,7 @@ public sealed partial class MusicWidgetView : UserControl
             XamlRoot = XamlRoot
         };
 
+        using var _ = _dialogInput?.Enter();
         if (await dialog.ShowAsync() != ContentDialogResult.Primary || list.SelectedIndex < 0)
         {
             return;

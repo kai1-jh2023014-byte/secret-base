@@ -142,35 +142,50 @@ public sealed class MacLaunchAgentAutoStartService : IAutoStartService
         executablePath = string.Empty;
         errorMessage = null;
 
-        var processPath = _processPath();
-        if (string.IsNullOrWhiteSpace(processPath))
+        foreach (var candidate in EnumerateCandidateExecutablePaths())
         {
-            errorMessage = "Could not resolve the application executable path.";
-            return false;
+            var fileName = Path.GetFileName(candidate);
+            if (LaunchAgentPlist.IsSupportedHostName(fileName) && File.Exists(candidate))
+            {
+                executablePath = Path.GetFullPath(candidate);
+                return true;
+            }
         }
 
-        var fileName = Path.GetFileName(processPath);
-        if (LaunchAgentPlist.IsDotnetHost(fileName))
+        var processName = Path.GetFileName(_processPath() ?? string.Empty);
+        if (LaunchAgentPlist.IsDotnetHost(processName))
         {
             errorMessage =
-                "Auto-start requires launching SecretBase.App.Mac directly. It is not available while using dotnet run.";
+                "SecretBase.App.Mac was not found next to the running build. Build once, then enable Login again.";
             return false;
         }
 
-        if (!LaunchAgentPlist.IsSupportedHostName(fileName))
+        errorMessage = string.IsNullOrWhiteSpace(processName)
+            ? "Could not resolve the application executable path."
+            : $"Unexpected host executable '{processName}'. Auto-start supports SecretBase.App.Mac only.";
+        return false;
+    }
+
+    private IEnumerable<string> EnumerateCandidateExecutablePaths()
+    {
+        var processPath = _processPath();
+        if (!string.IsNullOrWhiteSpace(processPath))
         {
-            errorMessage = $"Unexpected host executable '{fileName}'. Auto-start supports SecretBase.App.Mac only.";
-            return false;
+            yield return processPath;
         }
 
-        if (!File.Exists(processPath))
+        var baseDir = AppContext.BaseDirectory;
+        if (!string.IsNullOrWhiteSpace(baseDir))
         {
-            errorMessage = "The application executable could not be found on disk.";
-            return false;
+            yield return Path.Combine(baseDir, "SecretBase.App.Mac");
         }
 
-        executablePath = Path.GetFullPath(processPath);
-        return true;
+        var entry = System.Reflection.Assembly.GetEntryAssembly()?.Location;
+        var entryDir = string.IsNullOrWhiteSpace(entry) ? null : Path.GetDirectoryName(entry);
+        if (!string.IsNullOrWhiteSpace(entryDir))
+        {
+            yield return Path.Combine(entryDir, "SecretBase.App.Mac");
+        }
     }
 
     private string GetPlistPath() =>
