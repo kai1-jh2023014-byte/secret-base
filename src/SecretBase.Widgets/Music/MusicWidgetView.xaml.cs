@@ -258,7 +258,7 @@ public sealed partial class MusicWidgetView : UserControl
 
         if (_theme is not null)
         {
-            StyleActionButton(button, _theme);
+            WidgetSurfaceStyle.ApplyActionButton(button, _theme);
             if (button.Content is StackPanel sp)
             {
                 foreach (var child in sp.Children.OfType<TextBlock>())
