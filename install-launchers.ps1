@@ -13,20 +13,26 @@ if (Test-Path (Join-Path $userDotnet "dotnet.exe")) {
     $env:DOTNET_ROOT = $userDotnet
 }
 
-$exeCandidates = @(
-    (Join-Path $root "src\SecretBase.App\bin\x64\Debug\net10.0-windows10.0.26100.0\SecretBase.App.exe"),
-    (Join-Path $root "src\SecretBase.App\bin\x64\Release\net10.0-windows10.0.26100.0\SecretBase.App.exe")
-)
+function Find-SecretBaseAppExe {
+    $candidates = @(
+        (Join-Path $root "src\SecretBase.App\bin\x64\Debug\net10.0-windows10.0.26100.0\win-x64\SecretBase.App.exe"),
+        (Join-Path $root "src\SecretBase.App\bin\x64\Release\net10.0-windows10.0.26100.0\win-x64\SecretBase.App.exe"),
+        # Older layouts without an RID folder (kept for compatibility)
+        (Join-Path $root "src\SecretBase.App\bin\x64\Debug\net10.0-windows10.0.26100.0\SecretBase.App.exe"),
+        (Join-Path $root "src\SecretBase.App\bin\x64\Release\net10.0-windows10.0.26100.0\SecretBase.App.exe")
+    )
+    return $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+}
 
-$exe = $exeCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+$exe = Find-SecretBaseAppExe
 if (-not $exe) {
     Write-Host "Building Secret Base (Debug | x64)…"
     & (Join-Path $root "build.ps1")
-    $exe = $exeCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+    $exe = Find-SecretBaseAppExe
 }
 
 if (-not $exe) {
-    throw "SecretBase.App.exe was not found after build."
+    throw "SecretBase.App.exe was not found after build. Expected under src\SecretBase.App\bin\x64\Debug\...\win-x64\"
 }
 
 $workDir = Split-Path -Parent $exe

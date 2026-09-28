@@ -33,7 +33,7 @@ This appears in **Windows Settings → Apps → Startup** like other desktop app
 | `.\run.ps1` (dotnet run) | Supported when `SecretBase.App.exe` exists next to the build output — registration points at that **exe**, not `dotnet.exe` |
 | `.\run.ps1 -ExeOnly` | Recommended — launches the apphost directly |
 | Start Menu / Desktop shortcut | Supported (`.\install-launchers.ps1` or Setup → Create shortcuts) |
-| Built `SecretBase.App.exe` | Supported |
+| Built apphost | `src\SecretBase.App\bin\x64\Debug\net10.0-windows10.0.26100.0\win-x64\SecretBase.App.exe` |
 
 ## Daily launch (no terminal)
 

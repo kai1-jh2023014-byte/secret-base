@@ -32,16 +32,26 @@ if ($InstallLaunchers) {
     & (Join-Path $root "install-launchers.ps1")
 }
 
-$exe = Join-Path $root "src\SecretBase.App\bin\x64\Debug\net10.0-windows10.0.26100.0\SecretBase.App.exe"
+function Find-SecretBaseAppExe {
+    $candidates = @(
+        (Join-Path $root "src\SecretBase.App\bin\x64\Debug\net10.0-windows10.0.26100.0\win-x64\SecretBase.App.exe"),
+        (Join-Path $root "src\SecretBase.App\bin\x64\Release\net10.0-windows10.0.26100.0\win-x64\SecretBase.App.exe"),
+        (Join-Path $root "src\SecretBase.App\bin\x64\Debug\net10.0-windows10.0.26100.0\SecretBase.App.exe"),
+        (Join-Path $root "src\SecretBase.App\bin\x64\Release\net10.0-windows10.0.26100.0\SecretBase.App.exe")
+    )
+    return $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+}
 
 if ($ExeOnly) {
     Write-Host "Building Secret Base…"
     & (Join-Path $root "build.ps1")
-    if (-not (Test-Path $exe)) {
-        throw "SecretBase.App.exe missing after build: $exe"
+    $exe = Find-SecretBaseAppExe
+    if (-not $exe) {
+        throw "SecretBase.App.exe missing after build. Expected under src\SecretBase.App\bin\x64\Debug\...\win-x64\"
     }
 
     Write-Host "Starting SecretBase.App.exe (autostart-compatible)…"
+    Write-Host "  $exe"
     Start-Process -FilePath $exe -WorkingDirectory (Split-Path -Parent $exe)
     return
 }
