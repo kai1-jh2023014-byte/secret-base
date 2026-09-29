@@ -9,8 +9,8 @@ Secret Base can register itself in the **current user's** Windows startup list s
 | Contract | `IAutoStartService` (`Platform.Abstractions`) |
 | Implementation | `WindowsRegistryAutoStartService` (`Platform.Windows`) |
 | Preference | `AppLaunchSettings` → `%LocalAppData%\SecretBase\settings\launch.json` |
-| Coordinator | `AutoStartCoordinator` (`App`) |
-| UI | Debug chrome toggle (Ctrl+Shift+D) |
+| Coordinator | `AutoStartCoordinator` (`Infrastructure`) |
+| UI | **Setup** gear FAB (always visible) + Debug chrome toggle (Ctrl+Shift+D) |
 
 Registration uses the standard per-user Run key:
 
@@ -30,10 +30,23 @@ This appears in **Windows Settings → Apps → Startup** like other desktop app
 
 | Path | Auto-start |
 |------|------------|
-| `.\run.ps1` / `dotnet run` | **Not supported** — host is `dotnet.exe`; toggle shows an error and does not register |
-| Built `SecretBase.App.exe` (x64 Debug/Release) | Supported |
+| `.\run.ps1` (dotnet run) | Supported when `SecretBase.App.exe` exists next to the build output — registration points at that **exe**, not `dotnet.exe` |
+| `.\run.ps1 -ExeOnly` | Recommended — launches the apphost directly |
+| Start Menu / Desktop shortcut | Supported (`.\install-launchers.ps1` or Setup → Create shortcuts) |
+| Built apphost | `src\SecretBase.App\bin\x64\Debug\net10.0-windows10.0.26100.0\win-x64\SecretBase.App.exe` |
 
-`run.ps1` remains the developer launch path and is never written to the startup registry.
+## Daily launch (no terminal)
+
+```powershell
+.\install-launchers.ps1
+```
+
+Creates:
+
+- `%AppData%\Microsoft\Windows\Start Menu\Programs\Secret Base.lnk`
+- Desktop `\Secret Base.lnk`
+
+Then open **Setup (⚙)** in the overlay and turn on **Start at login**.
 
 ## Single instance
 

@@ -5,7 +5,7 @@ Use after `.\build.ps1` on a Windows x64 machine.
 ## Build and launch
 
 1. `.\build.ps1`
-2. Run `src\SecretBase.App\bin\x64\Debug\net10.0-windows10.0.26100.0\SecretBase.App.exe` directly (not only `run.ps1` for auto-start tests)
+2. Run `src\SecretBase.App\bin\x64\Debug\net10.0-windows10.0.26100.0\win-x64\SecretBase.App.exe` directly (not only `run.ps1` for auto-start tests), or `.\run.ps1 -ExeOnly`
 
 ## Auto-start
 

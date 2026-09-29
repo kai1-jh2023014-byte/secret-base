@@ -112,7 +112,7 @@ internal sealed class FallbackAiProvider : IAiProvider
         }
 
         var local = _factory.CreateForProviderId(AssistantProviderIds.Local, _settings);
-        var fallback = await local.ChatAsync(messages, tools, ResolveLocalModel(model), cancellationToken)
+        var fallback = await local.ChatAsync(messages, tools, ResolveLocalModel(), cancellationToken)
             .ConfigureAwait(false);
         if (fallback.Status == AiProviderStatus.Ok)
         {
@@ -127,8 +127,10 @@ internal sealed class FallbackAiProvider : IAiProvider
         return primary;
     }
 
-    private static string ResolveLocalModel(string model) =>
-        string.IsNullOrWhiteSpace(model) ? AssistantSettings.DefaultLocalModel : model;
+    private string ResolveLocalModel() =>
+        string.IsNullOrWhiteSpace(_settings.LocalModel)
+            ? AssistantSettings.DefaultLocalModel
+            : _settings.LocalModel.Trim();
 
     private static string DescribeFallback(string preferredId, AiProviderResponse primary)
     {

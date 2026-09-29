@@ -48,6 +48,7 @@ using SecretBase.Widgets.Assistant;
 using SecretBase.Widgets.Calendar;
 using SecretBase.Widgets.Clock;
 using SecretBase.Widgets.Creative;
+using SecretBase.Widgets.Hosting;
 using SecretBase.Widgets.Music;
 using SecretBase.Widgets.Text;
 using SecretBase.Widgets.Theming;
@@ -100,12 +101,29 @@ public sealed partial class DesktopPage : Page
     private CompatibilityInfo? _compatibility;
     private readonly List<IDisposable> _widgetDisposables = [];
     private bool _debugChromeVisible;
+    private OverlayDialogInput? _dialogInput;
+    private readonly WindowsDesktopShortcutService _shortcuts = new();
+    /// <summary>
+    /// While &gt; 0, a ContentDialog is open. Do not shrink SetWindowRgn to widget-only
+    /// regions — that makes the modal unreachable and looks like a freeze.
+    /// </summary>
+    private int _modalInputDepth;
 
     public DesktopPage()
     {
         InitializeComponent();
         Unloaded += OnUnloaded;
-        SizeChanged += (_, _) => SyncInteractiveInputRegions();
+        SizeChanged += (_, _) =>
+        {
+            if (_modalInputDepth > 0)
+            {
+                AllowFullWindowInput();
+            }
+            else
+            {
+                SyncInteractiveInputRegions();
+            }
+        };
     }
 
     protected override void OnNavigatedTo(NavigationEventArgs e)
@@ -118,6 +136,8 @@ public sealed partial class DesktopPage : Page
             StatusText.Text = "Desktop failed to start: missing bootstrap args.";
             return;
         }
+
+        _dialogInput = new OverlayDialogInput(BeginModalInput, EndModalInput);
 
         _logger = args.Logger;
         _safeExit = args.SafeExit;
@@ -289,6 +309,7 @@ public sealed partial class DesktopPage : Page
         StyleSecondary(AddBlockFab);
         StyleSecondary(ThemeFab);
         StyleSecondary(ArrangeFab);
+        StyleSecondary(SetupFab);
         TaskbarAiChat.ApplyTheme(theme);
 
         if (HostStatusLabel is not null)
@@ -365,7 +386,7 @@ public sealed partial class DesktopPage : Page
         _autoStartToggleSync = true;
         var settings = _launchSettingsStore.LoadOrCreate();
         var status = _autoStart.GetStatus();
-        AutoStartToggle.IsOn = settings.LaunchAtWindowsLogin && status.PointsToCurrentExecutable;
+        AutoStartToggle.IsOn = settings.LaunchAtWindowsLogin && status.IsRegistered;
         AutoStartToggle.IsEnabled = _autoStart.TryGetStartupExecutablePath(out _, out _) || status.IsRegistered;
         _autoStartToggleSync = false;
     }
@@ -377,8 +398,158 @@ public sealed partial class DesktopPage : Page
             return;
         }
 
-        var desired = AutoStartToggle.IsOn;
         _autoStartToggleSync = true;
+        ApplyAutoStartPreference(AutoStartToggle.IsOn, AutoStartToggle);
+        _autoStartToggleSync = false;
+    }
+
+    private async void SetupButton_Click(object sender, RoutedEventArgs e) =>
+        await ShowSetupDialogAsync();
+
+    private async Task ShowSetupDialogAsync()
+    {
+        BeginModalInput();
+        try
+        {
+            var intro = new TextBlock
+            {
+                Text =
+                    "Launch Secret Base without the terminal. Create Start Menu / Desktop shortcuts, and optionally start at Windows login.",
+                TextWrapping = TextWrapping.WrapWholeWords
+            };
+
+            var exeNote = new TextBlock
+            {
+                FontSize = 12,
+                Opacity = 0.85,
+                TextWrapping = TextWrapping.WrapWholeWords
+            };
+            string? resolvedExe = null;
+            string? resolveError = null;
+            var hasExe = _autoStart is not null
+                         && _autoStart.TryGetStartupExecutablePath(out resolvedExe, out resolveError);
+            exeNote.Text = hasExe && !string.IsNullOrWhiteSpace(resolvedExe)
+                ? "App host:\n" + resolvedExe
+                : resolveError
+                  ?? "Build Secret Base once (build.ps1 / run.ps1) so SecretBase.App.exe exists, then open Setup again.";
+
+            var canRegister = _autoStart?.IsSupported == true
+                              && (hasExe || _autoStart.GetStatus().IsRegistered);
+            var loginToggle = new ToggleSwitch
+            {
+                OffContent = "Start at login: Off",
+                OnContent = "Start at login: On",
+                IsEnabled = canRegister
+            };
+
+            // Suppress Toggled while applying the initial value — firing AutoStart /
+            // ShowHostStatus during ShowAsync used to shrink SetWindowRgn and freeze the dialog.
+            var loginSync = true;
+            var wantLogin = false;
+            if (_launchSettingsStore is not null && _autoStart is not null)
+            {
+                var settings = _launchSettingsStore.LoadOrCreate();
+                wantLogin = settings.LaunchAtWindowsLogin && _autoStart.GetStatus().IsRegistered;
+            }
+
+            loginToggle.Toggled += (_, _) =>
+            {
+                if (loginSync)
+                {
+                    return;
+                }
+
+                loginSync = true;
+                ApplyAutoStartPreference(loginToggle.IsOn, loginToggle);
+                _autoStartToggleSync = true;
+                AutoStartToggle.IsOn = loginToggle.IsOn;
+                _autoStartToggleSync = false;
+                loginSync = false;
+            };
+            loginToggle.IsOn = wantLogin;
+            loginSync = false;
+
+            var shortcutStatus = new TextBlock
+            {
+                FontSize = 12,
+                Opacity = 0.85,
+                TextWrapping = TextWrapping.WrapWholeWords
+            };
+            var shortcutButton = new Button
+            {
+                Content = "Create Start Menu + Desktop shortcuts",
+                HorizontalAlignment = HorizontalAlignment.Stretch
+            };
+            shortcutButton.Click += (_, _) =>
+            {
+                if (_autoStart is null)
+                {
+                    shortcutStatus.Text = "SecretBase.App.exe not found.";
+                    return;
+                }
+
+                if (!_autoStart.TryGetStartupExecutablePath(out var path, out var pathError)
+                    || string.IsNullOrWhiteSpace(path))
+                {
+                    shortcutStatus.Text = pathError ?? "SecretBase.App.exe not found.";
+                    return;
+                }
+
+                if (_shortcuts.TryCreateLaunchers(path, out var shortcutError, out var detail))
+                {
+                    shortcutStatus.Text = detail ?? "Shortcuts created.";
+                    _logger?.Info("desktop", "Start Menu and Desktop shortcuts are ready.");
+                }
+                else
+                {
+                    shortcutStatus.Text = shortcutError ?? "Could not create shortcuts.";
+                }
+            };
+
+            var tip = new TextBlock
+            {
+                Text =
+                    "Tip: After creating shortcuts, pin Secret Base from the Start Menu.",
+                FontSize = 12,
+                Opacity = 0.8,
+                TextWrapping = TextWrapping.WrapWholeWords
+            };
+
+            var panel = new StackPanel { Spacing = 10 };
+            panel.Children.Add(intro);
+            panel.Children.Add(exeNote);
+            panel.Children.Add(loginToggle);
+            panel.Children.Add(shortcutButton);
+            panel.Children.Add(shortcutStatus);
+            panel.Children.Add(tip);
+
+            var dialog = new ContentDialog
+            {
+                Title = "Setup",
+                Content = new ScrollViewer
+                {
+                    Content = panel,
+                    MaxHeight = 420
+                },
+                CloseButtonText = "Close",
+                DefaultButton = ContentDialogButton.Close,
+                XamlRoot = XamlRoot
+            };
+            await dialog.ShowAsync();
+        }
+        finally
+        {
+            EndModalInput();
+        }
+    }
+
+    private void ApplyAutoStartPreference(bool desired, ToggleSwitch source)
+    {
+        if (_autoStart is null || _launchSettingsStore is null)
+        {
+            return;
+        }
+
         if (!AutoStartCoordinator.TrySetEnabled(
                 desired,
                 _autoStart,
@@ -386,18 +557,27 @@ public sealed partial class DesktopPage : Page
                 _logger,
                 out var error))
         {
-            AutoStartToggle.IsOn = !desired;
+            var previousSync = _autoStartToggleSync;
+            _autoStartToggleSync = true;
+            source.IsOn = !desired;
+            _autoStartToggleSync = previousSync;
             _logger?.Warn("startup", error ?? "Auto-start could not be updated.");
-            HostStatusLabel.Text = error ?? "Auto-start could not be updated.";
-            HostStatusLabel.Visibility = Visibility.Visible;
-        }
-        else
-        {
-            HostStatusLabel.Visibility = Visibility.Collapsed;
-            _logger?.Info("startup", desired ? "User enabled Windows logon auto-start." : "User disabled Windows logon auto-start.");
+            // Avoid ShowHostStatus here while a modal may be open (it syncs hit regions).
+            if (_modalInputDepth == 0)
+            {
+                ShowHostStatus(error ?? "Auto-start could not be updated.");
+            }
+
+            return;
         }
 
-        _autoStartToggleSync = false;
+        _logger?.Info("startup", desired ? "User enabled Windows logon auto-start." : "User disabled Windows logon auto-start.");
+        if (_modalInputDepth == 0)
+        {
+            ShowHostStatus(desired
+                ? "Start at login enabled. Windows will launch SecretBase.App.exe after sign-in."
+                : "Start at login disabled.");
+        }
     }
 
     private void ShowDebugChrome(bool forceVisible)
@@ -501,6 +681,13 @@ public sealed partial class DesktopPage : Page
             return;
         }
 
+        // A modal owns the full hit region until EndModalInput. Shrinking early freezes the dialog.
+        if (_modalInputDepth > 0)
+        {
+            AllowFullWindowInput();
+            return;
+        }
+
         var scale = XamlRoot.RasterizationScale;
         var rects = new List<OverlayInputRect>();
 
@@ -536,6 +723,11 @@ public sealed partial class DesktopPage : Page
         if (TryCreateClientRect(ArrangeFab, scale, out var arrangeFabRect))
         {
             rects.Add(arrangeFabRect);
+        }
+
+        if (TryCreateClientRect(SetupFab, scale, out var setupFabRect))
+        {
+            rects.Add(setupFabRect);
         }
 
         if (TaskbarAiChat.Visibility == Visibility.Visible
@@ -607,7 +799,8 @@ public sealed partial class DesktopPage : Page
                     instance.Configuration = updated.ToDictionary();
                     PersistLayoutNow();
                 },
-                statusSource: ComposeClockStatus);
+                statusSource: ComposeClockStatus,
+                dialogInput: _dialogInput);
             if (_theme is not null)
             {
                 view.ApplyTheme(_theme);
@@ -703,7 +896,8 @@ public sealed partial class DesktopPage : Page
                 },
                 openUrl: url => TryOpenHttpsUrl(url),
                 musicService: _musicCommands.MusicService,
-                integrations: _integrationMemory);
+                integrations: _integrationMemory,
+                dialogInput: _dialogInput);
             if (_theme is not null)
             {
                 view.ApplyTheme(_theme);
@@ -735,7 +929,8 @@ public sealed partial class DesktopPage : Page
                     PersistLayoutNow();
                 },
                 tryLaunchTarget: TryLaunchCreativeTarget,
-                tryLaunchCursor: TryLaunchCursor);
+                tryLaunchCursor: TryLaunchCursor,
+                dialogInput: _dialogInput);
             if (_theme is not null)
             {
                 view.ApplyTheme(_theme);
@@ -760,7 +955,8 @@ public sealed partial class DesktopPage : Page
                 _assistantSettings,
                 _secretStore,
                 _assistantProviders,
-                TryApplyAssistantLaunch);
+                TryApplyAssistantLaunch,
+                dialogInput: _dialogInput);
             if (_theme is not null)
             {
                 view.ApplyTheme(_theme);
@@ -783,7 +979,8 @@ public sealed partial class DesktopPage : Page
                 apps,
                 tryExecute: TryExecuteAppResult,
                 pickFile: PickCreativeFileAsync,
-                pickFolder: PickCreativeFolderAsync);
+                pickFolder: PickCreativeFolderAsync,
+                dialogInput: _dialogInput);
             if (_theme is not null)
             {
                 view.ApplyTheme(_theme);
@@ -807,7 +1004,8 @@ public sealed partial class DesktopPage : Page
                 _assistantSettings,
                 _secretStore,
                 _assistantProviders,
-                TryApplyAssistantLaunch);
+                TryApplyAssistantLaunch,
+                dialogInput: _dialogInput);
             if (_theme is not null)
             {
                 view.ApplyTheme(_theme);
@@ -1165,7 +1363,7 @@ public sealed partial class DesktopPage : Page
             return;
         }
 
-        AllowFullWindowInput();
+        BeginModalInput();
 
         var list = new ListView
         {
@@ -1224,7 +1422,7 @@ public sealed partial class DesktopPage : Page
         }
         finally
         {
-            SyncInteractiveInputRegions();
+            EndModalInput();
         }
 
         if (result != ContentDialogResult.Primary)
@@ -1427,6 +1625,7 @@ public sealed partial class DesktopPage : Page
             DefaultButton = ContentDialogButton.Primary,
             XamlRoot = XamlRoot
         };
+        using var _ = _dialogInput?.Enter();
         if (await dialog.ShowAsync() != ContentDialogResult.Primary
             || string.IsNullOrWhiteSpace(session.ProjectId)
             || _creativeCommands is null)
@@ -1504,7 +1703,10 @@ public sealed partial class DesktopPage : Page
             DefaultButton = ContentDialogButton.Primary,
             XamlRoot = XamlRoot
         };
-        await dialog.ShowAsync();
+        using (_dialogInput?.Enter())
+        {
+            await dialog.ShowAsync();
+        }
 
         var modules = new List<string>();
         if (ai.IsChecked == true)
@@ -1574,7 +1776,7 @@ public sealed partial class DesktopPage : Page
         }
 
         // ContentDialog lives in the same HWND; expand hit region so the dialog is clickable.
-        AllowFullWindowInput();
+        BeginModalInput();
 
         var nameBox = new TextBox
         {
@@ -1635,7 +1837,7 @@ public sealed partial class DesktopPage : Page
         }
         finally
         {
-            SyncInteractiveInputRegions();
+            EndModalInput();
         }
 
         if (result != ContentDialogResult.Primary)
@@ -1670,7 +1872,7 @@ public sealed partial class DesktopPage : Page
             return;
         }
 
-        AllowFullWindowInput();
+        BeginModalInput();
 
         var draft = ThemeDefinition.CreateDefault();
         ThemePresets.CopyVisualsTo(_theme, draft);
@@ -1863,7 +2065,7 @@ public sealed partial class DesktopPage : Page
         }
         finally
         {
-            SyncInteractiveInputRegions();
+            EndModalInput();
         }
 
         if (result != ContentDialogResult.Primary)
@@ -1956,6 +2158,25 @@ public sealed partial class DesktopPage : Page
 
         normalized = "#" + hex.ToUpperInvariant();
         return true;
+    }
+
+    private void BeginModalInput()
+    {
+        _modalInputDepth++;
+        AllowFullWindowInput();
+    }
+
+    private void EndModalInput()
+    {
+        if (_modalInputDepth > 0)
+        {
+            _modalInputDepth--;
+        }
+
+        if (_modalInputDepth == 0)
+        {
+            SyncInteractiveInputRegions();
+        }
     }
 
     private void AllowFullWindowInput()

@@ -145,35 +145,67 @@ public sealed class WindowsRegistryAutoStartService : IAutoStartService
         executablePath = string.Empty;
         errorMessage = null;
 
-        var processPath = Environment.ProcessPath;
-        if (string.IsNullOrWhiteSpace(processPath))
+        foreach (var candidate in EnumerateCandidateExecutablePaths())
         {
-            errorMessage = "Could not resolve the application executable path.";
-            return false;
+            if (IsAppHostExecutable(candidate))
+            {
+                executablePath = Path.GetFullPath(candidate);
+                return true;
+            }
         }
 
-        var fileName = Path.GetFileName(processPath);
-        if (fileName.Equals("dotnet.exe", StringComparison.OrdinalIgnoreCase))
+        var processName = Path.GetFileName(Environment.ProcessPath ?? string.Empty);
+        if (processName.Equals("dotnet.exe", StringComparison.OrdinalIgnoreCase)
+            || processName.Equals("testhost.exe", StringComparison.OrdinalIgnoreCase))
         {
             errorMessage =
-                "Auto-start requires launching SecretBase.App.exe directly. It is not available while using dotnet run or run.ps1.";
+                "SecretBase.App.exe was not found next to the running build. Run build.ps1 / run.ps1 once, then enable Start at login again.";
             return false;
         }
 
-        if (!fileName.Equals("SecretBase.App.exe", StringComparison.OrdinalIgnoreCase))
+        errorMessage = string.IsNullOrWhiteSpace(processName)
+            ? "Could not resolve the application executable path."
+            : $"Unexpected host executable '{processName}'. Auto-start supports SecretBase.App.exe only.";
+        return false;
+    }
+
+    /// <summary>
+    /// Prefers the live process path when it is already SecretBase.App.exe.
+    /// Under <c>dotnet run</c> / run.ps1, falls back to the built apphost beside AppContext.BaseDirectory
+    /// so login registration still points at a double-clickable exe.
+    /// </summary>
+    internal static IEnumerable<string> EnumerateCandidateExecutablePaths()
+    {
+        var processPath = Environment.ProcessPath;
+        if (!string.IsNullOrWhiteSpace(processPath))
         {
-            errorMessage = $"Unexpected host executable '{fileName}'. Auto-start supports SecretBase.App.exe only.";
-            return false;
+            yield return processPath;
         }
 
-        if (!File.Exists(processPath))
+        var baseDir = AppContext.BaseDirectory;
+        if (!string.IsNullOrWhiteSpace(baseDir))
         {
-            errorMessage = "The application executable could not be found on disk.";
+            yield return Path.Combine(baseDir, "SecretBase.App.exe");
+        }
+
+        var entry = System.Reflection.Assembly.GetEntryAssembly()?.Location;
+        var entryDir = string.IsNullOrWhiteSpace(entry) ? null : Path.GetDirectoryName(entry);
+        if (!string.IsNullOrWhiteSpace(entryDir))
+        {
+            yield return Path.Combine(entryDir, "SecretBase.App.exe");
+        }
+    }
+
+    internal static bool IsAppHostExecutable(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
             return false;
         }
 
-        executablePath = Path.GetFullPath(processPath);
-        return true;
+        var fileName = Path.GetFileName(path);
+        return fileName.Equals("SecretBase.App.exe", StringComparison.OrdinalIgnoreCase)
+               && File.Exists(path);
     }
 
     internal static bool TryParseExecutablePath(string command, out string executablePath)
