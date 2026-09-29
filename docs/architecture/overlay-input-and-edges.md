@@ -131,4 +131,6 @@ Safe code-wise; fails target UX (“widgets only on Desktop”).
 
 ### Modal dialogs (Settings / onboarding)
 
-`ContentDialog` is centered on the full work-area HWND. While a dialog is open, the host must temporarily expand the hit region via `OverlayDialogInput` → `AllowFullWindowInput()`, then restore widget-only regions on dispose. Widget Settings, Setup, onboarding, and other modals use this gate so controls outside the widget rect remain clickable.
+`ContentDialog` is centered on the full work-area HWND. While a dialog is open, the host must temporarily expand the hit region via `BeginModalInput` / `OverlayDialogInput` (full-window `SetWindowRgn`), then restore widget-only regions in `EndModalInput`.
+
+**Important:** While a modal is open (`_modalInputDepth > 0`), `SyncInteractiveInputRegions` must **not** shrink the region back to widgets. Doing so (e.g. via `ShowHostStatus` or ToggleSwitch side effects) makes the dialog unreachable and looks like a freeze.

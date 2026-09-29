@@ -1837,7 +1837,7 @@ public sealed partial class DesktopPage : Page
         }
         finally
         {
-            SyncInteractiveInputRegions();
+            EndModalInput();
         }
 
         if (result != ContentDialogResult.Primary)
@@ -1872,7 +1872,7 @@ public sealed partial class DesktopPage : Page
             return;
         }
 
-        AllowFullWindowInput();
+        BeginModalInput();
 
         var draft = ThemeDefinition.CreateDefault();
         ThemePresets.CopyVisualsTo(_theme, draft);
@@ -2065,7 +2065,7 @@ public sealed partial class DesktopPage : Page
         }
         finally
         {
-            SyncInteractiveInputRegions();
+            EndModalInput();
         }
 
         if (result != ContentDialogResult.Primary)
