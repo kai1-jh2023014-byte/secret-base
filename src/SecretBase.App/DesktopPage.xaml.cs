@@ -103,12 +103,27 @@ public sealed partial class DesktopPage : Page
     private bool _debugChromeVisible;
     private OverlayDialogInput? _dialogInput;
     private readonly WindowsDesktopShortcutService _shortcuts = new();
+    /// <summary>
+    /// While &gt; 0, a ContentDialog is open. Do not shrink SetWindowRgn to widget-only
+    /// regions — that makes the modal unreachable and looks like a freeze.
+    /// </summary>
+    private int _modalInputDepth;
 
     public DesktopPage()
     {
         InitializeComponent();
         Unloaded += OnUnloaded;
-        SizeChanged += (_, _) => SyncInteractiveInputRegions();
+        SizeChanged += (_, _) =>
+        {
+            if (_modalInputDepth > 0)
+            {
+                AllowFullWindowInput();
+            }
+            else
+            {
+                SyncInteractiveInputRegions();
+            }
+        };
     }
 
     protected override void OnNavigatedTo(NavigationEventArgs e)
@@ -122,7 +137,7 @@ public sealed partial class DesktopPage : Page
             return;
         }
 
-        _dialogInput = new OverlayDialogInput(AllowFullWindowInput, SyncInteractiveInputRegions);
+        _dialogInput = new OverlayDialogInput(BeginModalInput, EndModalInput);
 
         _logger = args.Logger;
         _safeExit = args.SafeExit;
@@ -393,118 +408,139 @@ public sealed partial class DesktopPage : Page
 
     private async Task ShowSetupDialogAsync()
     {
-        using var dialogScope = _dialogInput?.Enter();
-
-        var intro = new TextBlock
+        BeginModalInput();
+        try
         {
-            Text =
-                "Launch Secret Base without the terminal. Create Start Menu / Desktop shortcuts, and optionally start at Windows login.",
-            TextWrapping = TextWrapping.WrapWholeWords
-        };
-
-        var exeNote = new TextBlock
-        {
-            FontSize = 12,
-            Opacity = 0.85,
-            TextWrapping = TextWrapping.WrapWholeWords
-        };
-        string? resolvedExe = null;
-        string? resolveError = null;
-        var hasExe = _autoStart is not null
-                     && _autoStart.TryGetStartupExecutablePath(out resolvedExe, out resolveError);
-        exeNote.Text = hasExe && !string.IsNullOrWhiteSpace(resolvedExe)
-            ? "App host:\n" + resolvedExe
-            : resolveError
-              ?? "Build Secret Base once (build.ps1 / run.ps1) so SecretBase.App.exe exists, then open Setup again.";
-
-        var canRegister = _autoStart?.IsSupported == true
-                          && (hasExe || _autoStart.GetStatus().IsRegistered);
-        var loginToggle = new ToggleSwitch
-        {
-            OffContent = "Start at login: Off",
-            OnContent = "Start at login: On",
-            IsEnabled = canRegister
-        };
-        if (_launchSettingsStore is not null && _autoStart is not null)
-        {
-            var settings = _launchSettingsStore.LoadOrCreate();
-            loginToggle.IsOn = settings.LaunchAtWindowsLogin && _autoStart.GetStatus().IsRegistered;
-        }
-
-        var loginSync = false;
-        loginToggle.Toggled += (_, _) =>
-        {
-            if (loginSync)
+            var intro = new TextBlock
             {
-                return;
+                Text =
+                    "Launch Secret Base without the terminal. Create Start Menu / Desktop shortcuts, and optionally start at Windows login.",
+                TextWrapping = TextWrapping.WrapWholeWords
+            };
+
+            var exeNote = new TextBlock
+            {
+                FontSize = 12,
+                Opacity = 0.85,
+                TextWrapping = TextWrapping.WrapWholeWords
+            };
+            string? resolvedExe = null;
+            string? resolveError = null;
+            var hasExe = _autoStart is not null
+                         && _autoStart.TryGetStartupExecutablePath(out resolvedExe, out resolveError);
+            exeNote.Text = hasExe && !string.IsNullOrWhiteSpace(resolvedExe)
+                ? "App host:\n" + resolvedExe
+                : resolveError
+                  ?? "Build Secret Base once (build.ps1 / run.ps1) so SecretBase.App.exe exists, then open Setup again.";
+
+            var canRegister = _autoStart?.IsSupported == true
+                              && (hasExe || _autoStart.GetStatus().IsRegistered);
+            var loginToggle = new ToggleSwitch
+            {
+                OffContent = "Start at login: Off",
+                OnContent = "Start at login: On",
+                IsEnabled = canRegister
+            };
+
+            // Suppress Toggled while applying the initial value — firing AutoStart /
+            // ShowHostStatus during ShowAsync used to shrink SetWindowRgn and freeze the dialog.
+            var loginSync = true;
+            var wantLogin = false;
+            if (_launchSettingsStore is not null && _autoStart is not null)
+            {
+                var settings = _launchSettingsStore.LoadOrCreate();
+                wantLogin = settings.LaunchAtWindowsLogin && _autoStart.GetStatus().IsRegistered;
             }
 
-            loginSync = true;
-            ApplyAutoStartPreference(loginToggle.IsOn, loginToggle);
-            _autoStartToggleSync = true;
-            AutoStartToggle.IsOn = loginToggle.IsOn;
-            _autoStartToggleSync = false;
+            loginToggle.Toggled += (_, _) =>
+            {
+                if (loginSync)
+                {
+                    return;
+                }
+
+                loginSync = true;
+                ApplyAutoStartPreference(loginToggle.IsOn, loginToggle);
+                _autoStartToggleSync = true;
+                AutoStartToggle.IsOn = loginToggle.IsOn;
+                _autoStartToggleSync = false;
+                loginSync = false;
+            };
+            loginToggle.IsOn = wantLogin;
             loginSync = false;
-        };
 
-        var shortcutStatus = new TextBlock
-        {
-            FontSize = 12,
-            Opacity = 0.85,
-            TextWrapping = TextWrapping.WrapWholeWords
-        };
-        var shortcutButton = new Button { Content = "Create Start Menu + Desktop shortcuts", HorizontalAlignment = HorizontalAlignment.Stretch };
-        shortcutButton.Click += (_, _) =>
-        {
-            if (_autoStart is null)
+            var shortcutStatus = new TextBlock
             {
-                shortcutStatus.Text = "SecretBase.App.exe not found.";
-                return;
-            }
-
-            if (!_autoStart.TryGetStartupExecutablePath(out var path, out var pathError)
-                || string.IsNullOrWhiteSpace(path))
+                FontSize = 12,
+                Opacity = 0.85,
+                TextWrapping = TextWrapping.WrapWholeWords
+            };
+            var shortcutButton = new Button
             {
-                shortcutStatus.Text = pathError ?? "SecretBase.App.exe not found.";
-                return;
-            }
-
-            if (_shortcuts.TryCreateLaunchers(path, out var shortcutError, out var detail))
+                Content = "Create Start Menu + Desktop shortcuts",
+                HorizontalAlignment = HorizontalAlignment.Stretch
+            };
+            shortcutButton.Click += (_, _) =>
             {
-                shortcutStatus.Text = detail ?? "Shortcuts created.";
-                ShowHostStatus("Start Menu and Desktop shortcuts are ready.");
-            }
-            else
-            {
-                shortcutStatus.Text = shortcutError ?? "Could not create shortcuts.";
-            }
-        };
+                if (_autoStart is null)
+                {
+                    shortcutStatus.Text = "SecretBase.App.exe not found.";
+                    return;
+                }
 
-        var tip = new TextBlock
+                if (!_autoStart.TryGetStartupExecutablePath(out var path, out var pathError)
+                    || string.IsNullOrWhiteSpace(path))
+                {
+                    shortcutStatus.Text = pathError ?? "SecretBase.App.exe not found.";
+                    return;
+                }
+
+                if (_shortcuts.TryCreateLaunchers(path, out var shortcutError, out var detail))
+                {
+                    shortcutStatus.Text = detail ?? "Shortcuts created.";
+                    _logger?.Info("desktop", "Start Menu and Desktop shortcuts are ready.");
+                }
+                else
+                {
+                    shortcutStatus.Text = shortcutError ?? "Could not create shortcuts.";
+                }
+            };
+
+            var tip = new TextBlock
+            {
+                Text =
+                    "Tip: After creating shortcuts, pin Secret Base from the Start Menu.",
+                FontSize = 12,
+                Opacity = 0.8,
+                TextWrapping = TextWrapping.WrapWholeWords
+            };
+
+            var panel = new StackPanel { Spacing = 10 };
+            panel.Children.Add(intro);
+            panel.Children.Add(exeNote);
+            panel.Children.Add(loginToggle);
+            panel.Children.Add(shortcutButton);
+            panel.Children.Add(shortcutStatus);
+            panel.Children.Add(tip);
+
+            var dialog = new ContentDialog
+            {
+                Title = "Setup",
+                Content = new ScrollViewer
+                {
+                    Content = panel,
+                    MaxHeight = 420
+                },
+                CloseButtonText = "Close",
+                DefaultButton = ContentDialogButton.Close,
+                XamlRoot = XamlRoot
+            };
+            await dialog.ShowAsync();
+        }
+        finally
         {
-            Text =
-                "Tip: After creating shortcuts, pin Secret Base from the Start Menu. Settings dialogs stay clickable over the whole overlay.",
-            FontSize = 12,
-            Opacity = 0.8,
-            TextWrapping = TextWrapping.WrapWholeWords
-        };
-
-        var panel = new StackPanel { Spacing = 10 };
-        panel.Children.Add(intro);
-        panel.Children.Add(exeNote);
-        panel.Children.Add(loginToggle);
-        panel.Children.Add(shortcutButton);
-        panel.Children.Add(shortcutStatus);
-        panel.Children.Add(tip);
-
-        var dialog = new ContentDialog
-        {
-            Title = "Setup",
-            Content = panel,
-            CloseButtonText = "Close",
-            XamlRoot = XamlRoot
-        };
-        await dialog.ShowAsync();
+            EndModalInput();
+        }
     }
 
     private void ApplyAutoStartPreference(bool desired, ToggleSwitch source)
@@ -521,16 +557,27 @@ public sealed partial class DesktopPage : Page
                 _logger,
                 out var error))
         {
+            var previousSync = _autoStartToggleSync;
+            _autoStartToggleSync = true;
             source.IsOn = !desired;
+            _autoStartToggleSync = previousSync;
             _logger?.Warn("startup", error ?? "Auto-start could not be updated.");
-            ShowHostStatus(error ?? "Auto-start could not be updated.");
+            // Avoid ShowHostStatus here while a modal may be open (it syncs hit regions).
+            if (_modalInputDepth == 0)
+            {
+                ShowHostStatus(error ?? "Auto-start could not be updated.");
+            }
+
             return;
         }
 
-        ShowHostStatus(desired
-            ? "Start at login enabled. Windows will launch SecretBase.App.exe after sign-in."
-            : "Start at login disabled.");
         _logger?.Info("startup", desired ? "User enabled Windows logon auto-start." : "User disabled Windows logon auto-start.");
+        if (_modalInputDepth == 0)
+        {
+            ShowHostStatus(desired
+                ? "Start at login enabled. Windows will launch SecretBase.App.exe after sign-in."
+                : "Start at login disabled.");
+        }
     }
 
     private void ShowDebugChrome(bool forceVisible)
@@ -631,6 +678,13 @@ public sealed partial class DesktopPage : Page
     {
         if (_overlay is null || _overlayTarget is null || XamlRoot is null)
         {
+            return;
+        }
+
+        // A modal owns the full hit region until EndModalInput. Shrinking early freezes the dialog.
+        if (_modalInputDepth > 0)
+        {
+            AllowFullWindowInput();
             return;
         }
 
@@ -1309,7 +1363,7 @@ public sealed partial class DesktopPage : Page
             return;
         }
 
-        AllowFullWindowInput();
+        BeginModalInput();
 
         var list = new ListView
         {
@@ -1368,7 +1422,7 @@ public sealed partial class DesktopPage : Page
         }
         finally
         {
-            SyncInteractiveInputRegions();
+            EndModalInput();
         }
 
         if (result != ContentDialogResult.Primary)
@@ -1722,7 +1776,7 @@ public sealed partial class DesktopPage : Page
         }
 
         // ContentDialog lives in the same HWND; expand hit region so the dialog is clickable.
-        AllowFullWindowInput();
+        BeginModalInput();
 
         var nameBox = new TextBox
         {
@@ -2104,6 +2158,25 @@ public sealed partial class DesktopPage : Page
 
         normalized = "#" + hex.ToUpperInvariant();
         return true;
+    }
+
+    private void BeginModalInput()
+    {
+        _modalInputDepth++;
+        AllowFullWindowInput();
+    }
+
+    private void EndModalInput()
+    {
+        if (_modalInputDepth > 0)
+        {
+            _modalInputDepth--;
+        }
+
+        if (_modalInputDepth == 0)
+        {
+            SyncInteractiveInputRegions();
+        }
     }
 
     private void AllowFullWindowInput()
