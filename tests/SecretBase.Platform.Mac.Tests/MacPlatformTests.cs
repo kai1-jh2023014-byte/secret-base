@@ -80,7 +80,7 @@ public class MacLaunchAgentAutoStartServiceTests
     }
 
     [Fact]
-    public void TryEnable_RejectsDotnetHost()
+    public void TryEnable_RejectsDotnetHost_WhenApphostMissing()
     {
         var service = new MacLaunchAgentAutoStartService(
             agentsDirectory: Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N")),
@@ -88,7 +88,7 @@ public class MacLaunchAgentAutoStartServiceTests
             isSupported: true);
 
         Assert.False(service.TryEnable(out var error));
-        Assert.Contains("dotnet run", error, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("SecretBase.App.Mac", error, StringComparison.OrdinalIgnoreCase);
     }
 }
 

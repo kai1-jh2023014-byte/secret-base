@@ -37,6 +37,24 @@ public class AutoStartServiceTests
     }
 
     [Fact]
+    public void EnumerateCandidateExecutablePaths_IncludesBaseDirectoryApphost()
+    {
+        var paths = WindowsRegistryAutoStartService.EnumerateCandidateExecutablePaths().ToList();
+        Assert.Contains(
+            paths,
+            path => path.EndsWith("SecretBase.App.exe", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void IsAppHostExecutable_RequiresExistingSecretBaseAppExe()
+    {
+        Assert.False(WindowsRegistryAutoStartService.IsAppHostExecutable(null));
+        Assert.False(WindowsRegistryAutoStartService.IsAppHostExecutable("dotnet.exe"));
+        Assert.False(WindowsRegistryAutoStartService.IsAppHostExecutable(
+            Path.Combine(Path.GetTempPath(), "SecretBase.App.exe")));
+    }
+
+    [Fact]
     public void RegistryEnableDisable_RoundTrips_WithIsolatedValueName()
     {
         if (!OperatingSystem.IsWindows())

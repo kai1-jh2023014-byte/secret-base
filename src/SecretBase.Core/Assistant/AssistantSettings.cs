@@ -7,6 +7,8 @@ public sealed class AssistantSettings
 
     public const string DefaultOpenAiModel = "gpt-4o-mini";
 
+    public const string DefaultGeminiModel = "gemini-2.0-flash";
+
     public const string DefaultLocalModel = "llama3.2";
 
     public const string DefaultLocalBaseUrl = "http://localhost:11434";

@@ -2,6 +2,7 @@ using Microsoft.UI.Xaml.Controls;
 using SecretBase.Core.Assistant;
 using SecretBase.Core.Themes;
 using SecretBase.Platform.Abstractions;
+using SecretBase.Widgets.Hosting;
 
 namespace SecretBase.Widgets.Ai;
 
@@ -20,7 +21,8 @@ public sealed partial class AiWorkspaceView : UserControl
         IAssistantSettingsStore settingsStore,
         ISecureSecretStore secrets,
         IAiProviderFactory providers,
-        Func<AssistantTurnResult, string?> applyLaunch)
+        Func<AssistantTurnResult, string?> applyLaunch,
+        OverlayDialogInput? dialogInput = null)
     {
         ChatHost.Initialize(
             assistant,
@@ -29,7 +31,8 @@ public sealed partial class AiWorkspaceView : UserControl
             providers,
             applyLaunch,
             headerTitle: "AI Workspace",
-            headerSubtitle: "Chat · Context · Tools");
+            headerSubtitle: "Chat · Context · Tools",
+            dialogInput: dialogInput);
     }
 
     public void ApplyTheme(ThemeDefinition theme) => ChatHost.ApplyTheme(theme);

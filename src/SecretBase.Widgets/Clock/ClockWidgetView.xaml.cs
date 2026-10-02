@@ -5,6 +5,7 @@ using Microsoft.UI.Xaml.Shapes;
 using SecretBase.Core.Themes;
 using SecretBase.Core.Time;
 using SecretBase.Core.Widgets.Clock;
+using SecretBase.Widgets.Hosting;
 using SecretBase.Widgets.Theming;
 
 namespace SecretBase.Widgets.Clock;
@@ -17,6 +18,7 @@ public sealed partial class ClockWidgetView : UserControl, IDisposable
     private ClockWidgetConfiguration _configuration = ClockWidgetConfiguration.CreateDefault();
     private Action<ClockWidgetConfiguration>? _onConfigurationChanged;
     private Func<ClockBaseStatus?>? _statusSource;
+    private OverlayDialogInput? _dialogInput;
     private ThemeDefinition? _theme;
     private bool _disposed;
 
@@ -33,12 +35,14 @@ public sealed partial class ClockWidgetView : UserControl, IDisposable
         ClockWidgetConfiguration configuration,
         ITimeProvider? timeProvider = null,
         Action<ClockWidgetConfiguration>? onConfigurationChanged = null,
-        Func<ClockBaseStatus?>? statusSource = null)
+        Func<ClockBaseStatus?>? statusSource = null,
+        OverlayDialogInput? dialogInput = null)
     {
         _configuration = configuration;
         _timeProvider = timeProvider ?? new SystemTimeProvider();
         _onConfigurationChanged = onConfigurationChanged;
         _statusSource = statusSource;
+        _dialogInput = dialogInput;
         RefreshDisplay();
     }
 
@@ -220,6 +224,7 @@ public sealed partial class ClockWidgetView : UserControl, IDisposable
             XamlRoot = XamlRoot
         };
 
+        using var _ = _dialogInput?.Enter();
         if (await dialog.ShowAsync() != ContentDialogResult.Primary)
         {
             return;

@@ -11,6 +11,9 @@ public interface IPathPickService
     Task<PathPickResult> PickFileAsync();
 
     Task<PathPickResult> PickFolderAsync();
+
+    /// <summary>Image picker for Block / widget custom icons (png, jpg, bmp, gif, ico, webp).</summary>
+    Task<PathPickResult> PickImageAsync();
 }
 
 public sealed record PathPickResult(

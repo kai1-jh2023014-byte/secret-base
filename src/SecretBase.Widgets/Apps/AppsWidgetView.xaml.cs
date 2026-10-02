@@ -3,6 +3,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using SecretBase.Core.Apps;
 using SecretBase.Core.Themes;
+using SecretBase.Widgets.Hosting;
 using SecretBase.Widgets.Theming;
 
 namespace SecretBase.Widgets.Apps;
@@ -17,6 +18,7 @@ public sealed partial class AppsWidgetView : UserControl
     private Func<AppCommandResult, string?>? _tryExecute;
     private Func<Task<(bool ok, bool cancelled, string? path, string? error)>>? _pickFile;
     private Func<Task<(bool ok, bool cancelled, string? path, string? error)>>? _pickFolder;
+    private OverlayDialogInput? _dialogInput;
     private ThemeDefinition? _theme;
 
     public AppsWidgetView()
@@ -28,12 +30,14 @@ public sealed partial class AppsWidgetView : UserControl
         AppCommandService commands,
         Func<AppCommandResult, string?> tryExecute,
         Func<Task<(bool ok, bool cancelled, string? path, string? error)>> pickFile,
-        Func<Task<(bool ok, bool cancelled, string? path, string? error)>> pickFolder)
+        Func<Task<(bool ok, bool cancelled, string? path, string? error)>> pickFolder,
+        OverlayDialogInput? dialogInput = null)
     {
         _commands = commands;
         _tryExecute = tryExecute;
         _pickFile = pickFile;
         _pickFolder = pickFolder;
+        _dialogInput = dialogInput;
         StatusLabel.Text = string.Empty;
         Rebuild();
     }
@@ -289,6 +293,7 @@ public sealed partial class AppsWidgetView : UserControl
             XamlRoot = XamlRoot
         };
 
+        using var _ = _dialogInput?.Enter();
         if (await dialog.ShowAsync() != ContentDialogResult.Primary)
         {
             return;

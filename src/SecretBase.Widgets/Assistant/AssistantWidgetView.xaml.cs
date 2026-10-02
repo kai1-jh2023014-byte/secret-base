@@ -5,6 +5,7 @@ using Microsoft.UI.Xaml.Media;
 using SecretBase.Core.Assistant;
 using SecretBase.Core.Themes;
 using SecretBase.Platform.Abstractions;
+using SecretBase.Widgets.Hosting;
 using SecretBase.Widgets.Theming;
 using Windows.System;
 
@@ -21,6 +22,7 @@ public sealed partial class AssistantWidgetView : UserControl
     private ISecureSecretStore? _secrets;
     private IAiProviderFactory? _providers;
     private Func<AssistantTurnResult, string?>? _applyLaunch;
+    private OverlayDialogInput? _dialogInput;
     private ThemeDefinition? _theme;
     private bool _busy;
     private string? _lastRetryUserText;
@@ -38,13 +40,15 @@ public sealed partial class AssistantWidgetView : UserControl
         IAiProviderFactory providers,
         Func<AssistantTurnResult, string?> applyLaunch,
         string? headerTitle = null,
-        string? headerSubtitle = null)
+        string? headerSubtitle = null,
+        OverlayDialogInput? dialogInput = null)
     {
         _assistant = assistant;
         _settingsStore = settingsStore;
         _secrets = secrets;
         _providers = providers;
         _applyLaunch = applyLaunch;
+        _dialogInput = dialogInput;
         if (!string.IsNullOrWhiteSpace(headerTitle))
         {
             HeaderText.Text = headerTitle;
@@ -89,13 +93,14 @@ public sealed partial class AssistantWidgetView : UserControl
         if (status is null && _settingsStore is not null)
         {
             var settings = AssistantSettingsMigrator.MigrateToCurrent(_settingsStore.LoadOrCreate());
-            var hasKey = _secrets is not null
-                         && _secrets.TryGetSecret(AssistantSecretKeys.OpenAiApiKey, out var key)
-                         && !string.IsNullOrWhiteSpace(key);
+            var hasKey = HasKeyForProvider(settings.ProviderId);
             ProviderStatusText.Text = BaseAiStatusFormatter.Format(new AssistantProviderStatusInfo
             {
                 ProviderId = settings.ProviderId,
-                IsConfigured = hasKey
+                IsConfigured = hasKey || string.Equals(
+                    settings.ProviderId,
+                    AssistantProviderIds.Local,
+                    StringComparison.OrdinalIgnoreCase)
             });
             OnboardingPanel.Visibility = Visibility.Collapsed;
             return;
@@ -504,6 +509,8 @@ public sealed partial class AssistantWidgetView : UserControl
             return;
         }
 
+        using var _ = _dialogInput?.Enter();
+
         var settings = AssistantSettingsMigrator.MigrateToCurrent(_settingsStore.LoadOrCreate());
         var providerBox = new ComboBox
         {
@@ -530,17 +537,58 @@ public sealed partial class AssistantWidgetView : UserControl
             Opacity = 0.85,
             TextWrapping = TextWrapping.WrapWholeWords
         };
-        void RefreshProviderHelp()
+        var keyStatus = new TextBlock
         {
-            providerHelp.Text = (providerBox.SelectedItem as string) switch
+            FontSize = 12,
+            Opacity = 0.85,
+            TextWrapping = TextWrapping.WrapWholeWords
+        };
+        var keyBox = new PasswordBox();
+
+        void RefreshProviderUi(bool resetModelIfNeeded)
+        {
+            var selected = providerBox.SelectedItem as string;
+            providerHelp.Text = selected switch
             {
-                "Gemini" => "Gemini uses your API key. When unavailable, Secret Base falls back to Local AI (Ollama).",
+                "Gemini" => "Gemini uses your Google AI Studio key (saved separately from OpenAI). Falls back to Local AI when unavailable.",
                 "Local" => "Local AI uses Ollama at the configured endpoint. No API key required.",
-                _ => "OpenAI uses your API key. When unavailable, Secret Base falls back to Local AI (Ollama)."
+                _ => "OpenAI uses your API key (Credential Manager). Falls back to Local AI when unavailable."
             };
+
+            if (resetModelIfNeeded)
+            {
+                modelBox.Text = selected switch
+                {
+                    "Gemini" => AssistantSettings.DefaultGeminiModel,
+                    "Local" => AssistantSettings.DefaultLocalModel,
+                    _ => AssistantSettings.DefaultOpenAiModel
+                };
+            }
+
+            if (selected == "Local")
+            {
+                keyStatus.Text = "API Key  (not required for Local)";
+                keyBox.Header = "API Key (unused for Local)";
+                keyBox.PlaceholderText = "—";
+                keyBox.IsEnabled = false;
+                return;
+            }
+
+            keyBox.IsEnabled = true;
+            var secretKey = selected == "Gemini"
+                ? AssistantSecretKeys.GeminiApiKey
+                : AssistantSecretKeys.OpenAiApiKey;
+            var hasKey = _secrets.TryGetSecret(secretKey, out var existing)
+                         && !string.IsNullOrWhiteSpace(existing);
+            keyStatus.Text = hasKey
+                ? $"{selected} API Key  ••••••••  (saved in Credential Manager)"
+                : $"{selected} API Key  (not set)";
+            keyBox.Header = hasKey ? $"Change {selected} API Key (leave blank to keep)" : $"{selected} API Key";
+            keyBox.PlaceholderText = hasKey ? "••••••••" : selected == "Gemini" ? "AIza…" : "sk-…";
         }
-        providerBox.SelectionChanged += (_, _) => RefreshProviderHelp();
-        RefreshProviderHelp();
+
+        providerBox.SelectionChanged += (_, _) => RefreshProviderUi(resetModelIfNeeded: true);
+        RefreshProviderUi(resetModelIfNeeded: false);
 
         var maxStepsBox = new NumberBox
         {
@@ -553,25 +601,10 @@ public sealed partial class AssistantWidgetView : UserControl
 
         var confirmNote = new TextBlock
         {
-            Text = "Launch actions always require Run confirmation in v0.5.",
+            Text = "Launch actions always require Run confirmation. Keys are never shown in chat.",
             FontSize = 12,
             Opacity = 0.85,
             TextWrapping = TextWrapping.WrapWholeWords
-        };
-
-        var hasKey = _secrets.TryGetSecret(AssistantSecretKeys.OpenAiApiKey, out var existing)
-                     && !string.IsNullOrWhiteSpace(existing);
-        var keyStatus = new TextBlock
-        {
-            Text = hasKey ? "API Key  ••••••••  (saved in Credential Manager)" : "API Key  (not set)",
-            FontSize = 12,
-            Opacity = 0.85,
-            TextWrapping = TextWrapping.WrapWholeWords
-        };
-        var keyBox = new PasswordBox
-        {
-            Header = hasKey ? "Change API Key (leave blank to keep)" : "API Key",
-            PlaceholderText = hasKey ? "••••••••" : "sk-…"
         };
 
         var testStatus = new TextBlock
@@ -592,9 +625,9 @@ public sealed partial class AssistantWidgetView : UserControl
                 current.Model);
             testStatus.Text = ping.Status switch
             {
-                AiProviderStatus.Ok => "● Connected",
+                AiProviderStatus.Ok => "● Connected — remote (or Local fallback) answered.",
                 AiProviderStatus.NotConfigured =>
-                    AssistantUserMessages.NotConfigured + " " + AssistantUserMessages.OpenSettings,
+                    AssistantUserMessages.NotConfigured + " Save the key for the selected provider, then test again.",
                 _ => ping.ErrorMessage ?? AssistantUserMessages.Unavailable
             };
         };
@@ -650,8 +683,15 @@ public sealed partial class AssistantWidgetView : UserControl
             _ => AssistantProviderIds.OpenAi
         };
         settings.Model = string.IsNullOrWhiteSpace(modelBox.Text)
-            ? AssistantSettings.DefaultOpenAiModel
+            ? DefaultModelFor(settings.ProviderId)
             : modelBox.Text.Trim();
+        if (string.Equals(settings.ProviderId, AssistantProviderIds.Gemini, StringComparison.OrdinalIgnoreCase)
+            && (settings.Model.Contains("gpt-", StringComparison.OrdinalIgnoreCase)
+                || settings.Model.Contains("llama", StringComparison.OrdinalIgnoreCase)))
+        {
+            settings.Model = AssistantSettings.DefaultGeminiModel;
+        }
+
         settings.MaxSteps = (int)Math.Clamp(
             double.IsNaN(maxStepsBox.Value) ? AssistantSettings.DefaultMaxSteps : maxStepsBox.Value,
             AssistantSettings.MinMaxSteps,
@@ -659,14 +699,48 @@ public sealed partial class AssistantWidgetView : UserControl
         settings.RequireConfirmationForActions = true;
         _settingsStore.Save(settings);
 
+        if (string.Equals(settings.ProviderId, AssistantProviderIds.Local, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        var secretKey = string.Equals(settings.ProviderId, AssistantProviderIds.Gemini, StringComparison.OrdinalIgnoreCase)
+            ? AssistantSecretKeys.GeminiApiKey
+            : AssistantSecretKeys.OpenAiApiKey;
         var typed = keyBox.Password?.Trim();
         if (!string.IsNullOrWhiteSpace(typed))
         {
-            _secrets.SetSecret(AssistantSecretKeys.OpenAiApiKey, typed);
+            _secrets.SetSecret(secretKey, typed);
         }
         else if (!keepExistingIfBlank)
         {
-            _secrets.DeleteSecret(AssistantSecretKeys.OpenAiApiKey);
+            _secrets.DeleteSecret(secretKey);
         }
     }
+
+    private bool HasKeyForProvider(string? providerId)
+    {
+        if (_secrets is null)
+        {
+            return false;
+        }
+
+        if (string.Equals(providerId, AssistantProviderIds.Local, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        var secretKey = string.Equals(providerId, AssistantProviderIds.Gemini, StringComparison.OrdinalIgnoreCase)
+            ? AssistantSecretKeys.GeminiApiKey
+            : AssistantSecretKeys.OpenAiApiKey;
+        return _secrets.TryGetSecret(secretKey, out var key) && !string.IsNullOrWhiteSpace(key);
+    }
+
+    private static string DefaultModelFor(string providerId) =>
+        providerId switch
+        {
+            AssistantProviderIds.Gemini => AssistantSettings.DefaultGeminiModel,
+            AssistantProviderIds.Local => AssistantSettings.DefaultLocalModel,
+            _ => AssistantSettings.DefaultOpenAiModel
+        };
 }

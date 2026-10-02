@@ -128,3 +128,9 @@ Safe code-wise; fails target UX (“widgets only on Desktop”).
 - Multi-monitor: primary `WorkArea` only.
 - If WinUI renames the island class, child targeting may miss — top-level RGN remains as fallback.
 - Win10 may ignore some Win11 DWM attributes (harmless).
+
+### Modal dialogs (Settings / onboarding)
+
+`ContentDialog` is centered on the full work-area HWND. While a dialog is open, the host must temporarily expand the hit region via `BeginModalInput` / `OverlayDialogInput` (full-window `SetWindowRgn`), then restore widget-only regions in `EndModalInput`.
+
+**Important:** While a modal is open (`_modalInputDepth > 0`), `SyncInteractiveInputRegions` must **not** shrink the region back to widgets. Doing so (e.g. via `ShowHostStatus` or ToggleSwitch side effects) makes the dialog unreachable and looks like a freeze.

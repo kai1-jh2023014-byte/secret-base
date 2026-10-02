@@ -66,7 +66,7 @@ public static class AssistantActivityDomains
 
 public static class AssistantUserMessages
 {
-    public const string NotConfigured = "OpenAI API Key is not configured.";
+    public const string NotConfigured = "AI API key is not configured.";
     public const string OpenSettings = "Open AI Settings.";
     public const string Unavailable = "AI provider is unavailable.";
     public const string Timeout = "AI response timed out.";

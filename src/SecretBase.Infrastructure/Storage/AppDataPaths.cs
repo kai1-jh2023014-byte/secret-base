@@ -33,6 +33,10 @@ public static class AppDataPaths
     public static string LayoutsDirectory => Ensure("layouts");
     public static string SettingsDirectory => Ensure("settings");
     public static string IconsDirectory => Ensure("icons");
+
+    /// <summary>User-chosen and design-preset Block icons (PNG). Not the shell extract cache.</summary>
+    public static string CustomIconsDirectory => Ensure(Path.Combine("icons", "custom"));
+
     public static string BlockItemsDirectory => Ensure("block-items");
     public static string CreativeDirectory => Ensure("creative");
     public static string AppsDirectory => Ensure("apps");
