@@ -90,6 +90,7 @@ public sealed record DesktopPageArgs(
     ISecureSecretStore? SecretStore = null,
     ICalendarAgendaCache? CalendarCache = null,
     IPathPickService? PathPicker = null,
+    ICustomIconService? CustomIcons = null,
     CreativeCommandService? CreativeCommands = null,
     ICursorLaunchService? CursorLaunch = null,
     AiCommandService? AiCommands = null,

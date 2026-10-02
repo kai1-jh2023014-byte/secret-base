@@ -73,6 +73,7 @@ public sealed partial class DesktopPage : Page
     private ISecureSecretStore? _secretStore;
     private ICalendarAgendaCache? _calendarCache;
     private IPathPickService? _pathPicker;
+    private ICustomIconService? _customIcons;
     private CreativeCommandService? _creativeCommands;
     private ICursorLaunchService? _cursorLaunch;
     private AiCommandService? _aiCommands;
@@ -153,6 +154,7 @@ public sealed partial class DesktopPage : Page
         _secretStore = args.SecretStore ?? new WindowsCredentialSecretStore();
         _calendarCache = args.CalendarCache ?? new JsonCalendarAgendaCache();
         _pathPicker = args.PathPicker;
+        _customIcons = args.CustomIcons;
         _cursorLaunch = args.CursorLaunch ?? new WindowsCursorLaunchService();
         var projectService = args.CreativeCommands?.Projects
             ?? new CreativeProjectService(new JsonCreativeProjectStore());
@@ -666,7 +668,10 @@ public sealed partial class DesktopPage : Page
                 onLayoutCommitted: PersistLayoutNow,
                 onDeleteRequested: DeleteBlock,
                 onBoundsChanged: SyncInteractiveInputRegions,
-                onStatus: ShowHostStatus);
+                onStatus: ShowHostStatus,
+                customIcons: _customIcons,
+                pathPicker: _pathPicker,
+                dialogInput: _dialogInput);
             Canvas.SetLeft(frame, block.Position.X);
             Canvas.SetTop(frame, block.Position.Y);
             frame.Loaded += (_, _) => SyncInteractiveInputRegions();
@@ -2228,6 +2233,18 @@ public sealed partial class DesktopPage : Page
                 RefreshDebugStatus();
                 ShowHostStatus("Some items could not be returned to the Desktop. The Block was kept.");
                 return;
+            }
+        }
+
+        if (_customIcons is not null)
+        {
+            foreach (var item in block.Items)
+            {
+                if (_customIcons.IsUserIcon(item.Icon))
+                {
+                    _customIcons.TryDeleteUserIcon(item.Icon);
+                    item.Icon = string.Empty;
+                }
             }
         }
 

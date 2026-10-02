@@ -129,6 +129,7 @@ public partial class App : Application
             Icons: new ShellFileIconService(AppDataPaths.IconsDirectory),
             Intake: new BlockItemIntakeService(AppDataPaths.BlockItemsDirectory),
             PathPicker: pathPicker,
+            CustomIcons: new WindowsCustomIconService(AppDataPaths.CustomIconsDirectory),
             CreativeCommands: creativeCommands,
             CursorLaunch: cursorLaunch,
             AiCommands: aiCommands,

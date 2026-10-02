@@ -4,9 +4,11 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
+using Microsoft.UI.Xaml.Shapes;
 using SecretBase.Core.Blocks;
 using SecretBase.Core.Themes;
 using SecretBase.Platform.Abstractions;
+using SecretBase.Widgets.Hosting;
 using SecretBase.Widgets.Theming;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.Foundation;
@@ -24,6 +26,9 @@ public sealed partial class BlockFrame : UserControl
     private readonly ITargetLaunchService _launcher;
     private readonly IFileIconService _icons;
     private readonly IBlockItemIntakeService _intake;
+    private readonly ICustomIconService? _customIcons;
+    private readonly IPathPickService? _pathPicker;
+    private readonly OverlayDialogInput? _dialogInput;
     private readonly Action _onLayoutCommitted;
     private readonly Action? _onBoundsChanged;
     private readonly Action<Block> _onDeleteRequested;
@@ -49,7 +54,10 @@ public sealed partial class BlockFrame : UserControl
         Action onLayoutCommitted,
         Action<Block> onDeleteRequested,
         Action? onBoundsChanged = null,
-        Action<string>? onStatus = null)
+        Action<string>? onStatus = null,
+        ICustomIconService? customIcons = null,
+        IPathPickService? pathPicker = null,
+        OverlayDialogInput? dialogInput = null)
     {
         InitializeComponent();
         _block = block;
@@ -57,6 +65,9 @@ public sealed partial class BlockFrame : UserControl
         _launcher = launcher;
         _icons = icons;
         _intake = intake;
+        _customIcons = customIcons;
+        _pathPicker = pathPicker;
+        _dialogInput = dialogInput;
         _onLayoutCommitted = onLayoutCommitted;
         _onDeleteRequested = onDeleteRequested;
         _onBoundsChanged = onBoundsChanged;
@@ -153,17 +164,22 @@ public sealed partial class BlockFrame : UserControl
             Background = new SolidColorBrush(Windows.UI.Color.FromArgb(0x33, 0xFF, 0xFF, 0xFF))
         };
 
-        var iconPath = !string.IsNullOrWhiteSpace(item.Icon) && File.Exists(item.Icon)
+        // Persist only user/custom icons. Shell cache paths are display-only.
+        var customPath = !string.IsNullOrWhiteSpace(item.Icon) && File.Exists(item.Icon)
             ? item.Icon
-            : _icons.TryGetCachedIconPath(item.Target);
-
-        if (!string.IsNullOrWhiteSpace(iconPath) && File.Exists(iconPath))
+            : null;
+        if (!string.IsNullOrWhiteSpace(item.Icon) && customPath is null)
         {
-            item.Icon = iconPath;
+            item.Icon = string.Empty;
+        }
+
+        var displayPath = customPath ?? _icons.TryGetCachedIconPath(item.Target);
+        if (!string.IsNullOrWhiteSpace(displayPath) && File.Exists(displayPath))
+        {
             iconHost.Child = new Image
             {
-                Source = new BitmapImage(new Uri(iconPath)),
-                Stretch = Stretch.Uniform,
+                Source = new BitmapImage(new Uri(displayPath)),
+                Stretch = Stretch.UniformToFill,
                 Width = 36,
                 Height = 36
             };
@@ -216,6 +232,21 @@ public sealed partial class BlockFrame : UserControl
         var openItem = new MenuFlyoutItem { Text = "Open" };
         openItem.Click += (_, _) => LaunchItem(item);
         menu.Items.Add(openItem);
+
+        if (_customIcons is not null)
+        {
+            var changeIcon = new MenuFlyoutItem { Text = "Change icon…" };
+            changeIcon.Click += async (_, _) => await ChangeItemIconAsync(item);
+            menu.Items.Add(changeIcon);
+
+            if (_customIcons.IsUserIcon(item.Icon))
+            {
+                var resetIcon = new MenuFlyoutItem { Text = "Reset icon" };
+                resetIcon.Click += (_, _) => ResetItemIcon(item);
+                menu.Items.Add(resetIcon);
+            }
+        }
+
         if (item.HiddenFromDesktop)
         {
             var restoreItem = new MenuFlyoutItem { Text = "Return to Desktop" };
@@ -381,6 +412,7 @@ public sealed partial class BlockFrame : UserControl
             return;
         }
 
+        DiscardUserIcon(item);
         _block.Items.Remove(item);
         RefreshItems(arrangeIfNeeded: true);
         _onLayoutCommitted();
@@ -390,11 +422,217 @@ public sealed partial class BlockFrame : UserControl
 
     private void RemoveLinkedItem(BlockItem item)
     {
+        DiscardUserIcon(item);
         _block.Items.Remove(item);
         RefreshItems(arrangeIfNeeded: true);
         _onLayoutCommitted();
         _onBoundsChanged?.Invoke();
         _onStatus?.Invoke($"Removed '{item.Name}' from '{_block.Name}'. The original file was not deleted.");
+    }
+
+    private void DiscardUserIcon(BlockItem item)
+    {
+        if (_customIcons is null || !_customIcons.IsUserIcon(item.Icon))
+        {
+            return;
+        }
+
+        _customIcons.TryDeleteUserIcon(item.Icon);
+        item.Icon = string.Empty;
+    }
+
+    private void ResetItemIcon(BlockItem item)
+    {
+        DiscardUserIcon(item);
+        RefreshItems(arrangeIfNeeded: false);
+        _onLayoutCommitted();
+        _onBoundsChanged?.Invoke();
+        _onStatus?.Invoke($"Reset icon for '{item.Name}'.");
+    }
+
+    private async Task ChangeItemIconAsync(BlockItem item)
+    {
+        if (_customIcons is null)
+        {
+            _onStatus?.Invoke("Icon customization is not available.");
+            return;
+        }
+
+        var presets = BlockCustomIcons.Presets.ToList();
+        var presetList = new ListView
+        {
+            SelectionMode = ListViewSelectionMode.Single,
+            MaxHeight = 240
+        };
+        foreach (var preset in presets)
+        {
+            var swatch = new Ellipse
+            {
+                Width = 18,
+                Height = 18,
+                Fill = new SolidColorBrush(ParsePresetColor(preset.HexColor)),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            presetList.Items.Add(new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 10,
+                Children =
+                {
+                    swatch,
+                    new TextBlock
+                    {
+                        Text = preset.DisplayName,
+                        VerticalAlignment = VerticalAlignment.Center
+                    }
+                }
+            });
+        }
+
+        if (presetList.Items.Count > 0)
+        {
+            presetList.SelectedIndex = 0;
+        }
+
+        var dialog = new ContentDialog
+        {
+            Title = $"Icon for {item.Name}",
+            Content = new StackPanel
+            {
+                Spacing = 10,
+                Children =
+                {
+                    new TextBlock
+                    {
+                        Text = "Choose a design color, or import your own image (PNG, JPG, BMP, GIF, ICO, WEBP).",
+                        FontSize = 12,
+                        Opacity = 0.8,
+                        TextWrapping = TextWrapping.WrapWholeWords
+                    },
+                    presetList
+                }
+            },
+            PrimaryButtonText = "Apply design",
+            SecondaryButtonText = "Import image…",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = XamlRoot
+        };
+
+        ContentDialogResult result;
+        using (_dialogInput?.Enter())
+        {
+            result = await dialog.ShowAsync();
+        }
+
+        if (result == ContentDialogResult.Secondary)
+        {
+            await ImportItemIconAsync(item);
+            return;
+        }
+
+        if (result != ContentDialogResult.Primary)
+        {
+            return;
+        }
+
+        if (presetList.SelectedIndex < 0 || presetList.SelectedIndex >= presets.Count)
+        {
+            _onStatus?.Invoke("Select a design first.");
+            return;
+        }
+
+        var presetId = presets[presetList.SelectedIndex].Id;
+        var glyph = BlockCustomIcons.GlyphFor(item.Type, item.Name);
+        if (!_customIcons.TryCreatePresetIcon(item.Id, presetId, glyph, out var stored, out var error)
+            || string.IsNullOrWhiteSpace(stored))
+        {
+            _onStatus?.Invoke(error ?? "Could not create that icon design.");
+            return;
+        }
+
+        ApplyStoredIcon(item, stored);
+        _onStatus?.Invoke($"Updated icon for '{item.Name}'.");
+    }
+
+    private async Task ImportItemIconAsync(BlockItem item)
+    {
+        if (_customIcons is null || _pathPicker is null)
+        {
+            _onStatus?.Invoke("Image import is not available.");
+            return;
+        }
+
+        PathPickResult pick;
+        using (_dialogInput?.Enter())
+        {
+            pick = await _pathPicker.PickImageAsync();
+        }
+
+        if (pick.Cancelled)
+        {
+            return;
+        }
+
+        if (!pick.Succeeded || string.IsNullOrWhiteSpace(pick.Path))
+        {
+            _onStatus?.Invoke(pick.ErrorMessage ?? "Could not open the image picker.");
+            return;
+        }
+
+        if (!_customIcons.TryImportImage(pick.Path, item.Id, out var stored, out var error)
+            || string.IsNullOrWhiteSpace(stored))
+        {
+            _onStatus?.Invoke(error ?? "Could not import that image.");
+            return;
+        }
+
+        ApplyStoredIcon(item, stored);
+        _onStatus?.Invoke($"Imported custom icon for '{item.Name}'.");
+    }
+
+    private void ApplyStoredIcon(BlockItem item, string storedPath)
+    {
+        item.Icon = storedPath;
+        RefreshItems(arrangeIfNeeded: false);
+        _onLayoutCommitted();
+        _onBoundsChanged?.Invoke();
+    }
+
+    private static Windows.UI.Color ParsePresetColor(string hex)
+    {
+        var value = hex.Trim();
+        if (value.StartsWith('#'))
+        {
+            value = value[1..];
+        }
+
+        try
+        {
+            if (value.Length == 8)
+            {
+                return Windows.UI.Color.FromArgb(
+                    Convert.ToByte(value[..2], 16),
+                    Convert.ToByte(value[2..4], 16),
+                    Convert.ToByte(value[4..6], 16),
+                    Convert.ToByte(value[6..8], 16));
+            }
+
+            if (value.Length == 6)
+            {
+                return Windows.UI.Color.FromArgb(
+                    255,
+                    Convert.ToByte(value[..2], 16),
+                    Convert.ToByte(value[2..4], 16),
+                    Convert.ToByte(value[4..6], 16));
+            }
+        }
+        catch
+        {
+            // Fall through.
+        }
+
+        return Windows.UI.Color.FromArgb(255, 47, 111, 237);
     }
 
     private void SetChromeEmphasis(bool emphasized)
@@ -622,7 +860,6 @@ public sealed partial class BlockFrame : UserControl
 
             // Re-infer type from final target (moved .lnk stays Shortcut).
             type = BlockTargetValidator.InferType(target, Directory.Exists(target));
-            var iconPath = _icons.TryGetCachedIconPath(target) ?? string.Empty;
             var item = new BlockItem
             {
                 Id = itemId,
@@ -630,7 +867,7 @@ public sealed partial class BlockFrame : UserControl
                     intake.MovedFromSource ? normalized : target),
                 Type = type,
                 Target = target,
-                Icon = iconPath,
+                Icon = string.Empty,
                 DesktopOriginPath = intake.DesktopOriginPath,
                 HiddenFromDesktop = intake.MovedFromSource,
                 X = -1,

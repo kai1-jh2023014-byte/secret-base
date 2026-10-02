@@ -26,7 +26,10 @@ public sealed class BlockItem
     /// <summary>True when Secret Base moved the Desktop original into block-items storage.</summary>
     public bool HiddenFromDesktop { get; set; }
 
-    /// <summary>Optional cached icon path (PNG). Empty = extract from Target at runtime.</summary>
+    /// <summary>
+    /// Optional user/custom icon path under AppData icons/custom.
+    /// Empty = show the OS shell icon for Target at runtime (not persisted).
+    /// </summary>
     public string Icon { get; set; } = string.Empty;
 
     /// <summary>Position inside the Block content canvas. Negative = needs auto-placement.</summary>

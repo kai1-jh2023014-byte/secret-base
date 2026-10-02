@@ -81,4 +81,45 @@ public sealed class WindowsPathPickService : IPathPickService
             return new PathPickResult(false, false, null, true, ex.Message);
         }
     }
+
+    public async Task<PathPickResult> PickImageAsync()
+    {
+        if (_hwnd == nint.Zero)
+        {
+            return new PathPickResult(false, false, null, false, "Owner window is not set.");
+        }
+
+        try
+        {
+            var picker = new FileOpenPicker();
+            InitializeWithWindow.Initialize(picker, _hwnd);
+            picker.ViewMode = PickerViewMode.Thumbnail;
+            picker.SuggestedStartLocation = PickerLocationId.PicturesLibrary;
+            picker.FileTypeFilter.Add(".png");
+            picker.FileTypeFilter.Add(".jpg");
+            picker.FileTypeFilter.Add(".jpeg");
+            picker.FileTypeFilter.Add(".bmp");
+            picker.FileTypeFilter.Add(".gif");
+            picker.FileTypeFilter.Add(".ico");
+            picker.FileTypeFilter.Add(".webp");
+
+            var file = await picker.PickSingleFileAsync();
+            if (file is null)
+            {
+                return new PathPickResult(false, true, null, false, null);
+            }
+
+            var path = file.Path;
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                return new PathPickResult(false, false, null, false, "Selected image has no path.");
+            }
+
+            return new PathPickResult(true, false, path, false, null);
+        }
+        catch (Exception ex)
+        {
+            return new PathPickResult(false, false, null, false, ex.Message);
+        }
+    }
 }

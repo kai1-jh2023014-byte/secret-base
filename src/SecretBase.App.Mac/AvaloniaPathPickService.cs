@@ -72,4 +72,42 @@ public sealed class AvaloniaPathPickService : IPathPickService
             return new PathPickResult(false, false, null, true, ex.Message);
         }
     }
+
+    public async Task<PathPickResult> PickImageAsync()
+    {
+        if (_window is null)
+        {
+            return new PathPickResult(false, false, null, false, "Owner window is not set.");
+        }
+
+        try
+        {
+            var files = await _window.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+            {
+                Title = "Choose an image",
+                AllowMultiple = false,
+                FileTypeFilter =
+                [
+                    new FilePickerFileType("Images")
+                    {
+                        Patterns = ["*.png", "*.jpg", "*.jpeg", "*.bmp", "*.gif", "*.webp", "*.ico"],
+                        AppleUniformTypeIdentifiers = ["public.image"],
+                        MimeTypes = ["image/*"]
+                    }
+                ]
+            });
+            var file = files.Count > 0 ? files[0] : null;
+            var path = file?.TryGetLocalPath();
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                return new PathPickResult(false, file is null, null, false, file is null ? null : "Selected image has no path.");
+            }
+
+            return new PathPickResult(true, false, path, false, null);
+        }
+        catch (Exception ex)
+        {
+            return new PathPickResult(false, false, null, false, ex.Message);
+        }
+    }
 }
