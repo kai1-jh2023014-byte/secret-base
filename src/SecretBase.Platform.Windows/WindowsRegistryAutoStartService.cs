@@ -232,7 +232,7 @@ public sealed class WindowsRegistryAutoStartService : IAutoStartService
         {
             try
             {
-                return AppHostLaunchScript.TryReadExecutable(File.ReadAllText(launcherPath), out executablePath);
+                return AppHostLaunchScript.TryReadExecutable(AppHostLaunchScript.ReadText(launcherPath), out executablePath);
             }
             catch (IOException)
             {

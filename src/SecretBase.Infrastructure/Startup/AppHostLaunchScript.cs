@@ -12,6 +12,17 @@ public static class AppHostLaunchScript
     public const string FileName = "launch-secretbase.vbs";
     public const string ExecutableMarkerPrefix = "' SecretBase.App.exe=";
 
+    static AppHostLaunchScript()
+    {
+        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+    }
+
+    /// <summary>
+    /// Shift-JIS (code page 932). Japanese Notepad and wscript both use this by default.
+    /// UTF-16 is valid for wscript but looks corrupted when opened as the usual text encoding.
+    /// </summary>
+    public static Encoding FileEncoding => Encoding.GetEncoding(932);
+
     public static string Build(string executablePath, string? dotnetRoot)
     {
         var exe = executablePath.Trim();
@@ -21,8 +32,6 @@ public static class AppHostLaunchScript
             : dotnetRoot.Trim().TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
 
         // Chr(34) keeps the file readable. A pile of quotes looks like mojibake in Notepad.
-        // Windows Script Host reads .vbs as ANSI unless the file is UTF-16, so Japanese
-        // user/folder names must be written as Unicode or the path is corrupted.
         var script = new StringBuilder();
         script.AppendLine("Option Explicit");
         script.AppendLine(ExecutableMarkerPrefix + exe);
@@ -48,9 +57,6 @@ public static class AppHostLaunchScript
         return script.ToString();
     }
 
-    /// <summary>UTF-16 LE with BOM. This is the encoding wscript accepts for non-ANSI paths.</summary>
-    public static readonly Encoding FileEncoding = new UnicodeEncoding(bigEndian: false, byteOrderMark: true);
-
     public static void WriteFile(string launcherPath, string executablePath, string? dotnetRoot)
     {
         var directory = Path.GetDirectoryName(launcherPath);
@@ -60,6 +66,17 @@ public static class AppHostLaunchScript
         }
 
         File.WriteAllText(launcherPath, Build(executablePath, dotnetRoot), FileEncoding);
+    }
+
+    public static string ReadText(string path)
+    {
+        var bytes = File.ReadAllBytes(path);
+        if (bytes.Length >= 2 && bytes[0] == 0xFF && bytes[1] == 0xFE)
+        {
+            return Encoding.Unicode.GetString(bytes);
+        }
+
+        return FileEncoding.GetString(bytes);
     }
 
     public static string BuildStartupCommand(string wscriptPath, string launcherScriptPath) =>

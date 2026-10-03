@@ -24,7 +24,7 @@ Command:
 "C:\Windows\System32\wscript.exe" //B //Nologo "C:\Users\me\AppData\Local\SecretBase\launch-secretbase.vbs" --autostart
 ```
 
-The script sets `DOTNET_ROOT` when a user-local .NET install exists, then starts `SecretBase.App.exe`. It is saved as UTF-16 so Japanese folder names are not garbled. A shortcut that points straight at the exe flashes and exits, because Explorer does not inherit `DOTNET_ROOT`.
+The script sets `DOTNET_ROOT` when a user-local .NET install exists, then starts `SecretBase.App.exe`. It is saved as Shift-JIS (code page 932), the encoding Japanese Notepad and wscript already use. A shortcut that points straight at the exe flashes and exits, because Explorer does not inherit `DOTNET_ROOT`.
 
 This appears in **Windows Settings → Apps → Startup** like other desktop applications. No elevation, no machine-wide shell changes, no PowerShell persistence.
 

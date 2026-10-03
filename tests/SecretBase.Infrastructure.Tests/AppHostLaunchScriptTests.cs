@@ -46,7 +46,7 @@ public class AppHostLaunchScriptTests
     }
 
     [Fact]
-    public void WriteFile_UsesUtf16SoJapanesePathsStayReadable()
+    public void WriteFile_UsesShiftJisSoNotepadShowsJapanese()
     {
         var dir = Path.Combine(Path.GetTempPath(), "secretbase-vbs-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(dir);
@@ -57,10 +57,11 @@ public class AppHostLaunchScriptTests
             AppHostLaunchScript.WriteFile(path, exe, "C:\\Users\\太郎\\AppData\\Local\\Microsoft\\dotnet");
             var bytes = File.ReadAllBytes(path);
             Assert.True(bytes.Length >= 2);
-            Assert.Equal(0xFF, bytes[0]);
-            Assert.Equal(0xFE, bytes[1]);
-            var text = File.ReadAllText(path, AppHostLaunchScript.FileEncoding);
+            Assert.Equal((byte)'O', bytes[0]);
+            Assert.Equal((byte)'p', bytes[1]);
+            var text = AppHostLaunchScript.ReadText(path);
             Assert.Contains("太郎", text, StringComparison.Ordinal);
+            Assert.Contains("Option Explicit", text, StringComparison.Ordinal);
             Assert.True(AppHostLaunchScript.TryReadExecutable(text, out var read));
             Assert.Equal(exe, read);
         }

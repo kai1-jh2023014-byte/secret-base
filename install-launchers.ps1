@@ -89,8 +89,9 @@ Next
 shell.Run quote & exe & quote & args, 1, False
 '@
 $vbs = $template.Replace('__EXE__', $exe).Replace('__WORKDIR__', $workDir).Replace('__DOTNET__', $dotnetBlock)
-# UTF-16 so Japanese folder names stay intact. wscript treats UTF-8 as ANSI and garbles them.
-Set-Content -Path $vbsPath -Value $vbs -Encoding Unicode
+# Shift-JIS. UTF-16 is valid for wscript but Notepad on Japanese Windows shows it as mojibake.
+$shiftJis = [System.Text.Encoding]::GetEncoding(932)
+[System.IO.File]::WriteAllText($vbsPath, $vbs, $shiftJis)
 
 $wscript = Join-Path $env:SystemRoot "System32\wscript.exe"
 $shell = New-Object -ComObject WScript.Shell
