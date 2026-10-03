@@ -21,8 +21,10 @@ Value name: `SecretBase` (see `AppInfo.ProductId`)
 Command:
 
 ```text
-"C:\path\SecretBase.App.exe" --autostart
+"C:\Windows\System32\wscript.exe" //B //Nologo "C:\Users\me\AppData\Local\SecretBase\launch-secretbase.vbs" --autostart
 ```
+
+The script sets `DOTNET_ROOT` when a user-local .NET install exists, then starts `SecretBase.App.exe`. A shortcut that points straight at the exe flashes and exits, because Explorer does not inherit `DOTNET_ROOT`.
 
 This appears in **Windows Settings → Apps → Startup** like other desktop applications. No elevation, no machine-wide shell changes, no PowerShell persistence.
 

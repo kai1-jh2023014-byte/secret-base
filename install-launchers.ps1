@@ -36,12 +36,41 @@ if (-not $exe) {
 }
 
 $workDir = Split-Path -Parent $exe
+$launcherDir = Join-Path $env:LOCALAPPDATA "SecretBase"
+New-Item -ItemType Directory -Force -Path $launcherDir | Out-Null
+$vbsPath = Join-Path $launcherDir "launch-secretbase.vbs"
+$dotnetRoot = Join-Path $env:LOCALAPPDATA "Microsoft\dotnet"
+$dotnetBlock = ""
+if (Test-Path (Join-Path $dotnetRoot "dotnet.exe")) {
+    $dotnetBlock = "env(""DOTNET_ROOT"") = ""$dotnetRoot""`r`n" +
+        "env(""DOTNET_ROOT(x64)"") = env(""DOTNET_ROOT"")`r`n" +
+        "env(""PATH"") = env(""DOTNET_ROOT"") & "";"" & env(""PATH"")`r`n"
+}
+$template = @'
+Option Explicit
+' SecretBase.App.exe=__EXE__
+Dim shell, env, cmd, i
+Set shell = CreateObject("WScript.Shell")
+Set env = shell.Environment("Process")
+__DOTNET__shell.CurrentDirectory = "__WORKDIR__"
+cmd = """" & "__EXE__" & """"
+For i = 0 To WScript.Arguments.Count - 1
+  cmd = cmd & " """ & Replace(WScript.Arguments(i), """", """""") & """"
+Next
+shell.Run cmd, 1, False
+'@
+$vbs = $template.Replace('__EXE__', $exe).Replace('__WORKDIR__', $workDir).Replace('__DOTNET__', $dotnetBlock)
+Set-Content -Path $vbsPath -Value $vbs -Encoding ASCII
+
+$wscript = Join-Path $env:SystemRoot "System32\wscript.exe"
 $shell = New-Object -ComObject WScript.Shell
 
 function New-SecretBaseShortcut([string]$path) {
     $shortcut = $shell.CreateShortcut($path)
-    $shortcut.TargetPath = $exe
+    $shortcut.TargetPath = $wscript
+    $shortcut.Arguments = "//B //Nologo `"$vbsPath`""
     $shortcut.WorkingDirectory = $workDir
+    $shortcut.WindowStyle = 1
     $shortcut.Description = "Secret Base — personal desktop overlay"
     $shortcut.IconLocation = "$exe,0"
     $shortcut.Save()
@@ -57,5 +86,6 @@ Write-Host "Shortcuts created:"
 Write-Host "  Start Menu: $startMenu"
 Write-Host "  Desktop:    $desktop"
 Write-Host "  Target:     $exe"
+Write-Host "  Launcher:   $vbsPath"
 Write-Host ""
 Write-Host "Double-click either shortcut to launch. In the app, open Setup (gear) to enable Start at login."

@@ -179,6 +179,7 @@ public sealed class AppWindowDesktopOverlayService : IDesktopOverlayService
         }
 
         var transferred = false;
+        var pieces = 0;
         try
         {
             foreach (var rect in rects)
@@ -205,6 +206,14 @@ public sealed class AppWindowDesktopOverlayService : IDesktopOverlayService
 
                 _ = NativeMethods.CombineRgn(combined, combined, piece, NativeMethods.RgnOr);
                 _ = NativeMethods.DeleteObject(piece);
+                pieces++;
+            }
+
+            // An empty region hides the whole window (the shortcut appears, then vanishes).
+            // Leave the previous shape until real widget rects exist.
+            if (pieces == 0)
+            {
+                return;
             }
 
             if (NativeMethods.SetWindowRgn(hwnd, combined, redraw: true))

@@ -4,12 +4,17 @@ namespace SecretBase.Platform.Windows.Tests;
 
 public class AutoStartServiceTests
 {
-    [Theory]
-    [InlineData(@"C:\Apps\SecretBase.App.exe", @"""C:\Apps\SecretBase.App.exe"" --autostart")]
-    [InlineData(@"C:\Apps\Secret Base\SecretBase.App.exe", @"""C:\Apps\Secret Base\SecretBase.App.exe"" --autostart")]
-    public void BuildStartupCommand_QuotesExecutableAndAddsSwitch(string executable, string expected)
+    [Fact]
+    public void BuildStartupCommand_LaunchesHiddenWscriptWithAutostart()
     {
-        Assert.Equal(expected, WindowsRegistryAutoStartService.BuildStartupCommand(executable));
+        var command = WindowsRegistryAutoStartService.BuildStartupCommand(
+            @"C:\Windows\System32\wscript.exe",
+            @"C:\Users\me\AppData\Local\SecretBase\launch-secretbase.vbs");
+
+        Assert.Contains("wscript.exe", command, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("//B //Nologo", command, StringComparison.Ordinal);
+        Assert.Contains("launch-secretbase.vbs", command, StringComparison.OrdinalIgnoreCase);
+        Assert.EndsWith("--autostart", command, StringComparison.Ordinal);
     }
 
     [Theory]

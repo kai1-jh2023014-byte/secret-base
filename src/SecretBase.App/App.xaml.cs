@@ -21,6 +21,7 @@ public partial class App : Application
     private ICompatibilityService? _compatibility;
     private ISafeExitService? _safeExit;
     private ISingleInstanceGuard? _singleInstance;
+    private WindowsInstanceActivation? _activation;
 
     public App()
     {
@@ -41,7 +42,8 @@ public partial class App : Application
             _singleInstance = new WindowsMutexSingleInstanceGuard();
             if (!_singleInstance.TryAcquire())
             {
-                bootstrapLogger.Info("startup", "Another Secret Base instance is already running. Exiting.");
+                bootstrapLogger.Info("startup", "Another Secret Base instance is already running. Asking it to show.");
+                WindowsInstanceActivation.Signal();
                 _singleInstance.Dispose();
                 _singleInstance = null;
                 bootstrapLogger.Dispose();
@@ -142,6 +144,8 @@ public partial class App : Application
         _window.Closed += (_, _) =>
         {
             _logger?.Info("lifecycle", "Main window closed. Returning to normal Windows desktop.");
+            _activation?.Dispose();
+            _activation = null;
             _singleInstance?.Dispose();
             _singleInstance = null;
             if (_logger is IDisposable disposable)
@@ -150,6 +154,12 @@ public partial class App : Application
             }
         };
         _window.Activate();
+        if (_window is MainWindow mainWindow)
+        {
+            _activation = WindowsInstanceActivation.Listen(() =>
+                mainWindow.DispatcherQueue.TryEnqueue(mainWindow.PresentExistingInstance));
+        }
+
         _logger.Info("overlay", "Host activated; Blocks + widgets; SetWindowRgn input; HWND_BOTTOM Z-order.");
     }
 

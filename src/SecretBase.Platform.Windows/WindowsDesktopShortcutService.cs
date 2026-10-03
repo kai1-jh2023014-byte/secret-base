@@ -1,5 +1,7 @@
 using System.Runtime.InteropServices;
 using SecretBase.Core;
+using SecretBase.Infrastructure.Startup;
+using SecretBase.Infrastructure.Storage;
 
 namespace SecretBase.Platform.Windows;
 
@@ -47,10 +49,24 @@ public sealed class WindowsDesktopShortcutService
                 Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),
                 ShortcutFileName);
 
-            CreateShortcut(startMenu, exe, workDir, "Secret Base — personal desktop overlay");
-            CreateShortcut(desktop, exe, workDir, "Secret Base — personal desktop overlay");
+            var launcherPath = Path.Combine(AppDataPaths.RootDirectory, AppHostLaunchScript.FileName);
+            File.WriteAllText(
+                launcherPath,
+                AppHostLaunchScript.Build(exe, AppHostLaunchScript.FindUserDotNetRoot()));
 
-            detail = $"Start Menu and Desktop shortcuts point to:{Environment.NewLine}{exe}";
+            var wscript = Path.Combine(Environment.SystemDirectory, "wscript.exe");
+            if (!File.Exists(wscript))
+            {
+                errorMessage = "Windows Script Host (wscript.exe) was not found.";
+                return false;
+            }
+
+            var arguments = $"//B //Nologo \"{launcherPath}\"";
+            const string description = "Secret Base — personal desktop overlay";
+            CreateShortcut(startMenu, wscript, arguments, workDir, description, exe);
+            CreateShortcut(desktop, wscript, arguments, workDir, description, exe);
+
+            detail = $"Start Menu and Desktop shortcuts launch:{Environment.NewLine}{exe}";
             return true;
         }
         catch (Exception ex)
@@ -60,7 +76,13 @@ public sealed class WindowsDesktopShortcutService
         }
     }
 
-    private static void CreateShortcut(string shortcutPath, string targetPath, string workingDirectory, string description)
+    private static void CreateShortcut(
+        string shortcutPath,
+        string targetPath,
+        string arguments,
+        string workingDirectory,
+        string description,
+        string iconPath)
     {
         var shellType = Type.GetTypeFromProgID("WScript.Shell")
             ?? throw new InvalidOperationException("WScript.Shell is not available on this PC.");
@@ -83,9 +105,11 @@ public sealed class WindowsDesktopShortcutService
 
             var shortcutType = shortcut.GetType();
             shortcutType.InvokeMember("TargetPath", System.Reflection.BindingFlags.SetProperty, null, shortcut, [targetPath]);
+            shortcutType.InvokeMember("Arguments", System.Reflection.BindingFlags.SetProperty, null, shortcut, [arguments]);
             shortcutType.InvokeMember("WorkingDirectory", System.Reflection.BindingFlags.SetProperty, null, shortcut, [workingDirectory]);
             shortcutType.InvokeMember("Description", System.Reflection.BindingFlags.SetProperty, null, shortcut, [description]);
-            shortcutType.InvokeMember("IconLocation", System.Reflection.BindingFlags.SetProperty, null, shortcut, [targetPath + ",0"]);
+            shortcutType.InvokeMember("WindowStyle", System.Reflection.BindingFlags.SetProperty, null, shortcut, [1]);
+            shortcutType.InvokeMember("IconLocation", System.Reflection.BindingFlags.SetProperty, null, shortcut, [iconPath + ",0"]);
             shortcutType.InvokeMember("Save", System.Reflection.BindingFlags.InvokeMethod, null, shortcut, null);
         }
         finally

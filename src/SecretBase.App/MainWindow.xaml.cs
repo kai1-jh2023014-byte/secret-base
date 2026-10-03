@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using SecretBase.App.Desktop;
@@ -64,6 +65,19 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    public void PresentExistingInstance()
+    {
+        var hwnd = WindowNative.GetWindowHandle(this);
+        _ = ShowWindow(hwnd, SwRestore);
+        Activate();
+        if (RootFrame.Content is DesktopPage page)
+        {
+            page.RequestInteractiveRegionSync();
+        }
+
+        _overlayService.KeepBehindApplicationWindows(_overlayTarget);
+    }
+
     private void OnActivated(object sender, WindowActivatedEventArgs args)
     {
         if (args.WindowActivationState == WindowActivationState.Deactivated)
@@ -73,6 +87,11 @@ public sealed partial class MainWindow : Window
 
         _overlayService.KeepBehindApplicationWindows(_overlayTarget);
     }
+
+    private const int SwRestore = 9;
+
+    [DllImport("user32.dll")]
+    private static extern bool ShowWindow(nint hWnd, int nCmdShow);
 }
 
 public sealed record DesktopPageArgs(

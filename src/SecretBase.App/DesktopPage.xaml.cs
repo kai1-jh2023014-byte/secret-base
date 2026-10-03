@@ -451,7 +451,7 @@ public sealed partial class DesktopPage : Page
             var intro = new TextBlock
             {
                 Text =
-                    "Launch Secret Base without the terminal. Create Start Menu / Desktop shortcuts, and optionally start at Windows login.",
+                    "Launch Secret Base without the terminal. Create Start Menu / Desktop shortcuts, and optionally start at Windows login. If an older shortcut flashed and closed, create the shortcuts again.",
                 TextWrapping = TextWrapping.WrapWholeWords
             };
 
