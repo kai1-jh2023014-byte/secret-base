@@ -43,6 +43,8 @@ This appears in **Windows Settings → Apps → Startup** like other desktop app
 .\install-launchers.ps1
 ```
 
+This always rebuilds Debug | x64 first. An exe left in `bin\` from an older checkout is not reused. The script prints the branch, commit, and the exe's timestamp.
+
 Creates:
 
 - `%AppData%\Microsoft\Windows\Start Menu\Programs\Secret Base.lnk`
