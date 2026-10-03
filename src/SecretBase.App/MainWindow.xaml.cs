@@ -39,8 +39,8 @@ public sealed partial class MainWindow : Window
 
         _overlayService.ApplyChromelessWorkAreaOverlay(_overlayTarget);
 
-        // When Windows activates us (e.g. click a widget), immediately return to HWND_BOTTOM
-        // so normal applications stay above the desktop overlay layer.
+        // When Windows activates us (e.g. click a widget), park just above the shell desktop
+        // so normal applications stay above the overlay and the wallpaper stays behind it.
         // KeepBehind also reapplies the cached SetWindowRgn shape.
         Activated += OnActivated;
 

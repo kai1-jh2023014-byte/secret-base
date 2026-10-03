@@ -18,13 +18,21 @@ Registration uses the standard per-user Run key:
 
 Value name: `SecretBase` (see `AppInfo.ProductId`)
 
-Command:
+Command when .NET 10 is installed under `Program Files\dotnet` (Explorer can find it):
 
 ```text
-"C:\Windows\System32\wscript.exe" //B //Nologo "C:\Users\me\AppData\Local\SecretBase\launch-secretbase.vbs" --autostart
+"C:\Apps\SecretBase.App.exe" --autostart
 ```
 
-The script sets `DOTNET_ROOT` when a user-local .NET install exists, then starts `SecretBase.App.exe`. It is saved as Shift-JIS (code page 932), the encoding Japanese Notepad and wscript already use. A shortcut that points straight at the exe flashes and exits, because Explorer does not inherit `DOTNET_ROOT`.
+Command only when .NET 10 exists solely under `%LocalAppData%\Microsoft\dotnet`:
+
+```text
+"C:\Windows\System32\cmd.exe" /d /c C:\Users\me\AppData\Local\SecretBase\launch-secretbase.cmd --autostart
+```
+
+The cmd script is Shift-JIS (code page 932, no BOM) and sets `DOTNET_ROOT` before `start`ing `SecretBase.App.exe`. A user-local folder that only contains `dotnet.exe` without `shared\Microsoft.NETCore.App\10.*` is not used — pointing `DOTNET_ROOT` at it hides a working machine install and the apphost exits before any window exists. Shortcuts follow the same rule. The desktop shortcut's target is the exe itself whenever the machine runtime is present.
+
+`wscript.exe //B` is not used. That host hides script errors, so a bad launcher looks like the app opened and immediately closed.
 
 This appears in **Windows Settings → Apps → Startup** like other desktop applications. No elevation, no machine-wide shell changes, no PowerShell persistence.
 
@@ -54,11 +62,11 @@ Then open **Setup (⚙)** in the overlay and turn on **Start at login**.
 
 ## Single instance
 
-Logon startup launches `SecretBase.App.exe` like a normal double-click. `ISingleInstanceGuard` runs first in `App.OnLaunched`; a second logon attempt exits without creating another overlay.
+Logon startup launches `SecretBase.App.exe` like a normal double-click. `ISingleInstanceGuard` runs first in `App.OnLaunched`. A second launch asks the running instance to show itself. If that instance never recorded `window-visible` in `%LocalAppData%\SecretBase\logs\startup-last.txt`, a message box explains that `SecretBase.App.exe` is still running and must be ended in Task Manager. An abandoned mutex is taken over so a crashed process does not block every later launch.
 
 ## Failure containment
 
-When launched with `--autostart`, startup failures are **logged only** (no blocking dialog) so Windows logon is not interrupted. Manual launches still show `StartupFailurePresenter`.
+When launched with `--autostart`, startup failures are **logged only** (no blocking dialog) so Windows logon is not interrupted. Manual launches show a Win32 message box and write `%LocalAppData%\SecretBase\logs\startup-last.txt` (UTF-8 BOM). `launch-attempt.txt` is written as soon as managed code starts. If a double-click updates neither file, the process died in the apphost before `App` ran — usually the .NET 10 runtime was not visible to Explorer.
 
 ## Preference sync
 

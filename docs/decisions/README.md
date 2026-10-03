@@ -1,5 +1,11 @@
 # Decision Log
 
+## 2026-10-03 — Desktop launch stays visible
+
+**Decision:** Start Menu, Desktop, and the logon Run key start `SecretBase.App.exe` directly when `Program Files\dotnet\shared\Microsoft.NETCore.App\10.*` exists. Set `DOTNET_ROOT` only when that runtime exists solely under `%LocalAppData%\Microsoft\dotnet`, using a Shift-JIS `launch-secretbase.cmd` (no `wscript //B`). Park the overlay with documented `GetShellWindow` + `SetWindowPos` immediately above the shell desktop. `HWND_BOTTOM` remains only when the shell window cannot be resolved. A second launch signals the running instance; if that instance never wrote `startup-last.txt` status `window-visible`, show a Win32 message box. Take over an abandoned single-instance mutex.
+
+**Why:** A shortcut that flashes and closes had several independent causes: a hidden script host, `DOTNET_ROOT` forced onto a user-local folder that does not contain the .NET 10 shared framework, a second process exiting silently while the first was still alive, and `HWND_BOTTOM` placing the host behind the wallpaper. None of these require WorkerW or shell replacement.
+
 ## 2026-08-11 — Adopt .NET 10 LTS + WASDK 2.3.1
 
 **Decision:** Use .NET 10 (LTS) and Windows App SDK 2.3.1 with WinUI 3.

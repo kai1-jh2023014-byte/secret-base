@@ -139,15 +139,27 @@ public sealed class WindowsRegistryAutoStartService : IAutoStartService
     public bool TryGetStartupExecutablePath(out string executablePath, out string? errorMessage) =>
         TryResolveExecutablePath(out executablePath, out errorMessage);
 
-    internal static string BuildStartupCommand(string wscriptPath, string launcherScriptPath) =>
-        AppHostLaunchScript.BuildStartupCommand(wscriptPath, launcherScriptPath);
+    internal static string BuildStartupCommand(
+        string executablePath,
+        string? dotnetRoot,
+        string commandProcessorPath,
+        string launcherScriptPath) =>
+        string.IsNullOrWhiteSpace(dotnetRoot)
+            ? AppHostLaunchScript.BuildDirectStartupCommand(executablePath)
+            : AppHostLaunchScript.BuildScriptStartupCommand(commandProcessorPath, launcherScriptPath);
 
     internal static string WriteLauncherAndBuildCommand(string executablePath)
     {
+        var dotnetRoot = AppHostLaunchScript.ResolveDotNetRootForExplorerLaunch();
+        if (string.IsNullOrWhiteSpace(dotnetRoot))
+        {
+            return AppHostLaunchScript.BuildDirectStartupCommand(executablePath);
+        }
+
         var launcherPath = Path.Combine(AppDataPaths.RootDirectory, AppHostLaunchScript.FileName);
-        AppHostLaunchScript.WriteFile(launcherPath, executablePath, AppHostLaunchScript.FindUserDotNetRoot());
-        var wscript = Path.Combine(Environment.SystemDirectory, "wscript.exe");
-        return BuildStartupCommand(wscript, launcherPath);
+        AppHostLaunchScript.WriteFile(launcherPath, executablePath, dotnetRoot);
+        var commandProcessor = Path.Combine(Environment.SystemDirectory, "cmd.exe");
+        return BuildStartupCommand(executablePath, dotnetRoot, commandProcessor, launcherPath);
     }
 
     internal static bool TryResolveExecutablePath(out string executablePath, out string? errorMessage)
@@ -182,7 +194,8 @@ public sealed class WindowsRegistryAutoStartService : IAutoStartService
     /// <summary>
     /// Prefers the live process path when it is already SecretBase.App.exe.
     /// Under <c>dotnet run</c> / run.ps1, falls back to the built apphost beside AppContext.BaseDirectory
-    /// so login registration still starts SecretBase.App.exe (via the hidden launcher script).
+    /// so login registration still starts SecretBase.App.exe (directly, or via a cmd script when
+    /// only a user-local .NET 10 runtime exists).
     /// </summary>
     internal static IEnumerable<string> EnumerateCandidateExecutablePaths()
     {
@@ -227,7 +240,7 @@ public sealed class WindowsRegistryAutoStartService : IAutoStartService
         }
 
         var trimmed = command.Trim();
-        if (TryExtractQuotedPath(trimmed, AppHostLaunchScript.FileName, out var launcherPath)
+        if (AppHostLaunchScript.TryExtractScriptPath(trimmed, out var launcherPath)
             && File.Exists(launcherPath))
         {
             try
@@ -235,6 +248,10 @@ public sealed class WindowsRegistryAutoStartService : IAutoStartService
                 return AppHostLaunchScript.TryReadExecutable(AppHostLaunchScript.ReadText(launcherPath), out executablePath);
             }
             catch (IOException)
+            {
+                return false;
+            }
+            catch (UnauthorizedAccessException)
             {
                 return false;
             }
@@ -268,36 +285,5 @@ public sealed class WindowsRegistryAutoStartService : IAutoStartService
             Path.GetFullPath(left),
             Path.GetFullPath(right),
             StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static bool TryExtractQuotedPath(string command, string fileName, out string path)
-    {
-        path = string.Empty;
-        var search = 0;
-        while (search < command.Length)
-        {
-            var start = command.IndexOf('"', search);
-            if (start < 0)
-            {
-                return false;
-            }
-
-            var end = command.IndexOf('"', start + 1);
-            if (end < 0)
-            {
-                return false;
-            }
-
-            var candidate = command[(start + 1)..end];
-            if (candidate.EndsWith(fileName, StringComparison.OrdinalIgnoreCase))
-            {
-                path = candidate;
-                return true;
-            }
-
-            search = end + 1;
-        }
-
-        return false;
     }
 }

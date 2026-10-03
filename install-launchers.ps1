@@ -64,44 +64,82 @@ if (-not $exe) {
 $workDir = Split-Path -Parent $exe
 $launcherDir = Join-Path $env:LOCALAPPDATA "SecretBase"
 New-Item -ItemType Directory -Force -Path $launcherDir | Out-Null
-$vbsPath = Join-Path $launcherDir "launch-secretbase.vbs"
-$dotnetRoot = Join-Path $env:LOCALAPPDATA "Microsoft\dotnet"
-$dotnetBlock = ""
-if (Test-Path (Join-Path $dotnetRoot "dotnet.exe")) {
-    $dotnetBlock = "env(""DOTNET_ROOT"") = ""$dotnetRoot""`r`n" +
-        "env(""DOTNET_ROOT(x64)"") = env(""DOTNET_ROOT"")`r`n" +
-        "env(""PATH"") = env(""DOTNET_ROOT"") & "";"" & env(""PATH"")`r`n"
-}
-$template = @'
-Option Explicit
-' SecretBase.App.exe=__EXE__
-Dim shell, env, exe, workDir, args, i, quote
-Set shell = CreateObject("WScript.Shell")
-Set env = shell.Environment("Process")
-quote = Chr(34)
-__DOTNET__exe = "__EXE__"
-workDir = "__WORKDIR__"
-shell.CurrentDirectory = workDir
-args = ""
-For i = 0 To WScript.Arguments.Count - 1
-  args = args & " " & quote & WScript.Arguments(i) & quote
-Next
-shell.Run quote & exe & quote & args, 1, False
-'@
-$vbs = $template.Replace('__EXE__', $exe).Replace('__WORKDIR__', $workDir).Replace('__DOTNET__', $dotnetBlock)
-# Shift-JIS. UTF-16 is valid for wscript but Notepad on Japanese Windows shows it as mojibake.
-$shiftJis = [System.Text.Encoding]::GetEncoding(932)
-[System.IO.File]::WriteAllText($vbsPath, $vbs, $shiftJis)
+$cmdPath = Join-Path $launcherDir "launch-secretbase.cmd"
+$legacyVbs = Join-Path $launcherDir "launch-secretbase.vbs"
 
-$wscript = Join-Path $env:SystemRoot "System32\wscript.exe"
+function Test-Net10Runtime([string]$root) {
+    $shared = Join-Path $root "shared\Microsoft.NETCore.App"
+    if (-not (Test-Path $shared)) {
+        return $false
+    }
+
+    return [bool](Get-ChildItem $shared -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -like "10.*" })
+}
+
+$machineDotnet = Join-Path $env:ProgramFiles "dotnet"
+$userDotnetRoot = Join-Path $env:LOCALAPPDATA "Microsoft\dotnet"
+$machineHasNet10 = Test-Net10Runtime $machineDotnet
+$userHasNet10 = Test-Net10Runtime $userDotnetRoot
+# Same rule as AppHostLaunchScript.SelectDotNetRoot: only force DOTNET_ROOT when the
+# user-local folder is the one that actually has .NET 10 and Program Files does not.
+$dotnetRoot = $null
+if ((-not $machineHasNet10) -and $userHasNet10) {
+    $dotnetRoot = $userDotnetRoot.TrimEnd('\')
+}
+
+if (Test-Path $legacyVbs) {
+    Remove-Item -Force $legacyVbs
+}
+
+$shortcutTarget = $exe
+$shortcutArgs = ""
+$windowStyle = 1
+$launchMode = "direct exe"
+if ($dotnetRoot) {
+    $logDir = Join-Path $env:LOCALAPPDATA "SecretBase\logs"
+    $template = @"
+@echo off
+setlocal EnableExtensions
+rem SecretBase.App.exe=$exe
+set "SB_EXE=$exe"
+set "SB_DIR=$workDir"
+set "DOTNET_ROOT=$dotnetRoot"
+set "DOTNET_ROOT(x64)=%DOTNET_ROOT%"
+set "PATH=%DOTNET_ROOT%;%PATH%"
+set "SB_LOG=$logDir"
+if not exist "%SB_LOG%" mkdir "%SB_LOG%"
+> "%SB_LOG%\launch-last.txt" echo Secret Base launcher
+>> "%SB_LOG%\launch-last.txt" echo exe=%SB_EXE%
+>> "%SB_LOG%\launch-last.txt" echo DOTNET_ROOT=%DOTNET_ROOT%
+if not exist "%SB_EXE%" (
+  echo Secret Base executable was not found:
+  echo %SB_EXE%
+  pause
+  exit /b 1
+)
+start "" /D "%SB_DIR%" "%SB_EXE%" %*
+exit /b 0
+"@
+    # Shift-JIS, no BOM. cmd.exe on Japanese Windows reads this. UTF-16 looks corrupt in Notepad.
+    $shiftJis = [System.Text.Encoding]::GetEncoding(932)
+    $cmdText = ($template -replace "`r`n", "`n" -replace "`n", "`r`n")
+    [System.IO.File]::WriteAllText($cmdPath, $cmdText, $shiftJis)
+    $shortcutTarget = Join-Path $env:SystemRoot "System32\cmd.exe"
+    $shortcutArgs = "/d /c `"$cmdPath`""
+    $windowStyle = 7
+    $launchMode = "cmd script sets DOTNET_ROOT"
+} elseif (Test-Path $cmdPath) {
+    Remove-Item -Force $cmdPath
+}
+
 $shell = New-Object -ComObject WScript.Shell
 
 function New-SecretBaseShortcut([string]$path) {
     $shortcut = $shell.CreateShortcut($path)
-    $shortcut.TargetPath = $wscript
-    $shortcut.Arguments = "//B //Nologo `"$vbsPath`""
+    $shortcut.TargetPath = $shortcutTarget
+    $shortcut.Arguments = $shortcutArgs
     $shortcut.WorkingDirectory = $workDir
-    $shortcut.WindowStyle = 1
+    $shortcut.WindowStyle = $windowStyle
     $shortcut.Description = "Secret Base — personal desktop overlay"
     $shortcut.IconLocation = "$exe,0"
     $shortcut.Save()
@@ -117,11 +155,26 @@ Write-Host "Shortcuts created:"
 Write-Host "  Start Menu: $startMenu"
 Write-Host "  Desktop:    $desktop"
 $built = (Get-Item $exe).LastWriteTime.ToString("yyyy-MM-dd HH:mm:ss")
-Write-Host "  Target:     $exe"
+Write-Host "  Shortcut:   $shortcutTarget"
+if ($shortcutArgs) {
+    Write-Host "  Arguments:  $shortcutArgs"
+}
+Write-Host "  Starts:     $exe"
 Write-Host "  Built:      $built"
-Write-Host "  Launcher:   $vbsPath"
+Write-Host "  Launch:     $launchMode"
+if ($machineHasNet10) {
+    Write-Host "  .NET 10:    $machineDotnet"
+} elseif ($userHasNet10) {
+    Write-Host "  .NET 10:    $userDotnetRoot (Explorer does not see this unless DOTNET_ROOT is set)"
+} else {
+    Write-Host "  .NET 10:    NOT FOUND under Program Files or %LocalAppData%\Microsoft\dotnet"
+    Write-Host "              The exe shows Windows' own '.NET is required' dialog when the runtime is missing."
+}
 if ($commit) {
     Write-Host "  Commit:     $commit"
 }
 Write-Host ""
 Write-Host "Double-click either shortcut to launch. In the app, open Setup (gear) to enable Start at login."
+Write-Host "Opening SecretBase.App.exe in Notepad always looks garbled. It is a program, not a text file."
+Write-Host "If the shortcut still flashes: end any SecretBase.App.exe in Task Manager, then open the shortcut again."
+Write-Host "After a launch, read %LocalAppData%\SecretBase\logs\startup-last.txt and launch-attempt.txt."

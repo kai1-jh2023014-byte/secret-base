@@ -25,6 +25,7 @@ public partial class App : Application
 
     public App()
     {
+        TryWriteAttempt();
         InitializeComponent();
     }
 
@@ -39,11 +40,52 @@ public partial class App : Application
             {
                 bootstrapLogger.Info("startup", "Auto-start launch detected.");
             }
-            _singleInstance = new WindowsMutexSingleInstanceGuard();
-            if (!_singleInstance.TryAcquire())
+            var guard = new WindowsMutexSingleInstanceGuard();
+            _singleInstance = guard;
+            if (!guard.TryAcquire())
             {
-                bootstrapLogger.Info("startup", "Another Secret Base instance is already running. Asking it to show.");
-                WindowsInstanceActivation.Signal();
+                var mutexError = guard.FailureMessage;
+                var alreadyVisible = string.Equals(
+                    StartupTrace.ReadStatus(AppDataPaths.LogsDirectory),
+                    StartupTrace.VisibleStatus,
+                    StringComparison.Ordinal);
+                bootstrapLogger.Info(
+                    "startup",
+                    string.IsNullOrWhiteSpace(mutexError)
+                        ? "Another Secret Base instance is already running. Asking it to show."
+                        : "Single-instance lock could not be opened. " + mutexError);
+                if (!alreadyVisible || !string.IsNullOrWhiteSpace(mutexError))
+                {
+                    TryWriteStartupStatus(
+                        string.IsNullOrWhiteSpace(mutexError) ? "already-running" : "mutex-error",
+                        mutexError);
+                }
+                if (!string.IsNullOrWhiteSpace(mutexError))
+                {
+                    ShowLaunchNotice(
+                        "Secret Base could not take its single-instance lock, so this launch closed."
+                        + Environment.NewLine + Environment.NewLine
+                        + mutexError
+                        + Environment.NewLine + Environment.NewLine
+                        + "End SecretBase.App.exe in Task Manager, then open the desktop shortcut again."
+                        + Environment.NewLine
+                        + TracePath());
+                }
+                else
+                {
+                    var signaled = WindowsInstanceActivation.Signal();
+                    if (!signaled || !alreadyVisible)
+                    {
+                        ShowLaunchNotice(
+                            "Secret Base is already running, so this launch closed."
+                            + Environment.NewLine + Environment.NewLine
+                            + "If no widgets are on the desktop, the previous window is behind the wallpaper or still starting."
+                            + " Open Task Manager, end SecretBase.App.exe, then open the desktop shortcut again."
+                            + Environment.NewLine + Environment.NewLine
+                            + TracePath());
+                    }
+                }
+
                 _singleInstance.Dispose();
                 _singleInstance = null;
                 bootstrapLogger.Dispose();
@@ -51,6 +93,7 @@ public partial class App : Application
                 return;
             }
 
+            TryWriteStartupStatus("process-start", null);
             RunStartup(bootstrapLogger);
         }
         catch (Exception ex)
@@ -65,10 +108,25 @@ public partial class App : Application
                 // Logging must not prevent shutdown.
             }
 
+            TryWriteStartupStatus("failed", ex.ToString());
+
             try
             {
                 var silent = StartupLaunchMode.IsAutoStartLaunch;
-                StartupFailurePresenter.ShowBlocking(ex.Message, AppDataPaths.RootDirectory, silentUi: silent);
+                var shown = !silent && ShowLaunchNotice(
+                    "Secret Base could not start."
+                    + Environment.NewLine + Environment.NewLine
+                    + ex.Message
+                    + Environment.NewLine + Environment.NewLine
+                    + "Your data was not deleted."
+                    + Environment.NewLine
+                    + "Data folder: " + AppDataPaths.RootDirectory
+                    + Environment.NewLine
+                    + TracePath());
+                if (!shown)
+                {
+                    StartupFailurePresenter.ShowBlocking(ex.Message, AppDataPaths.RootDirectory, silentUi: silent);
+                }
             }
             catch
             {
@@ -83,6 +141,51 @@ public partial class App : Application
             {
                 Environment.Exit(1);
             }
+        }
+    }
+
+    private static bool ShowLaunchNotice(string message)
+    {
+        if (StartupLaunchMode.IsAutoStartLaunch)
+        {
+            return false;
+        }
+
+        try
+        {
+            WindowsUserNotice.Show(message);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static string TracePath() =>
+        "Log: " + Path.Combine(AppDataPaths.LogsDirectory, StartupTrace.FileName);
+
+    private static void TryWriteAttempt()
+    {
+        try
+        {
+            StartupTrace.WriteAttempt(AppDataPaths.LogsDirectory);
+        }
+        catch
+        {
+            // A missing trace must not block startup.
+        }
+    }
+
+    private static void TryWriteStartupStatus(string status, string? detail)
+    {
+        try
+        {
+            StartupTrace.Write(AppDataPaths.LogsDirectory, status, detail);
+        }
+        catch
+        {
+            // A missing trace must not block startup.
         }
     }
 
@@ -157,10 +260,15 @@ public partial class App : Application
         if (_window is MainWindow mainWindow)
         {
             _activation = WindowsInstanceActivation.Listen(() =>
-                mainWindow.DispatcherQueue.TryEnqueue(mainWindow.PresentExistingInstance));
+                mainWindow.DispatcherQueue.TryEnqueue(() =>
+                {
+                    mainWindow.PresentExistingInstance();
+                    TryWriteStartupStatus(StartupTrace.VisibleStatus, null);
+                }));
         }
 
-        _logger.Info("overlay", "Host activated; Blocks + widgets; SetWindowRgn input; HWND_BOTTOM Z-order.");
+        _logger.Info("overlay", "Host activated; Blocks + widgets; SetWindowRgn input; z-order above the shell desktop.");
+        TryWriteStartupStatus(StartupTrace.VisibleStatus, null);
     }
 
     private static FileAppLogger? TryCreateBootstrapLogger()

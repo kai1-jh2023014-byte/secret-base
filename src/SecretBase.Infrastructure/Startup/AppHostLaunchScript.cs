@@ -3,14 +3,19 @@ using System.Text;
 namespace SecretBase.Infrastructure.Startup;
 
 /// <summary>
-/// Hidden launcher script so Explorer shortcuts and login auto-start can find a
-/// user-local .NET install. Double-clicking SecretBase.App.exe directly does not
-/// inherit DOTNET_ROOT, so the apphost flashes and exits.
+/// How Explorer and the logon Run key start SecretBase.App.exe.
+/// The apphost exits before any window exists when it cannot find the .NET runtime.
+/// Explorer does not inherit a terminal's DOTNET_ROOT. Forcing DOTNET_ROOT at a
+/// user-local folder that lacks the shared framework also hides a working machine install,
+/// and the exe flashes closed. A hidden wscript host swallows that error.
 /// </summary>
 public static class AppHostLaunchScript
 {
-    public const string FileName = "launch-secretbase.vbs";
-    public const string ExecutableMarkerPrefix = "' SecretBase.App.exe=";
+    public const string FileName = "launch-secretbase.cmd";
+    public const string LegacyFileName = "launch-secretbase.vbs";
+    public const string ExecutableMarkerPrefix = "rem SecretBase.App.exe=";
+    public const string LegacyExecutableMarkerPrefix = "' SecretBase.App.exe=";
+    public const string RequiredRuntimePrefix = "10.";
 
     static AppHostLaunchScript()
     {
@@ -18,47 +23,108 @@ public static class AppHostLaunchScript
     }
 
     /// <summary>
-    /// Shift-JIS (code page 932). Japanese Notepad and wscript both use this by default.
-    /// UTF-16 is valid for wscript but looks corrupted when opened as the usual text encoding.
+    /// Shift-JIS (code page 932), no BOM. Japanese <c>cmd.exe</c> reads this encoding.
+    /// A BOM or UTF-16 file looks corrupt in Notepad and can make <c>cmd</c> exit immediately.
     /// </summary>
     public static Encoding FileEncoding => Encoding.GetEncoding(932);
 
-    public static string Build(string executablePath, string? dotnetRoot)
+    /// <summary>
+    /// User-local root to publish as DOTNET_ROOT, or null when the exe should start directly.
+    /// </summary>
+    public static string? SelectDotNetRoot(
+        bool machineHasRequiredRuntime,
+        bool userLocalHasRequiredRuntime,
+        string? userLocalRoot)
+    {
+        if (machineHasRequiredRuntime || !userLocalHasRequiredRuntime || string.IsNullOrWhiteSpace(userLocalRoot))
+        {
+            return null;
+        }
+
+        return userLocalRoot.Trim().TrimEnd('\\', '/');
+    }
+
+    public static bool SharedFrameworkPresent(string? dotnetRoot, string versionPrefix)
+    {
+        if (string.IsNullOrWhiteSpace(dotnetRoot) || string.IsNullOrWhiteSpace(versionPrefix))
+        {
+            return false;
+        }
+
+        var shared = Path.Combine(dotnetRoot, "shared", "Microsoft.NETCore.App");
+        if (!Directory.Exists(shared))
+        {
+            return false;
+        }
+
+        foreach (var directory in Directory.EnumerateDirectories(shared))
+        {
+            var name = Path.GetFileName(directory);
+            if (name.StartsWith(versionPrefix, StringComparison.Ordinal))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public static string? ResolveDotNetRootForExplorerLaunch()
+    {
+        var machine = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "dotnet");
+        var user = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "Microsoft",
+            "dotnet");
+        return SelectDotNetRoot(
+            SharedFrameworkPresent(machine, RequiredRuntimePrefix),
+            SharedFrameworkPresent(user, RequiredRuntimePrefix),
+            user);
+    }
+
+    public static string Build(string executablePath, string dotnetRoot)
     {
         var exe = executablePath.Trim();
         var workDir = DirectoryOf(exe);
-        var root = string.IsNullOrWhiteSpace(dotnetRoot)
-            ? string.Empty
-            : dotnetRoot.Trim().TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        var root = dotnetRoot.Trim().TrimEnd('\\', '/');
+        var logDir = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "SecretBase",
+            "logs");
 
-        // Chr(34) keeps the file readable. A pile of quotes looks like mojibake in Notepad.
+        // `start` returns immediately so the console does not stay open while the app runs.
         var script = new StringBuilder();
-        script.AppendLine("Option Explicit");
-        script.AppendLine(ExecutableMarkerPrefix + exe);
-        script.AppendLine("Dim shell, env, exe, workDir, args, i, quote");
-        script.AppendLine("Set shell = CreateObject(\"WScript.Shell\")");
-        script.AppendLine("Set env = shell.Environment(\"Process\")");
-        script.AppendLine("quote = Chr(34)");
-        if (!string.IsNullOrEmpty(root))
-        {
-            script.Append("env(\"DOTNET_ROOT\") = ").AppendLine(Vb(root));
-            script.AppendLine("env(\"DOTNET_ROOT(x64)\") = env(\"DOTNET_ROOT\")");
-            script.AppendLine("env(\"PATH\") = env(\"DOTNET_ROOT\") & \";\" & env(\"PATH\")");
-        }
-
-        script.Append("exe = ").AppendLine(Vb(exe));
-        script.Append("workDir = ").AppendLine(Vb(workDir));
-        script.AppendLine("shell.CurrentDirectory = workDir");
-        script.AppendLine("args = \"\"");
-        script.AppendLine("For i = 0 To WScript.Arguments.Count - 1");
-        script.AppendLine("  args = args & \" \" & quote & WScript.Arguments(i) & quote");
-        script.AppendLine("Next");
-        script.AppendLine("shell.Run quote & exe & quote & args, 1, False");
+        script.AppendLine("@echo off");
+        script.AppendLine("setlocal EnableExtensions");
+        script.Append(ExecutableMarkerPrefix).AppendLine(exe);
+        script.Append("set \"SB_EXE=").Append(exe).AppendLine("\"");
+        script.Append("set \"SB_DIR=").Append(workDir).AppendLine("\"");
+        script.Append("set \"DOTNET_ROOT=").Append(root).AppendLine("\"");
+        script.AppendLine("set \"DOTNET_ROOT(x64)=%DOTNET_ROOT%\"");
+        script.AppendLine("set \"PATH=%DOTNET_ROOT%;%PATH%\"");
+        script.Append("set \"SB_LOG=").Append(logDir).AppendLine("\"");
+        script.AppendLine("if not exist \"%SB_LOG%\" mkdir \"%SB_LOG%\"");
+        script.AppendLine("> \"%SB_LOG%\\launch-last.txt\" echo Secret Base launcher");
+        script.AppendLine(">> \"%SB_LOG%\\launch-last.txt\" echo exe=%SB_EXE%");
+        script.AppendLine(">> \"%SB_LOG%\\launch-last.txt\" echo DOTNET_ROOT=%DOTNET_ROOT%");
+        script.AppendLine("if not exist \"%SB_EXE%\" (");
+        script.AppendLine("  echo Secret Base executable was not found:");
+        script.AppendLine("  echo %SB_EXE%");
+        script.AppendLine("  pause");
+        script.AppendLine("  exit /b 1");
+        script.AppendLine(")");
+        script.AppendLine("start \"\" /D \"%SB_DIR%\" \"%SB_EXE%\" %*");
+        script.AppendLine("exit /b 0");
         return script.ToString();
     }
 
-    public static void WriteFile(string launcherPath, string executablePath, string? dotnetRoot)
+    public static void WriteFile(string launcherPath, string executablePath, string dotnetRoot)
     {
+        if (string.IsNullOrWhiteSpace(dotnetRoot))
+        {
+            throw new ArgumentException("A command launcher is only written when DOTNET_ROOT must be set.", nameof(dotnetRoot));
+        }
+
         var directory = Path.GetDirectoryName(launcherPath);
         if (!string.IsNullOrWhiteSpace(directory))
         {
@@ -76,11 +142,25 @@ public static class AppHostLaunchScript
             return Encoding.Unicode.GetString(bytes);
         }
 
+        if (bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF)
+        {
+            return Encoding.UTF8.GetString(bytes);
+        }
+
         return FileEncoding.GetString(bytes);
     }
 
-    public static string BuildStartupCommand(string wscriptPath, string launcherScriptPath) =>
-        $"\"{wscriptPath}\" //B //Nologo \"{launcherScriptPath}\" --autostart";
+    public static string BuildDirectStartupCommand(string executablePath) =>
+        $"\"{executablePath.Trim()}\" --autostart";
+
+    public static string BuildScriptStartupCommand(string commandProcessorPath, string scriptPath)
+    {
+        var script = QuoteIfNeeded(scriptPath.Trim());
+        return $"\"{commandProcessorPath.Trim()}\" /d /c {script} --autostart";
+    }
+
+    public static string BuildShortcutArguments(string scriptPath) =>
+        $"/d /c {QuoteIfNeeded(scriptPath.Trim())}";
 
     public static bool TryReadExecutable(string? script, out string executablePath)
     {
@@ -93,35 +173,62 @@ public static class AppHostLaunchScript
         foreach (var raw in script.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries))
         {
             var line = raw.Trim();
-            if (!line.StartsWith(ExecutableMarkerPrefix, StringComparison.Ordinal))
+            string? value = null;
+            if (line.StartsWith(ExecutableMarkerPrefix, StringComparison.Ordinal))
+            {
+                value = line[ExecutableMarkerPrefix.Length..];
+            }
+            else if (line.StartsWith(LegacyExecutableMarkerPrefix, StringComparison.Ordinal))
+            {
+                value = line[LegacyExecutableMarkerPrefix.Length..];
+            }
+
+            if (value is null)
             {
                 continue;
             }
 
-            executablePath = line[ExecutableMarkerPrefix.Length..].Trim();
+            executablePath = value.Trim();
             return executablePath.Length > 0;
         }
 
         return false;
     }
 
-    public static string? FindUserDotNetRoot()
+    public static bool TryExtractScriptPath(string? command, out string path)
     {
-        var fromEnv = Environment.GetEnvironmentVariable("DOTNET_ROOT");
-        if (IsDotNetRoot(fromEnv))
+        path = string.Empty;
+        if (string.IsNullOrWhiteSpace(command))
         {
-            return Path.GetFullPath(fromEnv!);
+            return false;
         }
 
-        var local = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "Microsoft",
-            "dotnet");
-        return IsDotNetRoot(local) ? Path.GetFullPath(local) : null;
+        if (TryExtractPathEndingWith(command, FileName, out path))
+        {
+            return true;
+        }
+
+        return TryExtractPathEndingWith(command, LegacyFileName, out path);
     }
 
-    private static bool IsDotNetRoot(string? path) =>
-        !string.IsNullOrWhiteSpace(path) && File.Exists(Path.Combine(path, "dotnet.exe"));
+    private static bool TryExtractPathEndingWith(string command, string fileName, out string path)
+    {
+        path = string.Empty;
+        var index = command.IndexOf(fileName, StringComparison.OrdinalIgnoreCase);
+        if (index < 0)
+        {
+            return false;
+        }
+
+        var start = index;
+        while (start > 0 && command[start - 1] != '"' && !char.IsWhiteSpace(command[start - 1]))
+        {
+            start--;
+        }
+
+        path = command[start..(index + fileName.Length)];
+        return path.Length > 0;
+    }
 
     private static string DirectoryOf(string path)
     {
@@ -130,5 +237,6 @@ public static class AppHostLaunchScript
         return index > 0 ? trimmed[..index] : string.Empty;
     }
 
-    private static string Vb(string value) => "\"" + value.Replace("\"", "\"\"", StringComparison.Ordinal) + "\"";
+    private static string QuoteIfNeeded(string value) =>
+        value.IndexOfAny([' ', '&', '(', ')', '^']) >= 0 ? "\"" + value + "\"" : value;
 }

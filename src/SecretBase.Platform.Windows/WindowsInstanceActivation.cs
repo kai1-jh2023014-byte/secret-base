@@ -53,7 +53,7 @@ public sealed class WindowsInstanceActivation : IDisposable
         _thread.Start();
     }
 
-    public static void Signal(string? eventName = null)
+    public static bool Signal(string? eventName = null)
     {
         try
         {
@@ -62,14 +62,15 @@ public sealed class WindowsInstanceActivation : IDisposable
                 EventResetMode.AutoReset,
                 eventName ?? DefaultEventName);
             handle.Set();
+            return true;
         }
         catch (UnauthorizedAccessException)
         {
-            // Another user owns the name. The second process still exits.
+            return false;
         }
         catch (WaitHandleCannotBeOpenedException)
         {
-            // Nothing to wake.
+            return false;
         }
     }
 

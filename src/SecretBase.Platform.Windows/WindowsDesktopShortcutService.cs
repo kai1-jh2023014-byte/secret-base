@@ -49,22 +49,36 @@ public sealed class WindowsDesktopShortcutService
                 Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),
                 ShortcutFileName);
 
-            var launcherPath = Path.Combine(AppDataPaths.RootDirectory, AppHostLaunchScript.FileName);
-            AppHostLaunchScript.WriteFile(launcherPath, exe, AppHostLaunchScript.FindUserDotNetRoot());
-
-            var wscript = Path.Combine(Environment.SystemDirectory, "wscript.exe");
-            if (!File.Exists(wscript))
+            const string description = "Secret Base — personal desktop overlay";
+            var dotnetRoot = AppHostLaunchScript.ResolveDotNetRootForExplorerLaunch();
+            if (dotnetRoot is null)
             {
-                errorMessage = "Windows Script Host (wscript.exe) was not found.";
-                return false;
+                DeleteLauncherScripts();
+                CreateShortcut(startMenu, exe, string.Empty, workDir, description, exe);
+                CreateShortcut(desktop, exe, string.Empty, workDir, description, exe);
+                detail = $"Start Menu and Desktop shortcuts launch:{Environment.NewLine}{exe}";
+                return true;
             }
 
-            var arguments = $"//B //Nologo \"{launcherPath}\"";
-            const string description = "Secret Base — personal desktop overlay";
-            CreateShortcut(startMenu, wscript, arguments, workDir, description, exe);
-            CreateShortcut(desktop, wscript, arguments, workDir, description, exe);
+            var launcherPath = Path.Combine(AppDataPaths.RootDirectory, AppHostLaunchScript.FileName);
+            AppHostLaunchScript.WriteFile(launcherPath, exe, dotnetRoot);
+            TryDelete(Path.Combine(AppDataPaths.RootDirectory, AppHostLaunchScript.LegacyFileName));
 
-            detail = $"Start Menu and Desktop shortcuts launch:{Environment.NewLine}{exe}";
+            var commandProcessor = Path.Combine(Environment.SystemDirectory, "cmd.exe");
+            if (!File.Exists(commandProcessor))
+            {
+                CreateShortcut(startMenu, exe, string.Empty, workDir, description, exe);
+                CreateShortcut(desktop, exe, string.Empty, workDir, description, exe);
+                detail = $"Start Menu and Desktop shortcuts launch:{Environment.NewLine}{exe}";
+                return true;
+            }
+
+            var arguments = AppHostLaunchScript.BuildShortcutArguments(launcherPath);
+            CreateShortcut(startMenu, commandProcessor, arguments, workDir, description, exe);
+            CreateShortcut(desktop, commandProcessor, arguments, workDir, description, exe);
+
+            detail =
+                $"Start Menu and Desktop shortcuts launch:{Environment.NewLine}{exe}{Environment.NewLine}DOTNET_ROOT={dotnetRoot}";
             return true;
         }
         catch (Exception ex)
@@ -121,6 +135,30 @@ public sealed class WindowsDesktopShortcutService
             {
                 Marshal.FinalReleaseComObject(shell);
             }
+        }
+    }
+
+    private static void DeleteLauncherScripts()
+    {
+        TryDelete(Path.Combine(AppDataPaths.RootDirectory, AppHostLaunchScript.FileName));
+        TryDelete(Path.Combine(AppDataPaths.RootDirectory, AppHostLaunchScript.LegacyFileName));
+    }
+
+    private static void TryDelete(string path)
+    {
+        try
+        {
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+        }
+        catch (IOException)
+        {
+            // An old launcher left in place is unused once the shortcut points at the exe.
+        }
+        catch (UnauthorizedAccessException)
+        {
         }
     }
 }

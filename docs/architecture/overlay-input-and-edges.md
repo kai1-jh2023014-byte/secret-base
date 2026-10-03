@@ -18,7 +18,7 @@ App
      │    ├─ DwmSetWindowAttribute(BORDER/CAPTION COLOR_NONE, DONOTROUND, SYSTEMBACKDROP NONE)
      │    ├─ SetWindowPos(SWP_FRAMECHANGED)
      │    ├─ SetWindowSubclass (WM_ERASEBKGND / WM_DWMCOMPOSITIONCHANGED)
-     │    └─ SetWindowPos(HWND_BOTTOM)
+     │    └─ SetWindowPos (just above the shell desktop; HWND_BOTTOM only if that window is missing)
      └─ RootFrame → DesktopPage
           └─ RootGrid / WidgetCanvas (Transparent)
                └─ WidgetFrame[] + FABs
