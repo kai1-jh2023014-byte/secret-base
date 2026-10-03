@@ -12,7 +12,7 @@ Desktop
   ├── Secret Base Overlay           ← HWND shaped to widgets + FABs (SetWindowRgn)
   │     ├── Widgets (Clock, Text, Web, Calendar, Music, Creative, AI, …)
   │     ├── Blocks
-  │     └── FABs (+ Add Widget, Blk, Aa, Grid) + Secret Base AI command bar
+  │     └── FABs (+ Add Widget, Blk, Aa, Grid) + taskbar shelf (clock, focus, next, AI)
   └── Other application windows / Taskbar / Windows Search (unchanged)
 ```
 

@@ -282,7 +282,7 @@ public sealed partial class DesktopPage : Page
         DispatcherQueue.TryEnqueue(async () => await MaybeShowOnboardingAsync());
         _logger.Info("desktop", $"Overlay desktop shown for room '{_layout.RoomId}' with {_layout.Widgets.Count} widget(s), {_layout.Blocks.Count} block(s).");
         _logger.Info("widget", "Widget hosts ready (Clock, Text, Calendar, Music, Creative, Workspace, Apps, Base AI).");
-        _logger.Info("assistant", "Taskbar AI chat bar ready (Ctrl+Shift+K). Does not replace Windows Search.");
+        _logger.Info("assistant", "Taskbar shelf ready (clock, focus, next, AI). Ctrl+Shift+K focuses the field. Does not replace the Windows taskbar.");
         _logger.Info("block", "Block host ready (use Blk button to add; drop + drag icons inside a Block).");
         _logger.Info("theme", "Theme editor ready (Aa button) — colors apply to all widgets and Blocks.");
         _logger.Info("layout", "Arrange ready (Grid button) — even placement for widgets and blocks.");
