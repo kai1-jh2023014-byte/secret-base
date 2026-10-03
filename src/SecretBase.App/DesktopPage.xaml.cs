@@ -1,4 +1,5 @@
 using System.Globalization;
+using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
@@ -93,6 +94,9 @@ public sealed partial class DesktopPage : Page
     private FocusSessionStore? _focus;
     private IBaseExperienceServices? _baseExperience;
     private IReadOnlyList<CalendarEvent> _upcomingEvents = [];
+    private IReadOnlyList<TodoItem> _shelfTodos = [];
+    private DispatcherQueueTimer? _taskbarShelfTimer;
+    private int _shelfTodoTicks;
     private IAutoStartService? _autoStart;
     private IAppLaunchSettingsStore? _launchSettingsStore;
     private bool _autoStartToggleSync;
@@ -278,7 +282,7 @@ public sealed partial class DesktopPage : Page
         DispatcherQueue.TryEnqueue(async () => await MaybeShowOnboardingAsync());
         _logger.Info("desktop", $"Overlay desktop shown for room '{_layout.RoomId}' with {_layout.Widgets.Count} widget(s), {_layout.Blocks.Count} block(s).");
         _logger.Info("widget", "Widget hosts ready (Clock, Text, Calendar, Music, Creative, Workspace, Apps, Base AI).");
-        _logger.Info("assistant", "Taskbar AI chat bar ready (Ctrl+Shift+K). Does not replace Windows Search.");
+        _logger.Info("assistant", "Taskbar shelf ready (clock, focus, next, AI). Ctrl+Shift+K focuses the field. Does not replace the Windows taskbar.");
         _logger.Info("block", "Block host ready (use Blk button to add; drop + drag icons inside a Block).");
         _logger.Info("theme", "Theme editor ready (Aa button) — colors apply to all widgets and Blocks.");
         _logger.Info("layout", "Arrange ready (Grid button) — even placement for widgets and blocks.");
@@ -369,6 +373,37 @@ public sealed partial class DesktopPage : Page
         }
 
         TaskbarAiChat.Loaded += (_, _) => SyncInteractiveInputRegions();
+        StartTaskbarShelfTimer();
+    }
+
+    private void StartTaskbarShelfTimer()
+    {
+        RefreshTaskbarShelf(forceTodos: true);
+        _taskbarShelfTimer?.Stop();
+        _taskbarShelfTimer = DispatcherQueue.CreateTimer();
+        _taskbarShelfTimer.Interval = TimeSpan.FromSeconds(1);
+        _taskbarShelfTimer.Tick += (_, _) => RefreshTaskbarShelf(forceTodos: false);
+        _taskbarShelfTimer.Start();
+    }
+
+    private void RefreshTaskbarShelf(bool forceTodos)
+    {
+        if (TaskbarAiChat.Visibility != Visibility.Visible)
+        {
+            return;
+        }
+
+        if (forceTodos || _shelfTodoTicks++ % 15 == 0)
+        {
+            _shelfTodos = _todoStore?.LoadOrCreate().OpenItems ?? [];
+        }
+
+        var now = (_timeProvider ?? new SystemTimeProvider()).GetLocalNow();
+        TaskbarAiChat.ApplyShelf(TaskbarShelfComposer.Compose(
+            now,
+            _focus?.Current,
+            _shelfTodos,
+            _upcomingEvents));
     }
 
     private void InitializeAutoStartToggle()
@@ -1657,6 +1692,7 @@ public sealed partial class DesktopPage : Page
             if (result.Succeeded)
             {
                 _upcomingEvents = result.Events.ToList();
+                RefreshTaskbarShelf(forceTodos: false);
             }
         }
         catch (Exception ex)

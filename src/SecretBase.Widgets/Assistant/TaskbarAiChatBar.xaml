@@ -8,13 +8,13 @@
     mc:Ignorable="d">
 
     <!--
-      Overlay AI command bar — sits in the work area just above the Windows taskbar.
-      Does not replace Explorer SearchHost / Windows Search.
+      Overlay shelf along the bottom of the work area, just above the Windows taskbar.
+      Clock, focus, and the next item sit beside the AI field. Does not replace the taskbar or Windows Search.
     -->
     <Grid
         x:Name="Root"
-        MinWidth="420"
-        MaxWidth="640"
+        HorizontalAlignment="Stretch"
+        MinWidth="520"
         RowSpacing="8">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -76,49 +76,92 @@
         <Border
             x:Name="Pill"
             Grid.Row="1"
-            Padding="12,8"
-            CornerRadius="22"
+            Padding="16,8"
+            CornerRadius="18"
             BorderThickness="1"
-            MinHeight="44">
-            <Grid ColumnSpacing="8">
+            MinHeight="56">
+            <Grid ColumnSpacing="16">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <StackPanel
+                    x:Name="ClockColumn"
                     Grid.Column="0"
                     VerticalAlignment="Center"
+                    MinWidth="88"
                     Spacing="0">
                     <TextBlock
-                        x:Name="BrandText"
-                        Text="Base"
-                        FontSize="10"
-                        CharacterSpacing="40"
+                        x:Name="ClockText"
+                        Text="--:--"
+                        FontSize="20"
                         FontWeight="SemiBold" />
                     <TextBlock
-                        x:Name="ProviderText"
-                        Text="AI"
-                        FontSize="10"
-                        Opacity="0.8" />
+                        x:Name="DateText"
+                        Text=""
+                        FontSize="11"
+                        Opacity="0.75" />
                 </StackPanel>
-                <TextBox
-                    x:Name="InputBox"
-                    Grid.Column="1"
-                    PlaceholderText="Ask Secret Base…"
-                    BorderThickness="0"
-                    Background="Transparent"
-                    VerticalAlignment="Center"
-                    KeyDown="InputBox_KeyDown" />
-                <Button
-                    x:Name="SendButton"
+                <Grid Grid.Column="1" ColumnSpacing="8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel
+                        Grid.Column="0"
+                        VerticalAlignment="Center"
+                        Spacing="0">
+                        <TextBlock
+                            x:Name="BrandText"
+                            Text="Base"
+                            FontSize="10"
+                            CharacterSpacing="40"
+                            FontWeight="SemiBold" />
+                        <TextBlock
+                            x:Name="ProviderText"
+                            Text="AI"
+                            FontSize="10"
+                            Opacity="0.8" />
+                    </StackPanel>
+                    <TextBox
+                        x:Name="InputBox"
+                        Grid.Column="1"
+                        PlaceholderText="Ask Secret Base…"
+                        BorderThickness="0"
+                        Background="Transparent"
+                        VerticalAlignment="Center"
+                        KeyDown="InputBox_KeyDown" />
+                    <Button
+                        x:Name="SendButton"
+                        Grid.Column="2"
+                        Content="➤"
+                        MinWidth="40"
+                        MinHeight="32"
+                        Padding="8,4"
+                        Click="SendButton_Click"
+                        ToolTipService.ToolTip="Send (Enter)" />
+                </Grid>
+                <StackPanel
+                    x:Name="StatusColumn"
                     Grid.Column="2"
-                    Content="➤"
-                    MinWidth="40"
-                    MinHeight="32"
-                    Padding="8,4"
-                    Click="SendButton_Click"
-                    ToolTipService.ToolTip="Send (Enter)" />
+                    VerticalAlignment="Center"
+                    MinWidth="140"
+                    MaxWidth="240"
+                    Spacing="2">
+                    <TextBlock
+                        x:Name="FocusText"
+                        Text="Focus idle"
+                        FontSize="12"
+                        TextTrimming="CharacterEllipsis" />
+                    <TextBlock
+                        x:Name="NextText"
+                        Text="Nothing queued"
+                        FontSize="11"
+                        Opacity="0.8"
+                        TextTrimming="CharacterEllipsis" />
+                </StackPanel>
             </Grid>
         </Border>
     </Grid>
