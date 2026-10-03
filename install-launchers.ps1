@@ -49,18 +49,22 @@ if (Test-Path (Join-Path $dotnetRoot "dotnet.exe")) {
 $template = @'
 Option Explicit
 ' SecretBase.App.exe=__EXE__
-Dim shell, env, cmd, i
+Dim shell, env, exe, workDir, args, i, quote
 Set shell = CreateObject("WScript.Shell")
 Set env = shell.Environment("Process")
-__DOTNET__shell.CurrentDirectory = "__WORKDIR__"
-cmd = """" & "__EXE__" & """"
+quote = Chr(34)
+__DOTNET__exe = "__EXE__"
+workDir = "__WORKDIR__"
+shell.CurrentDirectory = workDir
+args = ""
 For i = 0 To WScript.Arguments.Count - 1
-  cmd = cmd & " """ & Replace(WScript.Arguments(i), """", """""") & """"
+  args = args & " " & quote & WScript.Arguments(i) & quote
 Next
-shell.Run cmd, 1, False
+shell.Run quote & exe & quote & args, 1, False
 '@
 $vbs = $template.Replace('__EXE__', $exe).Replace('__WORKDIR__', $workDir).Replace('__DOTNET__', $dotnetBlock)
-Set-Content -Path $vbsPath -Value $vbs -Encoding ASCII
+# UTF-16 so Japanese folder names stay intact. wscript treats UTF-8 as ANSI and garbles them.
+Set-Content -Path $vbsPath -Value $vbs -Encoding Unicode
 
 $wscript = Join-Path $env:SystemRoot "System32\wscript.exe"
 $shell = New-Object -ComObject WScript.Shell

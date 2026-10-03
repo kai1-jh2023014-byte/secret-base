@@ -17,10 +17,9 @@ public class AppHostLaunchScriptTests
             StringComparison.Ordinal);
         Assert.Contains(@"env(""DOTNET_ROOT"")", script, StringComparison.Ordinal);
         Assert.Contains(@"Microsoft\dotnet", script, StringComparison.Ordinal);
-        Assert.Contains(
-            @"shell.CurrentDirectory = ""C:\Apps\Secret Base""",
-            script,
-            StringComparison.Ordinal);
+        Assert.Contains("workDir = \"C:\\Apps\\Secret Base\"", script, StringComparison.Ordinal);
+        Assert.Contains("shell.CurrentDirectory = workDir", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"\"\"\"", script, StringComparison.Ordinal);
         Assert.True(AppHostLaunchScript.TryReadExecutable(script, out var exe));
         Assert.Equal(@"C:\Apps\Secret Base\SecretBase.App.exe", exe);
     }
@@ -44,5 +43,37 @@ public class AppHostLaunchScriptTests
         Assert.Equal(
             "\"C:\\Windows\\System32\\wscript.exe\" //B //Nologo \"C:\\Users\\me\\AppData\\Local\\SecretBase\\launch-secretbase.vbs\" --autostart",
             command);
+    }
+
+    [Fact]
+    public void WriteFile_UsesUtf16SoJapanesePathsStayReadable()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "secretbase-vbs-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        var path = Path.Combine(dir, AppHostLaunchScript.FileName);
+        var exe = "C:\\Users\\太郎\\SecretBase\\SecretBase.App.exe";
+        try
+        {
+            AppHostLaunchScript.WriteFile(path, exe, "C:\\Users\\太郎\\AppData\\Local\\Microsoft\\dotnet");
+            var bytes = File.ReadAllBytes(path);
+            Assert.True(bytes.Length >= 2);
+            Assert.Equal(0xFF, bytes[0]);
+            Assert.Equal(0xFE, bytes[1]);
+            var text = File.ReadAllText(path, AppHostLaunchScript.FileEncoding);
+            Assert.Contains("太郎", text, StringComparison.Ordinal);
+            Assert.True(AppHostLaunchScript.TryReadExecutable(text, out var read));
+            Assert.Equal(exe, read);
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(dir, recursive: true);
+            }
+            catch
+            {
+                // best-effort
+            }
+        }
     }
 }

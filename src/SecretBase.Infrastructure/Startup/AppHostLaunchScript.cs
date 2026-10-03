@@ -20,12 +20,16 @@ public static class AppHostLaunchScript
             ? string.Empty
             : dotnetRoot.Trim().TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
 
+        // Chr(34) keeps the file readable. A pile of quotes looks like mojibake in Notepad.
+        // Windows Script Host reads .vbs as ANSI unless the file is UTF-16, so Japanese
+        // user/folder names must be written as Unicode or the path is corrupted.
         var script = new StringBuilder();
         script.AppendLine("Option Explicit");
         script.AppendLine(ExecutableMarkerPrefix + exe);
-        script.AppendLine("Dim shell, env, cmd, i");
+        script.AppendLine("Dim shell, env, exe, workDir, args, i, quote");
         script.AppendLine("Set shell = CreateObject(\"WScript.Shell\")");
         script.AppendLine("Set env = shell.Environment(\"Process\")");
+        script.AppendLine("quote = Chr(34)");
         if (!string.IsNullOrEmpty(root))
         {
             script.Append("env(\"DOTNET_ROOT\") = ").AppendLine(Vb(root));
@@ -33,13 +37,29 @@ public static class AppHostLaunchScript
             script.AppendLine("env(\"PATH\") = env(\"DOTNET_ROOT\") & \";\" & env(\"PATH\")");
         }
 
-        script.Append("shell.CurrentDirectory = ").AppendLine(Vb(workDir));
-        script.Append("cmd = \"\"\"\" & ").Append(Vb(exe)).AppendLine(" & \"\"\"\"");
+        script.Append("exe = ").AppendLine(Vb(exe));
+        script.Append("workDir = ").AppendLine(Vb(workDir));
+        script.AppendLine("shell.CurrentDirectory = workDir");
+        script.AppendLine("args = \"\"");
         script.AppendLine("For i = 0 To WScript.Arguments.Count - 1");
-        script.AppendLine("  cmd = cmd & \" \"\"\" & Replace(WScript.Arguments(i), \"\"\"\", \"\"\"\"\"\") & \"\"\"\"");
+        script.AppendLine("  args = args & \" \" & quote & WScript.Arguments(i) & quote");
         script.AppendLine("Next");
-        script.AppendLine("shell.Run cmd, 1, False");
+        script.AppendLine("shell.Run quote & exe & quote & args, 1, False");
         return script.ToString();
+    }
+
+    /// <summary>UTF-16 LE with BOM. This is the encoding wscript accepts for non-ANSI paths.</summary>
+    public static readonly Encoding FileEncoding = new UnicodeEncoding(bigEndian: false, byteOrderMark: true);
+
+    public static void WriteFile(string launcherPath, string executablePath, string? dotnetRoot)
+    {
+        var directory = Path.GetDirectoryName(launcherPath);
+        if (!string.IsNullOrWhiteSpace(directory))
+        {
+            Directory.CreateDirectory(directory);
+        }
+
+        File.WriteAllText(launcherPath, Build(executablePath, dotnetRoot), FileEncoding);
     }
 
     public static string BuildStartupCommand(string wscriptPath, string launcherScriptPath) =>

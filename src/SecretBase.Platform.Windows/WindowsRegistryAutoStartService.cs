@@ -145,9 +145,7 @@ public sealed class WindowsRegistryAutoStartService : IAutoStartService
     internal static string WriteLauncherAndBuildCommand(string executablePath)
     {
         var launcherPath = Path.Combine(AppDataPaths.RootDirectory, AppHostLaunchScript.FileName);
-        File.WriteAllText(
-            launcherPath,
-            AppHostLaunchScript.Build(executablePath, AppHostLaunchScript.FindUserDotNetRoot()));
+        AppHostLaunchScript.WriteFile(launcherPath, executablePath, AppHostLaunchScript.FindUserDotNetRoot());
         var wscript = Path.Combine(Environment.SystemDirectory, "wscript.exe");
         return BuildStartupCommand(wscript, launcherPath);
     }

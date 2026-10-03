@@ -50,9 +50,7 @@ public sealed class WindowsDesktopShortcutService
                 ShortcutFileName);
 
             var launcherPath = Path.Combine(AppDataPaths.RootDirectory, AppHostLaunchScript.FileName);
-            File.WriteAllText(
-                launcherPath,
-                AppHostLaunchScript.Build(exe, AppHostLaunchScript.FindUserDotNetRoot()));
+            AppHostLaunchScript.WriteFile(launcherPath, exe, AppHostLaunchScript.FindUserDotNetRoot());
 
             var wscript = Path.Combine(Environment.SystemDirectory, "wscript.exe");
             if (!File.Exists(wscript))
