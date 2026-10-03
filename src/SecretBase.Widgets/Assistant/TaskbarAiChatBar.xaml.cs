@@ -3,6 +3,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using SecretBase.Core.Assistant;
+using SecretBase.Core.Desktop;
 using SecretBase.Core.Themes;
 using SecretBase.Widgets.Theming;
 using Windows.System;
@@ -10,8 +11,8 @@ using Windows.System;
 namespace SecretBase.Widgets.Assistant;
 
 /// <summary>
-/// Dedicated Secret Base AI chat field for the overlay work area (above the Windows taskbar).
-/// Does not hook Explorer, SearchHost, or Windows Search.
+/// Work-area shelf just above the Windows taskbar: clock, focus, next item, and AI chat.
+/// Does not hook Explorer, the taskbar, SearchHost, or Windows Search.
 /// </summary>
 public sealed partial class TaskbarAiChatBar : UserControl
 {
@@ -43,6 +44,12 @@ public sealed partial class TaskbarAiChatBar : UserControl
         WidgetSurfaceStyle.ApplyChrome(Pill, theme);
         Pill.CornerRadius = new CornerRadius(22);
         WidgetSurfaceStyle.ApplyHeader(BrandText, ProviderText, theme);
+        WidgetSurfaceStyle.ApplyHeader(ClockText, DateText, theme);
+        ClockText.FontSize = 20;
+        ClockText.CharacterSpacing = 0;
+        DateText.CharacterSpacing = 0;
+        WidgetSurfaceStyle.ApplyBody(FocusText, theme);
+        WidgetSurfaceStyle.ApplyMuted(NextText, theme);
         WidgetSurfaceStyle.ApplyMuted(StatusLabel, theme);
         WidgetSurfaceStyle.ApplyBody(ConfirmText, theme);
         InputBox.FontFamily = new FontFamily(theme.FontFamily);
@@ -52,6 +59,14 @@ public sealed partial class TaskbarAiChatBar : UserControl
         WidgetSurfaceStyle.ApplyGhostButton(ConfirmCancelButton, theme);
         RefreshProvider();
         RenderTranscript();
+    }
+
+    public void ApplyShelf(TaskbarShelfSnapshot snapshot)
+    {
+        ClockText.Text = snapshot.Clock;
+        DateText.Text = snapshot.Date;
+        FocusText.Text = snapshot.Focus;
+        NextText.Text = snapshot.Next;
     }
 
     public void FocusInput()

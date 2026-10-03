@@ -71,7 +71,7 @@ Investigation notes: [overlay-input-and-edges.md](overlay-input-and-edges.md).
 | **Aa** Theme | Always visible | Debug chrome **Theme**, **Ctrl+Shift+T** |
 | **Grid** Arrange | Always visible | Debug chrome **Arrange** |
 | Host status | Ephemeral message above FABs | Also mirrored in debug chrome |
-| **Secret Base AI bar** | Centered above the taskbar (work area) | **Ctrl+Shift+K** focuses it. Does **not** replace Windows Search |
+| **Taskbar shelf** | Stretches along the bottom of the work area (clock, focus, next item, AI field). Starts to the right of the FABs so it does not cover them | **Ctrl+Shift+K** focuses the AI field. Does **not** replace the Windows taskbar or Windows Search |
 | Status / widget count | Hidden | **Ctrl+Shift+D** shows debug chrome |
 | Exit button | Hidden | Debug chrome **Exit**, or **Ctrl+Shift+Q** |
 | `WidgetFrame` | Grip + resize + **×** remove | Same |
