@@ -1,5 +1,6 @@
-# Builds Secret Base (if needed) and creates Start Menu + Desktop shortcuts
-# to SecretBase.App.exe so you can launch without a terminal.
+# Rebuilds Secret Base (Debug | x64) and creates Start Menu + Desktop shortcuts
+# to that SecretBase.App.exe so you can launch without a terminal.
+# Always rebuilds. An existing exe from an older checkout is not reused.
 # Usage: .\install-launchers.ps1
 
 $ErrorActionPreference = "Stop"
@@ -21,15 +22,40 @@ function Find-SecretBaseAppExe {
         (Join-Path $root "src\SecretBase.App\bin\x64\Debug\net10.0-windows10.0.26100.0\SecretBase.App.exe"),
         (Join-Path $root "src\SecretBase.App\bin\x64\Release\net10.0-windows10.0.26100.0\SecretBase.App.exe")
     )
-    return $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+    $found = @(
+        $candidates |
+            Where-Object { Test-Path $_ } |
+            ForEach-Object { Get-Item $_ } |
+            Sort-Object LastWriteTime -Descending
+    )
+    if ($found.Count -eq 0) {
+        return $null
+    }
+
+    return $found[0].FullName
+}
+
+$branch = ""
+$commit = ""
+try {
+    $branch = (git rev-parse --abbrev-ref HEAD 2>$null)
+    $commit = (git log -1 --format="%h %s" 2>$null)
+} catch {
+    $branch = ""
+    $commit = ""
+}
+
+Write-Host "Building Secret Base (Debug | x64) from this checkout…"
+if ($branch) {
+    Write-Host "  Branch: $branch"
+    Write-Host "  Commit: $commit"
+}
+& (Join-Path $root "build.ps1")
+if ($LASTEXITCODE -ne 0) {
+    throw "Build failed (exit $LASTEXITCODE). Shortcuts were not updated."
 }
 
 $exe = Find-SecretBaseAppExe
-if (-not $exe) {
-    Write-Host "Building Secret Base (Debug | x64)…"
-    & (Join-Path $root "build.ps1")
-    $exe = Find-SecretBaseAppExe
-}
 
 if (-not $exe) {
     throw "SecretBase.App.exe was not found after build. Expected under src\SecretBase.App\bin\x64\Debug\...\win-x64\"
@@ -89,7 +115,12 @@ Write-Host ""
 Write-Host "Shortcuts created:"
 Write-Host "  Start Menu: $startMenu"
 Write-Host "  Desktop:    $desktop"
+$built = (Get-Item $exe).LastWriteTime.ToString("yyyy-MM-dd HH:mm:ss")
 Write-Host "  Target:     $exe"
+Write-Host "  Built:      $built"
 Write-Host "  Launcher:   $vbsPath"
+if ($commit) {
+    Write-Host "  Commit:     $commit"
+}
 Write-Host ""
 Write-Host "Double-click either shortcut to launch. In the app, open Setup (gear) to enable Start at login."
