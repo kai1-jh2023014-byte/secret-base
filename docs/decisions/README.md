@@ -1,5 +1,11 @@
 # Decision Log
 
+## 2026-10-04 — Now playing comes from the Windows media session
+
+**Decision:** The Music widget reads the current OS media session through documented SMTC (`GlobalSystemMediaTransportControlsSessionManager`). Title, artist, artwork, and transport controls follow that session. This is the same session FluentFlyout uses. It does not call the Spotify Web API and does not replace the taskbar.
+
+**Why:** Spotify's catalog API returns 403 unless the app owner has Premium. Players such as Spotify still publish the current track to Windows, so a free account can see and control what is already playing.
+
 ## 2026-10-04 — Taskbar shows the configured AI, Spotify uses a fixed redirect
 
 **Decision:** If a Gemini API key is saved and the selected remote provider has no key, Base AI (including the taskbar shelf) uses Gemini and labels it Gemini. An explicit Local choice stays Local. Spotify connect asks for a Client ID in the Music widget and always uses `http://127.0.0.1:43821/callback`. Public PKCE clients do not send an empty HTTP Basic secret. Search skips a music provider that is not connected so the demo catalog still answers.

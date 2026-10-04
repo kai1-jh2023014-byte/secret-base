@@ -85,6 +85,7 @@ public sealed partial class DesktopPage : Page
     private IIntegrationMemory? _integrationMemory;
     private DesktopWorkspaceCatalog? _workspaceCatalog;
     private MusicCommandService? _musicCommands;
+    private ISystemNowPlayingSource? _systemNowPlaying;
     private IntegrationCommandService? _integrationCommands;
     private IAssistantService? _assistant;
     private IAssistantSettingsStore? _assistantSettings;
@@ -948,7 +949,8 @@ public sealed partial class DesktopPage : Page
                 openUrl: url => TryOpenHttpsUrl(url),
                 musicService: _musicCommands.MusicService,
                 integrations: _integrationMemory,
-                dialogInput: _dialogInput);
+                dialogInput: _dialogInput,
+                systemNowPlaying: _systemNowPlaying ??= new WindowsSystemNowPlayingSource());
             if (_theme is not null)
             {
                 view.ApplyTheme(_theme);

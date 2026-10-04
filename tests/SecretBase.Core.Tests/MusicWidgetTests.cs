@@ -6,6 +6,25 @@ using SecretBase.Core.Widgets.Web;
 
 namespace SecretBase.Core.Tests;
 
+public class SystemNowPlayingSourceNameTests
+{
+    [Fact]
+    public void SpotifyAumid_DisplaysSpotify()
+    {
+        Assert.Equal(
+            "Spotify",
+            SystemNowPlayingSourceNames.DisplayName("SpotifyAB.SpotifyMusic_zpdnekdrzrea0!Spotify"));
+    }
+
+    [Fact]
+    public void ExecutablePath_UsesTheFileName()
+    {
+        Assert.Equal(
+            "chrome",
+            SystemNowPlayingSourceNames.DisplayName(@"C:\Program Files\Google\Chrome\Application\chrome.exe"));
+    }
+}
+
 public class MusicSourceTests
 {
     [Fact]
