@@ -624,6 +624,121 @@ public class AssistantServiceTests
         Assert.True(service.VisibleHistory.Count <= AssistantService.MaxVisibleMessages);
         Assert.DoesNotContain(service.VisibleHistory, m => m.Content != null && m.Content.Contains("sk-", StringComparison.Ordinal));
     }
+
+    [Fact]
+    public async Task SongChange_WhenCatalogRefuses_OpensSpotifySearchWithoutAnotherModelCall()
+    {
+        var provider = new ToolThenTimeoutAiProvider(
+            AiProviderResponse.Tools(
+            [
+                new AiToolCall
+                {
+                    Id = "m1",
+                    Name = AssistantToolNames.MusicSearch,
+                    ArgumentsJson = """{"query":"mr.children 深海"}"""
+                }
+            ]));
+        var music = new MusicCommandService(new MusicService([new RefusingConnectedSearchProvider()]));
+        var service = new AssistantService(
+            BuiltinAssistantToolRegistry.Instance,
+            new AssistantToolExecutor(BuiltinAssistantToolRegistry.Instance, music: music),
+            () => provider);
+
+        var result = await service.SendAsync("曲をmr.childrenの深海にして");
+
+        Assert.True(result.Succeeded);
+        Assert.Equal(1, provider.Calls);
+        Assert.Contains("Spotify", result.AssistantText, StringComparison.Ordinal);
+        Assert.Contains("深海", result.AssistantText, StringComparison.Ordinal);
+        Assert.True(result.ShouldLaunch);
+        Assert.True(result.LaunchIsExternalLink);
+        Assert.StartsWith("https://open.spotify.com/search/", result.LaunchTarget, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(AssistantUserMessages.Timeout, result.AssistantText ?? string.Empty, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ConfirmedSongChange_WhenCatalogRefuses_OpensSpotifySearch()
+    {
+        var provider = new ToolThenTimeoutAiProvider(
+            AiProviderResponse.Tools(
+            [
+                new AiToolCall
+                {
+                    Id = "m1",
+                    Name = AssistantToolNames.MusicPlay,
+                    ArgumentsJson = """{"query":"innocent world"}"""
+                }
+            ]));
+        var music = new MusicCommandService(new MusicService([new RefusingConnectedSearchProvider()]));
+        var service = new AssistantService(
+            BuiltinAssistantToolRegistry.Instance,
+            new AssistantToolExecutor(BuiltinAssistantToolRegistry.Instance, music: music),
+            () => provider);
+
+        var pending = await service.SendAsync("曲をinnocent worldにして");
+        Assert.NotNull(pending.PendingConfirmation);
+        Assert.False(pending.ShouldLaunch);
+
+        var confirmed = await service.ConfirmPendingAsync();
+        Assert.True(confirmed.Succeeded);
+        Assert.Equal(1, provider.Calls);
+        Assert.Contains("Spotify", confirmed.AssistantText, StringComparison.Ordinal);
+        Assert.True(confirmed.ShouldLaunch);
+        Assert.True(confirmed.LaunchIsExternalLink);
+        Assert.StartsWith("https://open.spotify.com/search/", confirmed.LaunchTarget, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task FollowUpTimeout_AfterLocalTool_ReturnsTheToolNote()
+    {
+        var day = new DateOnly(2026, 8, 17);
+        var offset = TimeSpan.FromHours(9);
+        var calendar = new CalendarCommandService(
+            new CalendarService(
+            [
+                new LocalCalendarProvider(
+                [
+                    new CalendarEvent
+                    {
+                        Title = "DTM",
+                        Provider = CalendarProviderIds.Local,
+                        Start = new DateTimeOffset(day.ToDateTime(new TimeOnly(19, 0)), offset),
+                        End = new DateTimeOffset(day.ToDateTime(new TimeOnly(20, 0)), offset)
+                    }
+                ])
+            ]),
+            new AssistantFixedTime(new DateTimeOffset(day.ToDateTime(new TimeOnly(8, 0)), offset)));
+        var provider = new ToolThenTimeoutAiProvider(
+            AiProviderResponse.Tools(
+            [
+                new AiToolCall { Id = "c1", Name = AssistantToolNames.CalendarGetToday, ArgumentsJson = "{}" }
+            ]));
+        var service = new AssistantService(
+            BuiltinAssistantToolRegistry.Instance,
+            new AssistantToolExecutor(BuiltinAssistantToolRegistry.Instance, calendar: calendar),
+            () => provider);
+
+        var result = await service.SendAsync("今日の予定は？");
+        Assert.True(result.Succeeded);
+        Assert.Equal(2, provider.Calls);
+        Assert.Contains("DTM", result.AssistantText, StringComparison.Ordinal);
+        Assert.True(result.CanRetry);
+    }
+
+    [Fact]
+    public async Task Timeout_WithoutTools_StaysAFailure()
+    {
+        var provider = new ToolThenTimeoutAiProvider(first: null);
+        var service = new AssistantService(
+            BuiltinAssistantToolRegistry.Instance,
+            new AssistantToolExecutor(BuiltinAssistantToolRegistry.Instance),
+            () => provider);
+
+        var result = await service.SendAsync("hello");
+        Assert.False(result.Succeeded);
+        Assert.Equal(AssistantUserMessages.Timeout, result.ErrorMessage);
+        Assert.True(result.CanRetry);
+    }
 }
 
 public class CalendarQueryUpcomingTests
@@ -643,4 +758,76 @@ public class CalendarQueryUpcomingTests
 file sealed class AssistantFixedTime(DateTimeOffset instant) : ITimeProvider
 {
     public DateTimeOffset GetLocalNow() => instant;
+}
+
+file sealed class ToolThenTimeoutAiProvider(AiProviderResponse? first) : IAiProvider
+{
+    public int Calls { get; private set; }
+
+    public string ProviderId => AssistantProviderIds.Gemini;
+
+    public string DisplayName => "Gemini";
+
+    public Task<AiProviderResponse> ChatAsync(
+        IReadOnlyList<AiMessage> messages,
+        IReadOnlyList<AssistantToolDefinition> tools,
+        string model,
+        CancellationToken cancellationToken = default)
+    {
+        _ = messages;
+        _ = tools;
+        _ = model;
+        Calls++;
+        cancellationToken.ThrowIfCancellationRequested();
+        if (Calls == 1 && first is not null)
+        {
+            return Task.FromResult(first);
+        }
+
+        throw new TaskCanceledException();
+    }
+}
+
+file sealed class RefusingConnectedSearchProvider : IMusicProvider
+{
+    public string ProviderId => "spotify";
+
+    public string DisplayName => "Spotify";
+
+    public MusicProviderCapabilities Capabilities =>
+        MusicProviderCapabilities.Search | MusicProviderCapabilities.Authentication;
+
+    public MusicAuthStatus AuthStatus => MusicAuthStatus.Connected;
+
+    public MusicTrack? CurrentTrack => null;
+
+    public bool IsPlaying => false;
+
+    public bool CanHandle(MusicSourceType type) => false;
+
+    public bool TryResolveOpenUrl(MusicSource source, out string? url, out string? error)
+    {
+        url = null;
+        error = null;
+        return false;
+    }
+
+    public Task<IReadOnlyList<MusicTrack>> SearchAsync(string query, CancellationToken cancellationToken = default) =>
+        throw new InvalidOperationException("Spotify's catalog API refused this account.");
+
+    public Task PlayAsync(MusicTrack track, CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+    public Task PauseAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+    public Task ResumeAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+    public Task NextAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+    public Task PreviousAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+    public Task ConnectAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+    public Task DisconnectAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+    public Task RefreshPlaybackStateAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
 }

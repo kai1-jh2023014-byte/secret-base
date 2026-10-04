@@ -2,12 +2,14 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Media.Imaging;
 using SecretBase.Core.Integration;
 using SecretBase.Core.Music;
 using SecretBase.Core.Themes;
 using SecretBase.Core.Widgets.Music;
 using SecretBase.Widgets.Hosting;
 using SecretBase.Widgets.Theming;
+using Windows.Storage.Streams;
 using Windows.System;
 
 namespace SecretBase.Widgets.Music;
@@ -32,6 +34,11 @@ public sealed partial class MusicWidgetView : UserControl
     private bool _connectDismissed;
     private IIntegrationMemory? _integrations;
     private OverlayDialogInput? _dialogInput;
+    private ISystemNowPlayingSource? _systemNowPlaying;
+    private Microsoft.UI.Dispatching.DispatcherQueueTimer? _nowPlayingTimer;
+    private bool _showingSystemNowPlaying;
+    private string? _shownArtKey;
+    private int _nowPlayingGate;
 
     public MusicWidgetView()
     {
@@ -45,13 +52,15 @@ public sealed partial class MusicWidgetView : UserControl
         Func<string, bool>? openUrl = null,
         MusicService? musicService = null,
         IIntegrationMemory? integrations = null,
-        OverlayDialogInput? dialogInput = null)
+        OverlayDialogInput? dialogInput = null,
+        ISystemNowPlayingSource? systemNowPlaying = null)
     {
         _configuration = configuration;
         _onConfigurationChanged = onConfigurationChanged;
         _openUrl = openUrl;
         _integrations = integrations;
         _dialogInput = dialogInput;
+        _systemNowPlaying = systemNowPlaying;
         if (musicService is not null)
         {
             _musicService = musicService;
@@ -70,8 +79,33 @@ public sealed partial class MusicWidgetView : UserControl
         ResultsList.Children.Add(CreateMuted("Search tracks from your connected provider."));
         StatusLabel.Text = string.Empty;
         SourceLabel.Text = DescribeSource();
-        _ = RefreshPlaybackStateAsync();
+        StartNowPlayingTimer();
+        _ = RefreshPlaybackStateAsync(includeProvider: true);
     }
+
+    private void StartNowPlayingTimer()
+    {
+        _nowPlayingTimer?.Stop();
+        if (_systemNowPlaying is null)
+        {
+            return;
+        }
+
+        var queue = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
+        if (queue is null)
+        {
+            return;
+        }
+
+        _nowPlayingTimer = queue.CreateTimer();
+        _nowPlayingTimer.Interval = TimeSpan.FromSeconds(1);
+        _nowPlayingTimer.Tick += (_, _) => _ = RefreshPlaybackStateAsync(includeProvider: false);
+        _nowPlayingTimer.Start();
+        Unloaded -= StopNowPlayingTimer;
+        Unloaded += StopNowPlayingTimer;
+    }
+
+    private void StopNowPlayingTimer(object sender, RoutedEventArgs e) => _nowPlayingTimer?.Stop();
 
     private string DescribeSource()
     {
@@ -94,7 +128,133 @@ public sealed partial class MusicWidgetView : UserControl
         ConnectPanel.Visibility = needsConnect ? Visibility.Visible : Visibility.Collapsed;
     }
 
-    private async Task RefreshPlaybackStateAsync()
+    private async Task RefreshPlaybackStateAsync(bool includeProvider)
+    {
+        if (Interlocked.Exchange(ref _nowPlayingGate, 1) == 1)
+        {
+            return;
+        }
+
+        try
+        {
+            if (await TryApplySystemNowPlayingAsync().ConfigureAwait(true))
+            {
+                return;
+            }
+
+            if (_showingSystemNowPlaying)
+            {
+                _showingSystemNowPlaying = false;
+                ClearArtwork();
+                UpdateCurrentTrackUi(_configuration.CurrentTrack, isPlaying: false);
+                SourceLabel.Text = DescribeSource();
+                UpdateTransportEnabled();
+            }
+
+            if (!includeProvider)
+            {
+                return;
+            }
+
+            await RefreshProviderPlaybackAsync().ConfigureAwait(true);
+        }
+        finally
+        {
+            Interlocked.Exchange(ref _nowPlayingGate, 0);
+        }
+    }
+
+    private async Task<bool> TryApplySystemNowPlayingAsync()
+    {
+        if (_systemNowPlaying is null)
+        {
+            return false;
+        }
+
+        SystemNowPlaying? current;
+        try
+        {
+            current = await _systemNowPlaying.ReadCurrentAsync().ConfigureAwait(true);
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+
+        if (current is null || string.IsNullOrWhiteSpace(current.Title))
+        {
+            return false;
+        }
+
+        _showingSystemNowPlaying = true;
+        TrackTitleText.Text = current.Title;
+        TrackArtistText.Text = string.IsNullOrWhiteSpace(current.Artist) ? current.SourceName : current.Artist;
+        SourceLabel.Text = "Now playing · " + current.SourceName;
+        PlayPauseButton.Content = current.IsPlaying ? "⏸" : "▶";
+        if (current.DurationMilliseconds > 0)
+        {
+            PlaybackProgress.Maximum = current.DurationMilliseconds;
+            PlaybackProgress.Value = Math.Clamp(current.PositionMilliseconds, 0, current.DurationMilliseconds);
+            PlaybackProgress.Visibility = Visibility.Visible;
+        }
+        else
+        {
+            PlaybackProgress.Visibility = Visibility.Collapsed;
+        }
+
+        await ShowArtworkAsync(current.Artwork, current.SourceAppId + "\n" + current.Title + "\n" + current.Artist)
+            .ConfigureAwait(true);
+        UpdateTransportEnabled();
+        return true;
+    }
+
+    private async Task ShowArtworkAsync(byte[]? bytes, string artKey)
+    {
+        if (bytes is null || bytes.Length == 0)
+        {
+            ClearArtwork();
+            return;
+        }
+
+        if (string.Equals(artKey, _shownArtKey, StringComparison.Ordinal) && ArtImage.Visibility == Visibility.Visible)
+        {
+            return;
+        }
+
+        try
+        {
+            using var stream = new InMemoryRandomAccessStream();
+            using (var writer = new DataWriter(stream))
+            {
+                writer.WriteBytes(bytes);
+                await writer.StoreAsync();
+                await writer.FlushAsync();
+                writer.DetachStream();
+            }
+
+            stream.Seek(0);
+            var image = new BitmapImage();
+            await image.SetSourceAsync(stream);
+            ArtImage.Source = image;
+            ArtImage.Visibility = Visibility.Visible;
+            ArtGlyph.Visibility = Visibility.Collapsed;
+            _shownArtKey = artKey;
+        }
+        catch (Exception)
+        {
+            ClearArtwork();
+        }
+    }
+
+    private void ClearArtwork()
+    {
+        _shownArtKey = null;
+        ArtImage.Source = null;
+        ArtImage.Visibility = Visibility.Collapsed;
+        ArtGlyph.Visibility = Visibility.Visible;
+    }
+
+    private async Task RefreshProviderPlaybackAsync()
     {
         var result = await _commands.ExecuteAsync(MusicCommand.GetPlaybackState("spotify"));
         if (!result.Succeeded || result.CurrentTrack is null)
@@ -118,8 +278,67 @@ public sealed partial class MusicWidgetView : UserControl
 
     private async void ConnectSpotifyButton_Click(object sender, RoutedEventArgs e)
     {
+        var spotify = _musicService.Providers.FirstOrDefault(p => p.ProviderId == "spotify");
+        if (spotify is null)
+        {
+            StatusLabel.Text = "Spotify provider is not available.";
+            return;
+        }
+
+        using var dialogScope = _dialogInput?.Enter();
+        var savedClient = spotify.AuthStatus is not MusicAuthStatus.NotConfigured;
+        var clientIdBox = new TextBox
+        {
+            Header = "Spotify Client ID",
+            PlaceholderText = savedClient
+                ? "Leave blank to use the saved Client ID"
+                : "From the Spotify dashboard"
+        };
+        var secretBox = new PasswordBox
+        {
+            Header = "Client Secret (optional)",
+            PlaceholderText = "Leave blank for a public PKCE app"
+        };
+        var help = new TextBlock
+        {
+            TextWrapping = TextWrapping.WrapWholeWords,
+            FontSize = 12,
+            Text =
+                "In the Spotify developer dashboard, add this exact Redirect URI:\n"
+                + SpotifyOAuth.RedirectUri
+                + "\n\nA free Spotify account can open searches in the Spotify app or browser. In-app track lists and device controls use Spotify's API, which requires the app owner to have Spotify Premium.\n\nSecret Base does not play audio itself."
+        };
+        var panel = new StackPanel { Spacing = 8 };
+        panel.Children.Add(help);
+        panel.Children.Add(clientIdBox);
+        panel.Children.Add(secretBox);
+        var dialog = new ContentDialog
+        {
+            Title = "Connect Spotify",
+            PrimaryButtonText = "Connect",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Primary,
+            Content = panel,
+            XamlRoot = XamlRoot
+        };
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary)
+        {
+            return;
+        }
+
+        var clientId = clientIdBox.Text?.Trim();
+        var secret = secretBox.Password?.Trim();
+        if (!savedClient && string.IsNullOrWhiteSpace(clientId))
+        {
+            StatusLabel.Text = "Spotify Client ID is required. Register " + SpotifyOAuth.RedirectUri + " first.";
+            return;
+        }
+
         StatusLabel.Text = "Connecting to Spotify…";
-        var result = await _commands.ExecuteAsync(MusicCommand.ConnectProvider("spotify"));
+        var result = await _commands.ExecuteAsync(MusicCommand.ConnectProvider(
+            "spotify",
+            string.IsNullOrWhiteSpace(clientId) ? null : clientId,
+            string.IsNullOrWhiteSpace(secret) ? null : secret));
         if (!result.Succeeded)
         {
             StatusLabel.Text = result.ErrorMessage ?? "Spotify connect failed.";
@@ -132,7 +351,7 @@ public sealed partial class MusicWidgetView : UserControl
         StatusLabel.Text = "Spotify connected.";
         ResultsList.Children.Clear();
         ResultsList.Children.Add(CreateMuted("Search Spotify tracks above."));
-        await RefreshPlaybackStateAsync();
+        await RefreshPlaybackStateAsync(includeProvider: true);
     }
 
     private void ConnectYouTubeButton_Click(object sender, RoutedEventArgs e)
@@ -202,7 +421,14 @@ public sealed partial class MusicWidgetView : UserControl
             if (!result.Succeeded)
             {
                 ResultsList.Children.Add(CreateMuted(result.ErrorMessage ?? "Search failed."));
-                StatusLabel.Text = result.ErrorMessage ?? "Search failed.";
+                if (!string.IsNullOrWhiteSpace(result.WebSearchUrl))
+                {
+                    ResultsList.Children.Add(CreateOpenSpotifyButton(result.WebSearchUrl));
+                }
+
+                StatusLabel.Text = string.IsNullOrWhiteSpace(result.WebSearchUrl)
+                    ? result.ErrorMessage ?? "Search failed."
+                    : "Open this search in Spotify. A free account can play it there.";
                 return;
             }
 
@@ -219,13 +445,49 @@ public sealed partial class MusicWidgetView : UserControl
                 ResultsList.Children.Add(CreateResultRow(track));
             }
 
-            StatusLabel.Text = $"{result.Tracks.Count} result(s) · Demo catalog";
+            var sourceName = result.Tracks.Any(t => string.Equals(t.ProviderId, "spotify", StringComparison.Ordinal))
+                ? "Spotify"
+                : "Demo catalog";
+            StatusLabel.Text = $"{result.Tracks.Count} result(s) · {sourceName}";
             UpdateTransportEnabled();
         }
         finally
         {
             Interlocked.Exchange(ref _searchGate, 0);
         }
+    }
+
+    private UIElement CreateOpenSpotifyButton(string url)
+    {
+        var button = new Button
+        {
+            Content = "Open this search in Spotify",
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            Tag = url
+        };
+        button.Click += OpenSpotifySearchButton_Click;
+        if (_theme is not null)
+        {
+            WidgetSurfaceStyle.ApplyActionButton(button, _theme, accent: true);
+        }
+
+        return button;
+    }
+
+    private void OpenSpotifySearchButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: string url })
+        {
+            return;
+        }
+
+        if (_openUrl?.Invoke(url) == true)
+        {
+            StatusLabel.Text = "Opened the search in Spotify.";
+            return;
+        }
+
+        StatusLabel.Text = "Could not open Spotify.";
     }
 
     private UIElement CreateResultRow(MusicTrack track)
@@ -290,6 +552,11 @@ public sealed partial class MusicWidgetView : UserControl
 
     private async void PlayPauseButton_Click(object sender, RoutedEventArgs e)
     {
+        if (await TryControlSystemSessionAsync(source => source.TryTogglePlayPauseAsync()))
+        {
+            return;
+        }
+
         var playback = _musicService.GetPlaybackProvider();
         if (playback?.CurrentTrack is null && _configuration.CurrentTrack is not null)
         {
@@ -307,11 +574,42 @@ public sealed partial class MusicWidgetView : UserControl
         }
     }
 
-    private async void PreviousButton_Click(object sender, RoutedEventArgs e) =>
-        await RunCommandAsync(MusicCommand.Previous());
+    private async void PreviousButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (await TryControlSystemSessionAsync(source => source.TrySkipPreviousAsync()))
+        {
+            return;
+        }
 
-    private async void NextButton_Click(object sender, RoutedEventArgs e) =>
+        await RunCommandAsync(MusicCommand.Previous());
+    }
+
+    private async void NextButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (await TryControlSystemSessionAsync(source => source.TrySkipNextAsync()))
+        {
+            return;
+        }
+
         await RunCommandAsync(MusicCommand.Next());
+    }
+
+    private async Task<bool> TryControlSystemSessionAsync(Func<ISystemNowPlayingSource, Task<bool>> action)
+    {
+        if (!_showingSystemNowPlaying || _systemNowPlaying is null)
+        {
+            return false;
+        }
+
+        var ok = await action(_systemNowPlaying);
+        if (!ok)
+        {
+            StatusLabel.Text = "This player did not accept the control.";
+        }
+
+        await RefreshPlaybackStateAsync(includeProvider: false);
+        return true;
+    }
 
     private async Task RunCommandAsync(MusicCommand command)
     {
@@ -376,7 +674,8 @@ public sealed partial class MusicWidgetView : UserControl
     private void UpdateTransportEnabled()
     {
         var caps = _musicService.AggregateCapabilities();
-        var hasTrack = _configuration.CurrentTrack is not null
+        var hasTrack = _showingSystemNowPlaying
+                       || _configuration.CurrentTrack is not null
                        || _musicService.GetPlaybackProvider()?.CurrentTrack is not null;
 
         SearchButton.IsEnabled = caps.HasFlag(MusicProviderCapabilities.Search);

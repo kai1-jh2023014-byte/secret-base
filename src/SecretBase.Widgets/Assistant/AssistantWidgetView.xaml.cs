@@ -625,7 +625,9 @@ public sealed partial class AssistantWidgetView : UserControl
                 current.Model);
             testStatus.Text = ping.Status switch
             {
-                AiProviderStatus.Ok => "● Connected — remote (or Local fallback) answered.",
+                AiProviderStatus.Ok when string.Equals(provider.ProviderId, AssistantProviderIds.Local, StringComparison.OrdinalIgnoreCase)
+                    => "● Local AI answered. The selected remote provider was not used.",
+                AiProviderStatus.Ok => $"● Connected — {provider.DisplayName} answered.",
                 AiProviderStatus.NotConfigured =>
                     AssistantUserMessages.NotConfigured + " Save the key for the selected provider, then test again.",
                 _ => ping.ErrorMessage ?? AssistantUserMessages.Unavailable
@@ -676,7 +678,21 @@ public sealed partial class AssistantWidgetView : UserControl
         }
 
         var settings = AssistantSettingsMigrator.MigrateToCurrent(_settingsStore.LoadOrCreate());
-        settings.ProviderId = (providerBox.SelectedItem as string) switch
+        var typed = keyBox.Password?.Trim();
+        var selected = providerBox.SelectedItem as string;
+        if (!string.IsNullOrWhiteSpace(typed))
+        {
+            if (typed.StartsWith("AIza", StringComparison.Ordinal))
+            {
+                selected = "Gemini";
+            }
+            else if (typed.StartsWith("sk-", StringComparison.Ordinal))
+            {
+                selected = "OpenAI";
+            }
+        }
+
+        settings.ProviderId = selected switch
         {
             "Gemini" => AssistantProviderIds.Gemini,
             "Local" => AssistantProviderIds.Local,
@@ -707,7 +723,6 @@ public sealed partial class AssistantWidgetView : UserControl
         var secretKey = string.Equals(settings.ProviderId, AssistantProviderIds.Gemini, StringComparison.OrdinalIgnoreCase)
             ? AssistantSecretKeys.GeminiApiKey
             : AssistantSecretKeys.OpenAiApiKey;
-        var typed = keyBox.Password?.Trim();
         if (!string.IsNullOrWhiteSpace(typed))
         {
             _secrets.SetSecret(secretKey, typed);

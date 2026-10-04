@@ -116,13 +116,19 @@
                         Height="64"
                         CornerRadius="12"
                         Background="#28FFFFFF">
-                        <TextBlock
-                            x:Name="ArtGlyph"
-                            Text="♪"
-                            FontSize="24"
-                            HorizontalAlignment="Center"
-                            VerticalAlignment="Center"
-                            Opacity="0.85" />
+                        <Grid>
+                            <TextBlock
+                                x:Name="ArtGlyph"
+                                Text="♪"
+                                FontSize="24"
+                                HorizontalAlignment="Center"
+                                VerticalAlignment="Center"
+                                Opacity="0.85" />
+                            <Image
+                                x:Name="ArtImage"
+                                Stretch="UniformToFill"
+                                Visibility="Collapsed" />
+                        </Grid>
                     </Border>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="3">
                         <TextBlock

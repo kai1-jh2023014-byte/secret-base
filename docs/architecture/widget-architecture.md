@@ -61,7 +61,7 @@ Do not merge these widgets. Humans and the assistant share the same Command serv
 | Clock / Text | None | Local-only |
 | Calendar | Optional HTTPS ICS + OAuth read | User ICS URL and/or AppData OAuth client; tokens in Credential Manager |
 | Web | WebView2 | Untrusted; no host bridge. Classroom catalog uses this. |
-| Music | Commands + optional browser | Native UI; Demo catalog; no Host Bridge; APIs deferred |
+| Music | Commands + optional browser | Native UI; Spotify PKCE connect; demo catalog when Spotify is disconnected; no Host Bridge |
 | Creative | Open registered paths only | Favorites/Recent/Dashboard; no Explorer; CreativeCommand boundary |
 | AI Workspace | Cursor + official AI websites | Project → Cursor; no in-app LLM; AiCommand boundary |
 | Secret Base AI | OpenAI HTTP + registered tools | Tools → existing Commands; keys in Credential Manager; no Host Bridge |

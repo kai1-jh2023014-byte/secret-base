@@ -152,9 +152,16 @@ public class BaseAiStatusFormatterTests
             ProviderId = AssistantProviderIds.OpenAi,
             IsConfigured = false
         }));
-        Assert.Equal("Base AI ● Online", BaseAiStatusFormatter.Format(new AssistantProviderStatusInfo
+        Assert.Equal("Base AI ● OpenAI", BaseAiStatusFormatter.Format(new AssistantProviderStatusInfo
         {
             ProviderId = AssistantProviderIds.OpenAi,
+            DisplayName = "OpenAI",
+            IsConfigured = true
+        }));
+        Assert.Equal("● Gemini", BaseAiStatusFormatter.FormatShort(new AssistantProviderStatusInfo
+        {
+            ProviderId = AssistantProviderIds.Gemini,
+            DisplayName = "Gemini",
             IsConfigured = true
         }));
         Assert.Equal("Base AI ● Local", BaseAiStatusFormatter.Format(new AssistantProviderStatusInfo
@@ -162,6 +169,50 @@ public class BaseAiStatusFormatterTests
             ProviderId = AssistantProviderIds.Local,
             IsConfigured = true
         }));
+    }
+}
+
+public class AssistantProviderSelectionTests
+{
+    [Fact]
+    public void GeminiKey_OverridesUnconfiguredOpenAi()
+    {
+        var id = AssistantProviderSelection.ResolveActiveProviderId(AssistantProviderIds.OpenAi, hasOpenAiKey: false, hasGeminiKey: true);
+        Assert.Equal(AssistantProviderIds.Gemini, id);
+        var runtime = AssistantProviderSelection.ForRuntime(
+            new AssistantSettings { ProviderId = AssistantProviderIds.OpenAi, Model = "gpt-4o-mini" },
+            hasOpenAiKey: false,
+            hasGeminiKey: true);
+        Assert.Equal(AssistantProviderIds.Gemini, runtime.ProviderId);
+        Assert.Equal(AssistantSettings.DefaultGeminiModel, runtime.Model);
+    }
+
+    [Fact]
+    public void ExplicitLocal_StaysLocal_WhenGeminiKeyExists()
+    {
+        var id = AssistantProviderSelection.ResolveActiveProviderId(AssistantProviderIds.Local, hasOpenAiKey: false, hasGeminiKey: true);
+        Assert.Equal(AssistantProviderIds.Local, id);
+    }
+
+    [Fact]
+    public void ConfiguredOpenAi_StaysOpenAi_WhenGeminiKeyAlsoExists()
+    {
+        var id = AssistantProviderSelection.ResolveActiveProviderId(AssistantProviderIds.OpenAi, hasOpenAiKey: true, hasGeminiKey: true);
+        Assert.Equal(AssistantProviderIds.OpenAi, id);
+    }
+
+    [Fact]
+    public void ProviderStatus_UsesGemini_WhenOnlyGeminiKeyExists()
+    {
+        var context = new AssistantContextService(
+            settings: () => new AssistantSettings(),
+            isOpenAiKeyConfigured: () => false,
+            isGeminiKeyConfigured: () => true);
+        var status = context.GetProviderStatus();
+        Assert.Equal(AssistantProviderIds.Gemini, status.ProviderId);
+        Assert.Equal("Gemini", status.DisplayName);
+        Assert.True(status.IsConfigured);
+        Assert.Equal("Base AI ● Gemini", BaseAiStatusFormatter.Format(status));
     }
 }
 

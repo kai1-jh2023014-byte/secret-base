@@ -86,9 +86,20 @@ public sealed class MusicCommandService
         }
 
         var merged = new List<MusicTrack>();
+        string? lastError = null;
+        var skippedDisconnected = 0;
         foreach (var provider in providers)
         {
             ct.ThrowIfCancellationRequested();
+            if (provider.Capabilities.HasFlag(MusicProviderCapabilities.Authentication)
+                && provider.AuthStatus is MusicAuthStatus.NotConfigured
+                    or MusicAuthStatus.Disconnected
+                    or MusicAuthStatus.Error)
+            {
+                skippedDisconnected++;
+                continue;
+            }
+
             try
             {
                 var found = await provider.SearchAsync(query, ct).ConfigureAwait(false);
@@ -96,7 +107,23 @@ public sealed class MusicCommandService
             }
             catch (Exception ex)
             {
-                return MusicCommandResult.Fail(MusicCommandKind.SearchTrack, ex.Message);
+                lastError = ex.Message;
+            }
+        }
+
+        if (merged.Count == 0)
+        {
+            if (skippedDisconnected > 0 && lastError is null)
+            {
+                return MusicCommandResult.Fail(
+                    MusicCommandKind.SearchTrack,
+                    "Connect a music provider to search that catalog.");
+            }
+
+            if (lastError is not null)
+            {
+                SpotifyWebSearch.TryCreateSearchUrl(query, out var webSearchUrl, out _);
+                return MusicCommandResult.Fail(MusicCommandKind.SearchTrack, lastError, webSearchUrl);
             }
         }
 
@@ -230,6 +257,25 @@ public sealed class MusicCommandService
         if (provider is null)
         {
             return MusicCommandResult.Fail(MusicCommandKind.ConnectProvider, "Music provider was not found.");
+        }
+
+        if (!string.IsNullOrWhiteSpace(command.ClientId))
+        {
+            if (provider is not IMusicOAuthClientSource source)
+            {
+                return MusicCommandResult.Fail(
+                    MusicCommandKind.ConnectProvider,
+                    "This music provider does not accept a client id.");
+            }
+
+            try
+            {
+                source.RememberClient(command.ClientId, command.ClientSecret);
+            }
+            catch (Exception ex)
+            {
+                return MusicCommandResult.Fail(MusicCommandKind.ConnectProvider, ex.Message);
+            }
         }
 
         try

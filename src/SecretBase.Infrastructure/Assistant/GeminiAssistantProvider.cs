@@ -47,6 +47,10 @@ public sealed class GeminiAssistantProvider : IAiProvider
         {
             response = await _http.SendAsync(request, cancellationToken).ConfigureAwait(false);
         }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return AiProviderResponse.Unavailable(AssistantUserMessages.Timeout);
+        }
         catch (OperationCanceledException)
         {
             throw;

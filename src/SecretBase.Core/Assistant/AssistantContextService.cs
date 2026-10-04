@@ -343,12 +343,11 @@ public sealed class AssistantContextService : IAssistantContextService
 
     public AssistantProviderStatusInfo GetProviderStatus()
     {
-        var settings = AssistantSettingsMigrator.MigrateToCurrent(_settings());
-        var providerId = string.IsNullOrWhiteSpace(settings.ProviderId)
-            ? AssistantProviderIds.OpenAi
-            : settings.ProviderId.Trim().ToLowerInvariant();
+        var stored = AssistantSettingsMigrator.MigrateToCurrent(_settings());
         var hasOpenAiKey = _isOpenAiKeyConfigured();
         var hasGeminiKey = _isGeminiKeyConfigured?.Invoke() ?? false;
+        var settings = AssistantProviderSelection.ForRuntime(stored, hasOpenAiKey, hasGeminiKey);
+        var providerId = AssistantProviderSelection.Normalize(settings.ProviderId);
 
         return providerId switch
         {

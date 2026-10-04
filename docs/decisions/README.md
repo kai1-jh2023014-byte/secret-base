@@ -1,5 +1,23 @@
 # Decision Log
 
+## 2026-10-04 — A song change still answers when the catalog API refuses
+
+**Decision:** If Spotify search fails, `music_search` and confirmed `music_play` open `https://open.spotify.com/search/…` and that sentence is the Base AI reply. The turn does not wait for a second model call to narrate an external link. If a later model call times out after any tool already ran, the tool text is the reply instead of a bare timeout.
+
+**Why:** "Change this song" called `music_search`, Spotify returned an error, then the follow-up Gemini call hit the HTTP timeout. The widget showed only "AI response timed out." A free account cannot play from the catalog API.
+
+## 2026-10-04 — Now playing comes from the Windows media session
+
+**Decision:** The Music widget reads the current OS media session through documented SMTC (`GlobalSystemMediaTransportControlsSessionManager`). Title, artist, artwork, and transport controls follow that session. This is the same session FluentFlyout uses. It does not call the Spotify Web API and does not replace the taskbar.
+
+**Why:** Spotify's catalog API returns 403 unless the app owner has Premium. Players such as Spotify still publish the current track to Windows, so a free account can see and control what is already playing.
+
+## 2026-10-04 — Taskbar shows the configured AI, Spotify uses a fixed redirect
+
+**Decision:** If a Gemini API key is saved and the selected remote provider has no key, Base AI (including the taskbar shelf) uses Gemini and labels it Gemini. An explicit Local choice stays Local. Spotify connect asks for a Client ID in the Music widget and always uses `http://127.0.0.1:43821/callback`. Public PKCE clients do not send an empty HTTP Basic secret. Search skips a music provider that is not connected so the demo catalog still answers.
+
+**Why:** A saved Gemini key was ignored while the default provider stayed OpenAI, and the shelf label was not refreshed after settings were saved, so the taskbar kept saying Local. Spotify’s redirect used a random loopback port, which the dashboard cannot allow, and there was no in-app place to enter a Client ID.
+
 ## 2026-10-03 — Desktop launch stays visible
 
 **Decision:** Start Menu, Desktop, and the logon Run key start `SecretBase.App.exe` directly when `Program Files\dotnet\shared\Microsoft.NETCore.App\10.*` exists. Set `DOTNET_ROOT` only when that runtime exists solely under `%LocalAppData%\Microsoft\dotnet`, using a Shift-JIS `launch-secretbase.cmd` (no `wscript //B`). Park the overlay with documented `GetShellWindow` + `SetWindowPos` immediately above the shell desktop. `HWND_BOTTOM` remains only when the shell window cannot be resolved. A second launch signals the running instance; if that instance never wrote `startup-last.txt` status `window-visible`, show a Win32 message box. Take over an abandoned single-instance mutex.
