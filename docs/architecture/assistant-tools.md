@@ -45,7 +45,7 @@ RequiresConfirmation
 | Tool | Behavior |
 |------|----------|
 | `workspace_prepare` | Build a workspace card from registered data. No launch. |
-| `focus_start` | Local Pomodoro. No launch. |
+| `focus_start` | Open Pomodoro widget + start/show local timer. No launch. |
 
 ### Suggest
 

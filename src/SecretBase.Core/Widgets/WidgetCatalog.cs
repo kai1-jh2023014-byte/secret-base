@@ -113,6 +113,13 @@ public static class WidgetCatalog
         },
         new()
         {
+            Id = "pomodoro",
+            Group = WidgetCatalogGroups.Base,
+            Label = "Pomodoro",
+            WidgetType = WidgetTypes.Pomodoro
+        },
+        new()
+        {
             Id = "apps",
             Group = WidgetCatalogGroups.Apps,
             Label = "My Apps",

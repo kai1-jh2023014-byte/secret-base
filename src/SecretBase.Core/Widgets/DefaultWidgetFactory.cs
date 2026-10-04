@@ -6,6 +6,7 @@ using SecretBase.Core.Widgets.Calendar;
 using SecretBase.Core.Widgets.Clock;
 using SecretBase.Core.Widgets.Creative;
 using SecretBase.Core.Widgets.Music;
+using SecretBase.Core.Widgets.Pomodoro;
 using SecretBase.Core.Widgets.Text;
 using SecretBase.Core.Widgets.Web;
 using SecretBase.Core.Widgets.Workspace;
@@ -284,6 +285,28 @@ public static class DefaultWidgetFactory
             Type = WidgetTypes.Workspace,
             Position = new WidgetPosition(x ?? 360, y ?? 80),
             Size = new WidgetSize(width ?? 340, height ?? 420),
+            RoomId = room,
+            Configuration = config.ToDictionary()
+        };
+    }
+
+    /// <summary>Creates a Pomodoro timer widget. Not seeded into default layout — add via catalog or focus_start.</summary>
+    public static WidgetInstance CreatePomodoro(
+        RoomId? roomId = null,
+        double? x = null,
+        double? y = null,
+        double? width = null,
+        double? height = null,
+        PomodoroWidgetConfiguration? configuration = null)
+    {
+        var room = roomId ?? RoomId.DefaultRoomId;
+        var config = configuration ?? PomodoroWidgetConfiguration.CreateDefault();
+        return new WidgetInstance
+        {
+            Id = Guid.NewGuid(),
+            Type = WidgetTypes.Pomodoro,
+            Position = new WidgetPosition(x ?? 420, y ?? 120),
+            Size = new WidgetSize(width ?? 300, height ?? 320),
             RoomId = room,
             Configuration = config.ToDictionary()
         };

@@ -25,7 +25,10 @@ public sealed class AssistantService : IAssistantService
         + "(cursor_open_project, creative_open_project, apps_open, integration_open, music_play, "
         + "calendar_add_event, calendar_apply_usual, calendar_remember_usual, workspace_open_named, workspace_remove, files_delete, workspace_continue, todo_add) "
         + "unless the user clearly asked to open, launch, start, play, add, apply, continue, or remove. "
-        + "focus_start and workspace_prepare are Safe Auto. files_suggest_cleanup never deletes. "
+        + "focus_start and workspace_prepare are Safe Auto. "
+        + "When the user wants a Pomodoro / focus timer now (e.g. ポモドーロ, pomodoro, 集中タイマー), call focus_start — "
+        + "it opens the Pomodoro widget and starts (or shows) the local timer. Do not only talk about Pomodoro. "
+        + "files_suggest_cleanup never deletes. "
         + "files_delete / workspace_remove NEVER delete files on disk — they return a Block item to Desktop or unregister a Secret Base item. "
         + "If the user asks to delete a disk file that is not registered, refuse honestly. "
         + "Never run shell, PowerShell, or arbitrary executables. Use registered names only. "
@@ -49,6 +52,7 @@ public sealed class AssistantService : IAssistantService
     private readonly List<AssistantActivity> _turnActivities = [];
     private readonly List<AssistantActionResult> _actionResults = [];
     private AssistantToolResult? _lastLaunch;
+    private string? _ensureWidgetType;
     private AssistantIntentKind _turnIntent = AssistantIntentKind.Question;
     private AssistantPlan? _turnPlan;
     private string? _turnContextNote;
@@ -92,6 +96,7 @@ public sealed class AssistantService : IAssistantService
         _turnActivities.Clear();
         _actionResults.Clear();
         _lastLaunch = null;
+        _ensureWidgetType = null;
         _turnPlan = null;
         _turnContextNote = null;
         _lastProjectId = null;
@@ -109,6 +114,7 @@ public sealed class AssistantService : IAssistantService
         _turnActivities.Clear();
         _actionResults.Clear();
         _lastLaunch = null;
+        _ensureWidgetType = null;
         _stepsUsed = 0;
         _turnToolNotes.Clear();
         _jevVerdict = null;
@@ -173,6 +179,7 @@ public sealed class AssistantService : IAssistantService
         _turnActivities.Clear();
         _actionResults.Clear();
         _lastLaunch = null;
+        _ensureWidgetType = null;
         _turnToolNotes.Clear();
 
         foreach (var action in pending.Actions)
@@ -240,6 +247,7 @@ public sealed class AssistantService : IAssistantService
         _turnActivities.Clear();
         _actionResults.Clear();
         _lastLaunch = null;
+        _ensureWidgetType = null;
         return ContinueModelAsync(cancellationToken);
     }
 
@@ -649,6 +657,11 @@ public sealed class AssistantService : IAssistantService
             _lastLaunch = result;
         }
 
+        if (!string.IsNullOrWhiteSpace(result.EnsureWidgetType))
+        {
+            _ensureWidgetType = result.EnsureWidgetType;
+        }
+
         return result;
     }
 
@@ -727,7 +740,7 @@ public sealed class AssistantService : IAssistantService
     private AssistantTurnResult Finish(AssistantTurnResult result)
     {
         _turnContextNote = null;
-        if (_lastLaunch is null)
+        if (_lastLaunch is null && string.IsNullOrWhiteSpace(_ensureWidgetType))
         {
             return Enrich(result);
         }
@@ -747,11 +760,12 @@ public sealed class AssistantService : IAssistantService
             CanRetry = result.CanRetry,
             RetryUserText = result.RetryUserText,
             ShowOpenSettingsAction = result.ShowOpenSettingsAction,
-            ShouldLaunch = _lastLaunch.ShouldLaunch,
-            LaunchTarget = _lastLaunch.LaunchTarget,
-            LaunchIsExternalLink = _lastLaunch.LaunchIsExternalLink,
-            ShouldOpenCursorAtFolder = _lastLaunch.ShouldOpenCursorAtFolder,
-            CursorFolderPath = _lastLaunch.CursorFolderPath
+            ShouldLaunch = _lastLaunch?.ShouldLaunch ?? false,
+            LaunchTarget = _lastLaunch?.LaunchTarget,
+            LaunchIsExternalLink = _lastLaunch?.LaunchIsExternalLink ?? false,
+            ShouldOpenCursorAtFolder = _lastLaunch?.ShouldOpenCursorAtFolder ?? false,
+            CursorFolderPath = _lastLaunch?.CursorFolderPath,
+            EnsureWidgetType = _ensureWidgetType
         });
     }
 
@@ -775,7 +789,8 @@ public sealed class AssistantService : IAssistantService
             LaunchTarget = result.LaunchTarget,
             LaunchIsExternalLink = result.LaunchIsExternalLink,
             ShouldOpenCursorAtFolder = result.ShouldOpenCursorAtFolder,
-            CursorFolderPath = result.CursorFolderPath
+            CursorFolderPath = result.CursorFolderPath,
+            EnsureWidgetType = result.EnsureWidgetType ?? _ensureWidgetType
         };
 
     private IReadOnlyList<AiMessage> BuildModelMessages()

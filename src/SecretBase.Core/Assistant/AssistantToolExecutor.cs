@@ -9,6 +9,7 @@ using SecretBase.Core.Focus;
 using SecretBase.Core.Integration;
 using SecretBase.Core.Music;
 using SecretBase.Core.Todo;
+using SecretBase.Core.Widgets;
 using SecretBase.Core.Workspace;
 
 namespace SecretBase.Core.Assistant;
@@ -1120,11 +1121,32 @@ public sealed class AssistantToolExecutor : IAiToolExecutor
 
         AssistantToolArgumentValidator.TryGetInt(root, "minutes", 25, 5, 90, out var minutes, out _);
         AssistantToolArgumentValidator.TryGetString(root, "label", required: false, out var label, out _);
-        var session = _base.Focus.Start(_base.Now, TimeSpan.FromMinutes(minutes), label);
+        var started = _base.Focus.Start(_base.Now, TimeSpan.FromMinutes(minutes), label);
+        var session = started.Session;
+        string message;
+        if (started.AlreadyRunning)
+        {
+            message =
+                $"{session.Label} is already running ({session.PhaseLabel}, {session.StatusLine(_base.Now)}). "
+                + "Showing the Pomodoro widget. No second timer was stacked.";
+        }
+        else if (started.Resumed)
+        {
+            message =
+                $"Resumed {session.Label} ({session.PhaseLabel}). Pomodoro widget opened. No apps were launched.";
+        }
+        else
+        {
+            message =
+                $"Started {session.Label} focus for {minutes} minutes (then {FocusSession.DefaultShortBreakMinutes}m break). "
+                + "Pomodoro widget opened. No apps were launched.";
+        }
+
         return AssistantToolResult.Ok(
-            $"Started {session.Label} for {minutes} minutes. No apps were launched.",
+            message,
             activity: "Focus ✓",
-            activityDomain: AssistantActivityDomains.Focus);
+            activityDomain: AssistantActivityDomains.Focus,
+            ensureWidgetType: WidgetTypes.Pomodoro);
     }
 
     private AssistantToolResult FilesSuggestCleanup()

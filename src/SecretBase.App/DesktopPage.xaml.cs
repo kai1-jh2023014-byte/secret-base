@@ -31,6 +31,7 @@ using SecretBase.Core.Widgets.Calendar;
 using SecretBase.Core.Widgets.Clock;
 using SecretBase.Core.Widgets.Creative;
 using SecretBase.Core.Widgets.Music;
+using SecretBase.Core.Widgets.Pomodoro;
 using SecretBase.Core.Widgets.Text;
 using SecretBase.Core.Widgets.Web;
 using SecretBase.Core.Widgets.Workspace;
@@ -53,6 +54,7 @@ using SecretBase.Widgets.Clock;
 using SecretBase.Widgets.Creative;
 using SecretBase.Widgets.Hosting;
 using SecretBase.Widgets.Music;
+using SecretBase.Widgets.Pomodoro;
 using SecretBase.Widgets.Text;
 using SecretBase.Widgets.Theming;
 using SecretBase.Widgets.Web;
@@ -309,7 +311,7 @@ public sealed partial class DesktopPage : Page
         _ = RefreshUpcomingEventsQuietAsync();
         DispatcherQueue.TryEnqueue(async () => await MaybeShowOnboardingAsync());
         _logger.Info("desktop", $"Overlay desktop shown for room '{_layout.RoomId}' with {_layout.Widgets.Count} widget(s), {_layout.Blocks.Count} block(s).");
-        _logger.Info("widget", "Widget hosts ready (Clock, Text, Calendar, Music, Creative, Workspace, Apps, Base AI).");
+        _logger.Info("widget", "Widget hosts ready (Clock, Text, Calendar, Music, Creative, Workspace, Pomodoro, Apps, Base AI).");
         _logger.Info("assistant", "Taskbar shelf ready (clock, focus, next, AI). Ctrl+Shift+K focuses the field. Does not replace the Windows taskbar.");
         _logger.Info("block", "Block host ready (use Blk button to add; drop + drag icons inside a Block).");
         _logger.Info("theme", "Theme editor ready (Aa button) — colors apply to all widgets and Blocks.");
@@ -1104,6 +1106,25 @@ public sealed partial class DesktopPage : Page
             return view;
         }
 
+        if (instance.Type == WidgetTypes.Pomodoro)
+        {
+            var config = PomodoroWidgetConfiguration.FromDictionary(instance.Configuration);
+            instance.Configuration = config.ToDictionary();
+            if (_baseExperience is null)
+            {
+                return null;
+            }
+
+            var view = new PomodoroWidgetView();
+            view.Initialize(_baseExperience);
+            if (_theme is not null)
+            {
+                view.ApplyTheme(_theme);
+            }
+
+            return view;
+        }
+
         return null;
     }
 
@@ -1217,6 +1238,11 @@ public sealed partial class DesktopPage : Page
 
     private string? TryApplyAssistantLaunch(AssistantTurnResult result)
     {
+        if (!string.IsNullOrWhiteSpace(result.EnsureWidgetType))
+        {
+            _ = EnsureWidgetAsync(result.EnsureWidgetType!);
+        }
+
         if (result.ShouldOpenCursorAtFolder && !string.IsNullOrWhiteSpace(result.CursorFolderPath))
         {
             var cursorError = TryLaunchCursor(result.CursorFolderPath, false);
@@ -1592,6 +1618,8 @@ public sealed partial class DesktopPage : Page
                 _layout.RoomId, 320 + cascade, 60 + cascade),
             WidgetTypes.Workspace => DefaultWidgetFactory.CreateWorkspace(
                 _layout.RoomId, 360 + cascade, 80 + cascade),
+            WidgetTypes.Pomodoro => DefaultWidgetFactory.CreatePomodoro(
+                _layout.RoomId, 420 + cascade, 120 + cascade),
             _ => null
         };
 

@@ -31,4 +31,7 @@ public static class WidgetTypes
 
     /// <summary>Prepared work mode: project, registered apps/files, next task, focus.</summary>
     public const string Workspace = "workspace";
+
+    /// <summary>Pomodoro / focus timer. Reuses <c>FocusSessionStore</c>.</summary>
+    public const string Pomodoro = "pomodoro";
 }

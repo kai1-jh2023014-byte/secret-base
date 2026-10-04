@@ -63,6 +63,9 @@ public sealed class AssistantTurnResult
 
     public string? CursorFolderPath { get; init; }
 
+    /// <summary>Host should ensure this widget type is visible (add if missing).</summary>
+    public string? EnsureWidgetType { get; init; }
+
     public static AssistantTurnResult Ok(
         string? text,
         IReadOnlyList<AssistantActivity>? activities = null,
@@ -77,12 +80,13 @@ public sealed class AssistantTurnResult
         string? launchTarget = null,
         bool launchIsExternalLink = false,
         bool shouldOpenCursorAtFolder = false,
-        string? cursorFolderPath = null) =>
+        string? cursorFolderPath = null,
+        string? ensureWidgetType = null) =>
         new()
         {
             Succeeded = true,
             AssistantText = text,
-            ResponseKind = shouldLaunch || shouldOpenCursorAtFolder
+            ResponseKind = shouldLaunch || shouldOpenCursorAtFolder || !string.IsNullOrWhiteSpace(ensureWidgetType)
                 ? AssistantResponseKind.Execute
                 : kind,
             Intent = intent,
@@ -96,7 +100,8 @@ public sealed class AssistantTurnResult
             LaunchTarget = launchTarget,
             LaunchIsExternalLink = launchIsExternalLink,
             ShouldOpenCursorAtFolder = shouldOpenCursorAtFolder,
-            CursorFolderPath = cursorFolderPath
+            CursorFolderPath = cursorFolderPath,
+            EnsureWidgetType = ensureWidgetType
         };
 
     public static AssistantTurnResult Confirm(

@@ -130,7 +130,7 @@ Prefer Core / Infrastructure / Platform.Mac unit tests for new domain logic. Win
 
 ## Current status (v0.6 Base Experience)
 
-Working: overlay desktop, Clock (Base status style), Calendar, Music (IMusicProvider + Spotify OAuth), Creative Projects, My Apps allowlist, Workspace block, Base AI (context → plan → confirm → action, remote→local fallback), Jev decision layer (separate key, typed choice only, no PC execution), local Todo/Focus, time-aware workspace suggestions, file cleanup suggestions, first-run onboarding that does not wipe existing users.
+Working: overlay desktop, Clock (Base status style), Calendar, Music (IMusicProvider + Spotify OAuth), Creative Projects, My Apps allowlist, Workspace block, Pomodoro timer widget (25/5/15 via FocusSessionStore; Base AI `focus_start` opens + auto-starts), Base AI (context → plan → confirm → action, remote→local fallback), Jev decision layer (separate key, typed choice only, no PC execution), local Todo/Focus, time-aware workspace suggestions, file cleanup suggestions, first-run onboarding that does not wipe existing users.
 
 Not built: Rooms UI, plugins, marketplace, YouTube Music official API (open-web only), Google Tasks write, unrestricted filesystem/shell.
 

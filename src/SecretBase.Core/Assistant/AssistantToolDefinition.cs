@@ -66,6 +66,12 @@ public sealed class AssistantToolResult
 
     public string? CursorFolderPath { get; init; }
 
+    /// <summary>
+    /// When set, the desktop host should ensure this widget type is on the layout
+    /// (add if missing). Safe Auto UI surfacing — never an OS launch.
+    /// </summary>
+    public string? EnsureWidgetType { get; init; }
+
     public static AssistantToolResult Ok(
         string contentForModel,
         string? activity = null,
@@ -74,7 +80,8 @@ public sealed class AssistantToolResult
         string? launchTarget = null,
         bool launchIsExternalLink = false,
         bool shouldOpenCursorAtFolder = false,
-        string? cursorFolderPath = null) =>
+        string? cursorFolderPath = null,
+        string? ensureWidgetType = null) =>
         new()
         {
             Succeeded = true,
@@ -85,7 +92,8 @@ public sealed class AssistantToolResult
             LaunchTarget = launchTarget,
             LaunchIsExternalLink = launchIsExternalLink,
             ShouldOpenCursorAtFolder = shouldOpenCursorAtFolder,
-            CursorFolderPath = cursorFolderPath
+            CursorFolderPath = cursorFolderPath,
+            EnsureWidgetType = ensureWidgetType
         };
 
     public static AssistantToolResult Fail(string error, string? activity = null, string? activityDomain = null) =>
