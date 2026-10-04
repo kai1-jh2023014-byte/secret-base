@@ -8,6 +8,7 @@ using SecretBase.Core.Creative;
 using SecretBase.Core.Desktop;
 using SecretBase.Core.Focus;
 using SecretBase.Core.Integration;
+using SecretBase.Core.Jev;
 using SecretBase.Core.Music;
 using SecretBase.Core.Time;
 using SecretBase.Core.Todo;
@@ -15,6 +16,7 @@ using SecretBase.Core.Widgets.Ai;
 using SecretBase.Core.Widgets.Calendar;
 using SecretBase.Core.Workspace;
 using SecretBase.Infrastructure.Assistant;
+using SecretBase.Infrastructure.Jev;
 using SecretBase.Infrastructure.Calendar;
 using SecretBase.Infrastructure.Integration;
 using SecretBase.Infrastructure.Logging;
@@ -42,6 +44,7 @@ public sealed class MacHostSession
     public required IAppLaunchSettingsStore LaunchSettings { get; init; }
     public required IAssistantSettingsStore AssistantSettings { get; init; }
     public required IAssistantService Assistant { get; init; }
+    public required IJevDecisionService Jev { get; init; }
     public required IPathPickService PathPicker { get; init; }
 }
 
@@ -134,6 +137,9 @@ public static class MacHostComposer
             () => calendarCommands.ListLocalEvents(),
             () => time.GetLocalNow());
         baseExperience.CurrentWorkspace = baseSettings.LastWorkspace;
+        var jev = new JevDecisionService(
+            new JevApiClient(new HttpClient { Timeout = TimeSpan.FromSeconds(20) }),
+            () => secrets.TryGetSecret(JevSecretKeys.ApiKey, out var jevKey) ? jevKey : null);
         var assistant = new AssistantService(
             assistantRegistry,
             new AssistantToolExecutor(
@@ -150,7 +156,8 @@ public static class MacHostComposer
                 baseExperience),
             () => assistantProviders.Create(assistantSettings.LoadOrCreate()),
             () => assistantSettings.LoadOrCreate(),
-            assistantContext);
+            assistantContext,
+            jev);
 
         return new MacHostSession
         {
@@ -167,6 +174,7 @@ public static class MacHostComposer
             LaunchSettings = launchSettings,
             AssistantSettings = assistantSettings,
             Assistant = assistant,
+            Jev = jev,
             PathPicker = new MacPathPickService()
         };
     }

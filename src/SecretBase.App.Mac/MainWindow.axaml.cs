@@ -5,6 +5,7 @@ using Avalonia.Interactivity;
 using Avalonia.Threading;
 using SecretBase.Core;
 using SecretBase.Core.Assistant;
+using SecretBase.Core.Jev;
 using SecretBase.Core.Blocks;
 using SecretBase.Core.Desktop;
 using SecretBase.Core.Themes;
@@ -304,6 +305,11 @@ public partial class MainWindow : Window
             : "OpenAI";
 
         var typed = ApiKeyBox.Text?.Trim();
+        if (!string.IsNullOrWhiteSpace(typed) && typed.StartsWith("jv_", StringComparison.Ordinal))
+        {
+            StatusText.Text = JevUserMessages.ConversationKeyIgnored;
+            return;
+        }
         // If the typed key clearly belongs to the other provider, route it correctly.
         if (!string.IsNullOrWhiteSpace(typed))
         {
@@ -344,6 +350,47 @@ public partial class MainWindow : Window
         }
 
         RefreshProvider();
+    }
+
+    private void SaveJevKeyButton_OnClick(object? sender, RoutedEventArgs e) =>
+        TryStoreTypedJevKey(deleteWhenBlank: true);
+
+    private async void TestJevButton_OnClick(object? sender, RoutedEventArgs e)
+    {
+        if (!TryStoreTypedJevKey(deleteWhenBlank: false))
+        {
+            return;
+        }
+
+        var test = await _session.Jev.TestConnectionAsync();
+        StatusText.Text = test.Message;
+    }
+
+    private bool TryStoreTypedJevKey(bool deleteWhenBlank)
+    {
+        var typed = JevKeyBox.Text?.Trim();
+        if (!string.IsNullOrWhiteSpace(typed)
+            && (typed.StartsWith("AIza", StringComparison.Ordinal) || typed.StartsWith("sk-", StringComparison.Ordinal)))
+        {
+            StatusText.Text = JevUserMessages.WrongKey;
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(typed))
+        {
+            if (deleteWhenBlank)
+            {
+                _session.Secrets.DeleteSecret(JevSecretKeys.ApiKey);
+                StatusText.Text = "Jev key removed.";
+            }
+
+            return true;
+        }
+
+        _session.Secrets.SetSecret(JevSecretKeys.ApiKey, typed);
+        JevKeyBox.Text = string.Empty;
+        StatusText.Text = "Jev key saved separately from conversation keys.";
+        return true;
     }
 
     private void ExitButton_OnClick(object? sender, RoutedEventArgs e) => _session.SafeExit.RequestExit();

@@ -32,6 +32,8 @@ Host (ITargetLaunchService / ICursorLaunchService / browser)
 
 The LLM never calls `Process.Start`, PowerShell, the filesystem, Host Bridge, or WebView2.
 
+Jev is a separate decision layer, not another chat provider. See [jev-decision.md](jev-decision.md).
+
 See also:
 
 - [assistant-context.md](assistant-context.md)

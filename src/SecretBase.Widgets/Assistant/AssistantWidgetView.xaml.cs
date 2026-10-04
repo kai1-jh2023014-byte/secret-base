@@ -3,6 +3,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using SecretBase.Core.Assistant;
+using SecretBase.Core.Jev;
 using SecretBase.Core.Themes;
 using SecretBase.Platform.Abstractions;
 using SecretBase.Widgets.Hosting;
@@ -21,6 +22,7 @@ public sealed partial class AssistantWidgetView : UserControl
     private IAssistantSettingsStore? _settingsStore;
     private ISecureSecretStore? _secrets;
     private IAiProviderFactory? _providers;
+    private IJevDecisionService? _jev;
     private Func<AssistantTurnResult, string?>? _applyLaunch;
     private OverlayDialogInput? _dialogInput;
     private ThemeDefinition? _theme;
@@ -41,13 +43,15 @@ public sealed partial class AssistantWidgetView : UserControl
         Func<AssistantTurnResult, string?> applyLaunch,
         string? headerTitle = null,
         string? headerSubtitle = null,
-        OverlayDialogInput? dialogInput = null)
+        OverlayDialogInput? dialogInput = null,
+        IJevDecisionService? jev = null)
     {
         _assistant = assistant;
         _settingsStore = settingsStore;
         _secrets = secrets;
         _providers = providers;
         _applyLaunch = applyLaunch;
+        _jev = jev;
         _dialogInput = dialogInput;
         if (!string.IsNullOrWhiteSpace(headerTitle))
         {
@@ -512,9 +516,14 @@ public sealed partial class AssistantWidgetView : UserControl
         using var _ = _dialogInput?.Enter();
 
         var settings = AssistantSettingsMigrator.MigrateToCurrent(_settingsStore.LoadOrCreate());
+        var conversationHeader = new TextBlock
+        {
+            Text = "Conversation AI",
+            FontSize = 14
+        };
         var providerBox = new ComboBox
         {
-            Header = "AI Provider",
+            Header = "Provider",
             ItemsSource = new[] { "OpenAI", "Gemini", "Local" },
             HorizontalAlignment = HorizontalAlignment.Stretch
         };
@@ -607,6 +616,13 @@ public sealed partial class AssistantWidgetView : UserControl
             TextWrapping = TextWrapping.WrapWholeWords
         };
 
+        var jevSaved = _secrets.TryGetSecret(JevSecretKeys.ApiKey, out var jevExisting)
+                       && !string.IsNullOrWhiteSpace(jevExisting);
+        var jevKeyBox = new PasswordBox
+        {
+            Header = jevSaved ? "Change Jev API Key (leave blank to keep)" : "Jev API Key",
+            PlaceholderText = jevSaved ? "••••••••" : "Jev key"
+        };
         var testStatus = new TextBlock
         {
             FontSize = 12,
@@ -616,14 +632,14 @@ public sealed partial class AssistantWidgetView : UserControl
         var testButton = new Button { Content = "Test Connection", MinWidth = 120 };
         testButton.Click += async (_, _) =>
         {
-            PersistSettingsFromDialog(providerBox, modelBox, maxStepsBox, keyBox, keepExistingIfBlank: true);
+            var saveWarning = PersistSettingsFromDialog(providerBox, modelBox, maxStepsBox, keyBox, jevKeyBox, keepExistingIfBlank: true);
             var current = AssistantSettingsMigrator.MigrateToCurrent(_settingsStore.LoadOrCreate());
             var provider = _providers.Create(current);
             var ping = await provider.ChatAsync(
                 [new AiMessage { Role = AiMessageRole.User, Content = "Reply with the single word pong." }],
                 Array.Empty<AssistantToolDefinition>(),
                 current.Model);
-            testStatus.Text = ping.Status switch
+            var pingText = ping.Status switch
             {
                 AiProviderStatus.Ok when string.Equals(provider.ProviderId, AssistantProviderIds.Local, StringComparison.OrdinalIgnoreCase)
                     => "● Local AI answered. The selected remote provider was not used.",
@@ -632,18 +648,87 @@ public sealed partial class AssistantWidgetView : UserControl
                     AssistantUserMessages.NotConfigured + " Save the key for the selected provider, then test again.",
                 _ => ping.ErrorMessage ?? AssistantUserMessages.Unavailable
             };
+            testStatus.Text = saveWarning is null ? pingText : saveWarning + " " + pingText;
         };
 
-        var panel = new StackPanel { Spacing = 8 };
+        var jevHeader = new TextBlock
+        {
+            Text = "Jev Decision AI",
+            FontSize = 14,
+            Margin = new Thickness(0, 8, 0, 0)
+        };
+        var jevHelp = new TextBlock
+        {
+            FontSize = 12,
+            Opacity = 0.85,
+            TextWrapping = TextWrapping.WrapWholeWords,
+            Text = "Separate from the provider list above. Jev only decides. It does not chat and it does not run the PC."
+        };
+        var jevStatus = new TextBlock
+        {
+            FontSize = 12,
+            Opacity = 0.85,
+            TextWrapping = TextWrapping.WrapWholeWords,
+            Text = jevSaved
+                ? "Jev API Key  ••••••••  (saved separately from conversation keys)"
+                : "Jev API Key  (not set)"
+        };
+        var jevTestStatus = new TextBlock
+        {
+            FontSize = 12,
+            Opacity = 0.8,
+            TextWrapping = TextWrapping.WrapWholeWords
+        };
+        var jevTestButton = new Button { Content = "Test Jev", MinWidth = 120 };
+        jevTestButton.Click += async (_, _) =>
+        {
+            var jevWarning = TrySaveJevKey(jevKeyBox, keepExistingIfBlank: true);
+            if (jevWarning is not null)
+            {
+                jevTestStatus.Text = jevWarning;
+                return;
+            }
+
+            if (_jev is null)
+            {
+                jevTestStatus.Text = "Jev decision AI is not available.";
+                return;
+            }
+
+            var test = await _jev.TestConnectionAsync();
+            jevTestStatus.Text = test.Message;
+            var nowSaved = _secrets.TryGetSecret(JevSecretKeys.ApiKey, out var stored)
+                           && !string.IsNullOrWhiteSpace(stored);
+            jevStatus.Text = nowSaved
+                ? "Jev API Key  ••••••••  (saved separately from conversation keys)"
+                : "Jev API Key  (not set)";
+        };
+
+        var panel = new StackPanel { Spacing = 8, MinWidth = 360 };
+        panel.Children.Add(conversationHeader);
         panel.Children.Add(providerBox);
         panel.Children.Add(providerHelp);
         panel.Children.Add(modelBox);
-        panel.Children.Add(maxStepsBox);
-        panel.Children.Add(confirmNote);
         panel.Children.Add(keyStatus);
         panel.Children.Add(keyBox);
         panel.Children.Add(testButton);
         panel.Children.Add(testStatus);
+        panel.Children.Add(jevHeader);
+        panel.Children.Add(jevHelp);
+        panel.Children.Add(jevStatus);
+        panel.Children.Add(jevKeyBox);
+        panel.Children.Add(jevTestButton);
+        panel.Children.Add(jevTestStatus);
+        panel.Children.Add(maxStepsBox);
+        panel.Children.Add(confirmNote);
+
+        var scroll = new ScrollViewer
+        {
+            Content = panel,
+            MaxHeight = 460,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto
+        };
 
         var dialog = new ContentDialog
         {
@@ -651,7 +736,7 @@ public sealed partial class AssistantWidgetView : UserControl
             PrimaryButtonText = "Save",
             CloseButtonText = "Cancel",
             DefaultButton = ContentDialogButton.Primary,
-            Content = panel,
+            Content = scroll,
             XamlRoot = XamlRoot
         };
 
@@ -660,25 +745,34 @@ public sealed partial class AssistantWidgetView : UserControl
             return;
         }
 
-        PersistSettingsFromDialog(providerBox, modelBox, maxStepsBox, keyBox, keepExistingIfBlank: true);
-        StatusLabel.Text = "AI settings saved.";
+        var warning = PersistSettingsFromDialog(providerBox, modelBox, maxStepsBox, keyBox, jevKeyBox, keepExistingIfBlank: true);
+        StatusLabel.Text = warning ?? "AI settings saved.";
         RefreshProviderStatus();
     }
 
-    private void PersistSettingsFromDialog(
+    private string? PersistSettingsFromDialog(
         ComboBox providerBox,
         TextBox modelBox,
         NumberBox maxStepsBox,
         PasswordBox keyBox,
+        PasswordBox jevKeyBox,
         bool keepExistingIfBlank)
     {
         if (_settingsStore is null || _secrets is null)
         {
-            return;
+            return null;
         }
 
         var settings = AssistantSettingsMigrator.MigrateToCurrent(_settingsStore.LoadOrCreate());
         var typed = keyBox.Password?.Trim();
+        string? warning = null;
+        if (!string.IsNullOrWhiteSpace(typed)
+            && typed.StartsWith("jv_", StringComparison.Ordinal))
+        {
+            typed = null;
+            warning = JevUserMessages.ConversationKeyIgnored;
+        }
+
         var selected = providerBox.SelectedItem as string;
         if (!string.IsNullOrWhiteSpace(typed))
         {
@@ -715,22 +809,52 @@ public sealed partial class AssistantWidgetView : UserControl
         settings.RequireConfirmationForActions = true;
         _settingsStore.Save(settings);
 
-        if (string.Equals(settings.ProviderId, AssistantProviderIds.Local, StringComparison.OrdinalIgnoreCase))
+        if (!string.Equals(settings.ProviderId, AssistantProviderIds.Local, StringComparison.OrdinalIgnoreCase))
         {
-            return;
+            var secretKey = string.Equals(settings.ProviderId, AssistantProviderIds.Gemini, StringComparison.OrdinalIgnoreCase)
+                ? AssistantSecretKeys.GeminiApiKey
+                : AssistantSecretKeys.OpenAiApiKey;
+            if (!string.IsNullOrWhiteSpace(typed))
+            {
+                _secrets.SetSecret(secretKey, typed);
+            }
+            else if (!keepExistingIfBlank)
+            {
+                _secrets.DeleteSecret(secretKey);
+            }
         }
 
-        var secretKey = string.Equals(settings.ProviderId, AssistantProviderIds.Gemini, StringComparison.OrdinalIgnoreCase)
-            ? AssistantSecretKeys.GeminiApiKey
-            : AssistantSecretKeys.OpenAiApiKey;
-        if (!string.IsNullOrWhiteSpace(typed))
+        var jevWarning = TrySaveJevKey(jevKeyBox, keepExistingIfBlank);
+        return jevWarning ?? warning;
+    }
+
+    private string? TrySaveJevKey(PasswordBox jevKeyBox, bool keepExistingIfBlank)
+    {
+        if (_secrets is null)
         {
-            _secrets.SetSecret(secretKey, typed);
+            return null;
         }
-        else if (!keepExistingIfBlank)
+
+        var typed = jevKeyBox.Password?.Trim();
+        if (string.IsNullOrWhiteSpace(typed))
         {
-            _secrets.DeleteSecret(secretKey);
+            if (!keepExistingIfBlank)
+            {
+                _secrets.DeleteSecret(JevSecretKeys.ApiKey);
+            }
+
+            return null;
         }
+
+        if (typed.StartsWith("AIza", StringComparison.Ordinal)
+            || typed.StartsWith("sk-", StringComparison.Ordinal))
+        {
+            return JevUserMessages.WrongKey;
+        }
+
+        _secrets.SetSecret(JevSecretKeys.ApiKey, typed);
+        jevKeyBox.Password = string.Empty;
+        return null;
     }
 
     private bool HasKeyForProvider(string? providerId)

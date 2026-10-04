@@ -1,5 +1,6 @@
 using Microsoft.UI.Xaml.Controls;
 using SecretBase.Core.Assistant;
+using SecretBase.Core.Jev;
 using SecretBase.Core.Themes;
 using SecretBase.Platform.Abstractions;
 using SecretBase.Widgets.Hosting;
@@ -22,7 +23,8 @@ public sealed partial class AiWorkspaceView : UserControl
         ISecureSecretStore secrets,
         IAiProviderFactory providers,
         Func<AssistantTurnResult, string?> applyLaunch,
-        OverlayDialogInput? dialogInput = null)
+        OverlayDialogInput? dialogInput = null,
+        IJevDecisionService? jev = null)
     {
         ChatHost.Initialize(
             assistant,
@@ -32,7 +34,8 @@ public sealed partial class AiWorkspaceView : UserControl
             applyLaunch,
             headerTitle: "AI Workspace",
             headerSubtitle: "Chat · Context · Tools",
-            dialogInput: dialogInput);
+            dialogInput: dialogInput,
+            jev: jev);
     }
 
     public void ApplyTheme(ThemeDefinition theme) => ChatHost.ApplyTheme(theme);
