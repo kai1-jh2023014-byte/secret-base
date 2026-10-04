@@ -20,8 +20,16 @@ public sealed class AssistantProviderFactory : IAiProviderFactory
     public IAiProvider Create(AssistantSettings settings)
     {
         ArgumentNullException.ThrowIfNull(settings);
-        return _resolver.Resolve(AssistantSettingsMigrator.MigrateToCurrent(settings)).Provider;
+        var migrated = AssistantSettingsMigrator.MigrateToCurrent(settings);
+        var runtime = AssistantProviderSelection.ForRuntime(
+            migrated,
+            HasSecret(AssistantSecretKeys.OpenAiApiKey),
+            HasSecret(AssistantSecretKeys.GeminiApiKey));
+        return _resolver.Resolve(runtime).Provider;
     }
+
+    private bool HasSecret(string key) =>
+        _secrets.TryGetSecret(key, out var value) && !string.IsNullOrWhiteSpace(value);
 
     public IAiProvider CreateForProviderId(string providerId, AssistantSettings settings)
     {

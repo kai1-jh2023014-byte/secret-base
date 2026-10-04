@@ -33,6 +33,12 @@ public sealed class MusicCommand
     /// <summary>Optional resolved track for PlayTrack (preferred over TrackId lookup).</summary>
     public MusicTrack? Track { get; init; }
 
+    /// <summary>OAuth client id for ConnectProvider. Never logged.</summary>
+    public string? ClientId { get; init; }
+
+    /// <summary>Optional OAuth client secret for ConnectProvider. Never logged.</summary>
+    public string? ClientSecret { get; init; }
+
     public static MusicCommand SearchTrack(string query, string? providerId = null) =>
         new() { Kind = MusicCommandKind.SearchTrack, Query = query, ProviderId = providerId };
 
@@ -53,8 +59,14 @@ public sealed class MusicCommand
     public static MusicCommand GetPlaybackState(string? providerId = null) =>
         new() { Kind = MusicCommandKind.GetPlaybackState, ProviderId = providerId };
 
-    public static MusicCommand ConnectProvider(string providerId) =>
-        new() { Kind = MusicCommandKind.ConnectProvider, ProviderId = providerId };
+    public static MusicCommand ConnectProvider(string providerId, string? clientId = null, string? clientSecret = null) =>
+        new()
+        {
+            Kind = MusicCommandKind.ConnectProvider,
+            ProviderId = providerId,
+            ClientId = clientId,
+            ClientSecret = clientSecret
+        };
 
     public static MusicCommand DisconnectProvider(string providerId) =>
         new() { Kind = MusicCommandKind.DisconnectProvider, ProviderId = providerId };

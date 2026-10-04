@@ -28,13 +28,13 @@ Music is a first-class Creative OS surface — **Secret Base UI first**, externa
 1. Native search UI (Enter / Search button)
 2. Results list → select track → Current Track
 3. Play / Pause / Next / Previous (capability-gated)
-4. **Demo catalog** provider (honest in-memory catalog — not Spotify API)
+4. **Demo catalog** provider (honest in-memory catalog — used when Spotify is not connected)
 5. Optional “Open web source…” → system browser (https via `WebUrlValidator`)
 6. Layout persistence of sources + current track metadata (no tokens / artwork URLs)
+7. **Spotify connect** from the Music widget: paste the Client ID (Client Secret optional). PKCE uses one fixed redirect URI, `http://127.0.0.1:43821/callback`, which must be registered in the Spotify dashboard. The client file stays in `%LocalAppData%\SecretBase\credentials\` and is not committed. Playback controls an active Spotify device (Premium). Secret Base does not stream audio.
 
 ## What is deferred
 
-- Spotify OAuth / Web API
 - YouTube OAuth / Data API
 - Real audio output / Windows Audio session control
 - Local library scan / player
@@ -64,6 +64,7 @@ AI must never call Providers or OS APIs directly.
 
 | Provider | Capabilities |
 |----------|----------------|
+| `SpotifyMusicProvider` | Search, Playback, Pause, Resume, Next, Previous, NowPlaying, Authentication (active Spotify device) |
 | `DemoCatalogMusicProvider` | Search, Playback, Pause, Resume, Next, Previous, NowPlaying |
 | `OpenWebMusicProvider` | OpenInWidget only (URL → browser) |
 | `LocalMusicProvider` | None (placeholder) |

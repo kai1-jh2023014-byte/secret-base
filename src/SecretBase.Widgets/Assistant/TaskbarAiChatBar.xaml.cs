@@ -277,6 +277,7 @@ public sealed partial class TaskbarAiChatBar : UserControl
         DateText.Text = snapshot.Date;
         FocusText.Text = snapshot.Focus;
         NextText.Text = snapshot.Next;
+        RefreshProvider();
     }
 
     public void FocusInput()

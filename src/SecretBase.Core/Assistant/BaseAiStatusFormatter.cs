@@ -10,19 +10,26 @@ public static class BaseAiStatusFormatter
             return "Base AI ○ Unavailable";
         }
 
-        if (string.Equals(status.ProviderId, AssistantProviderIds.Local, StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(status.ProviderId, AssistantProviderIds.Local, StringComparison.OrdinalIgnoreCase)
+            || !status.IsConfigured)
         {
             return "Base AI ● Local";
         }
 
-        if (status.IsConfigured)
-        {
-            return "Base AI ● Online";
-        }
-
-        // Remote not configured → resilient provider uses Local.
-        return "Base AI ● Local";
+        var name = string.IsNullOrWhiteSpace(status.DisplayName)
+            ? NameFor(status.ProviderId)
+            : status.DisplayName.Trim();
+        return "Base AI ● " + name;
     }
+
+    private static string NameFor(string? providerId) =>
+        AssistantProviderSelection.Normalize(providerId) switch
+        {
+            AssistantProviderIds.Gemini => "Gemini",
+            AssistantProviderIds.OpenAi => "OpenAI",
+            AssistantProviderIds.Local => "Local",
+            _ => "Online"
+        };
 
     public static string FormatShort(AssistantProviderStatusInfo? status)
     {

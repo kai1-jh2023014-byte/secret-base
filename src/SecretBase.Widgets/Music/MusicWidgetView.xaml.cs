@@ -118,8 +118,67 @@ public sealed partial class MusicWidgetView : UserControl
 
     private async void ConnectSpotifyButton_Click(object sender, RoutedEventArgs e)
     {
+        var spotify = _musicService.Providers.FirstOrDefault(p => p.ProviderId == "spotify");
+        if (spotify is null)
+        {
+            StatusLabel.Text = "Spotify provider is not available.";
+            return;
+        }
+
+        using var dialogScope = _dialogInput?.Enter();
+        var savedClient = spotify.AuthStatus is not MusicAuthStatus.NotConfigured;
+        var clientIdBox = new TextBox
+        {
+            Header = "Spotify Client ID",
+            PlaceholderText = savedClient
+                ? "Leave blank to use the saved Client ID"
+                : "From the Spotify dashboard"
+        };
+        var secretBox = new PasswordBox
+        {
+            Header = "Client Secret (optional)",
+            PlaceholderText = "Leave blank for a public PKCE app"
+        };
+        var help = new TextBlock
+        {
+            TextWrapping = TextWrapping.WrapWholeWords,
+            FontSize = 12,
+            Text =
+                "In the Spotify developer dashboard, add this exact Redirect URI:\n"
+                + SpotifyOAuth.RedirectUri
+                + "\n\nPlayback controls Spotify on an active device. Secret Base does not play audio itself."
+        };
+        var panel = new StackPanel { Spacing = 8 };
+        panel.Children.Add(help);
+        panel.Children.Add(clientIdBox);
+        panel.Children.Add(secretBox);
+        var dialog = new ContentDialog
+        {
+            Title = "Connect Spotify",
+            PrimaryButtonText = "Connect",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Primary,
+            Content = panel,
+            XamlRoot = XamlRoot
+        };
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary)
+        {
+            return;
+        }
+
+        var clientId = clientIdBox.Text?.Trim();
+        var secret = secretBox.Password?.Trim();
+        if (!savedClient && string.IsNullOrWhiteSpace(clientId))
+        {
+            StatusLabel.Text = "Spotify Client ID is required. Register " + SpotifyOAuth.RedirectUri + " first.";
+            return;
+        }
+
         StatusLabel.Text = "Connecting to Spotify…";
-        var result = await _commands.ExecuteAsync(MusicCommand.ConnectProvider("spotify"));
+        var result = await _commands.ExecuteAsync(MusicCommand.ConnectProvider(
+            "spotify",
+            string.IsNullOrWhiteSpace(clientId) ? null : clientId,
+            string.IsNullOrWhiteSpace(secret) ? null : secret));
         if (!result.Succeeded)
         {
             StatusLabel.Text = result.ErrorMessage ?? "Spotify connect failed.";
@@ -219,7 +278,10 @@ public sealed partial class MusicWidgetView : UserControl
                 ResultsList.Children.Add(CreateResultRow(track));
             }
 
-            StatusLabel.Text = $"{result.Tracks.Count} result(s) · Demo catalog";
+            var sourceName = result.Tracks.Any(t => string.Equals(t.ProviderId, "spotify", StringComparison.Ordinal))
+                ? "Spotify"
+                : "Demo catalog";
+            StatusLabel.Text = $"{result.Tracks.Count} result(s) · {sourceName}";
             UpdateTransportEnabled();
         }
         finally

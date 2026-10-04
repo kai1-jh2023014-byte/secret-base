@@ -162,6 +162,130 @@ public class MusicCommandServiceTests
         var result = await service.ExecuteAsync(MusicCommand.Pause());
         Assert.False(result.Succeeded);
     }
+
+    [Fact]
+    public async Task Search_SkipsDisconnectedAuthProvider_AndKeepsDemoCatalog()
+    {
+        var music = new MusicService(
+        [
+            new DisconnectedAuthSearchProvider(),
+            new DemoCatalogMusicProvider()
+        ]);
+        var result = await new MusicCommandService(music).ExecuteAsync(MusicCommand.SearchTrack("Lilac"));
+        Assert.True(result.Succeeded);
+        Assert.Contains(result.Tracks, t => t.ProviderId == DemoCatalogMusicProvider.Id);
+        Assert.DoesNotContain(result.Tracks, t => t.ProviderId == "spotify");
+    }
+
+    [Fact]
+    public async Task Connect_RemembersClientId_BeforeConnect()
+    {
+        var provider = new RememberingMusicProvider();
+        var service = new MusicCommandService(new MusicService([provider]));
+        var result = await service.ExecuteAsync(MusicCommand.ConnectProvider("spotify", "0123456789abcdef0123456789abcdef", "secret"));
+        Assert.True(result.Succeeded);
+        Assert.Equal("0123456789abcdef0123456789abcdef", provider.SavedClientId);
+        Assert.Equal(MusicAuthStatus.Connected, result.AuthStatus);
+        Assert.Equal(SpotifyOAuth.RedirectUri, provider.RedirectUri);
+    }
+
+    private sealed class DisconnectedAuthSearchProvider : IMusicProvider
+    {
+        public string ProviderId => "spotify";
+
+        public string DisplayName => "Spotify";
+
+        public MusicProviderCapabilities Capabilities =>
+            MusicProviderCapabilities.Search | MusicProviderCapabilities.Authentication;
+
+        public MusicAuthStatus AuthStatus => MusicAuthStatus.Disconnected;
+
+        public MusicTrack? CurrentTrack => null;
+
+        public bool IsPlaying => false;
+
+        public bool CanHandle(MusicSourceType type) => false;
+
+        public bool TryResolveOpenUrl(MusicSource source, out string? url, out string? error)
+        {
+            url = null;
+            error = null;
+            return false;
+        }
+
+        public Task<IReadOnlyList<MusicTrack>> SearchAsync(string query, CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("Spotify is not connected.");
+
+        public Task PlayAsync(MusicTrack track, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task PauseAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public Task ResumeAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public Task NextAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public Task PreviousAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public Task ConnectAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+        public Task DisconnectAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+        public Task RefreshPlaybackStateAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+    }
+
+    private sealed class RememberingMusicProvider : IMusicProvider, IMusicOAuthClientSource
+    {
+        public string? SavedClientId { get; private set; }
+
+        public string ProviderId => "spotify";
+
+        public string DisplayName => "Spotify";
+
+        public MusicProviderCapabilities Capabilities => MusicProviderCapabilities.Authentication;
+
+        public MusicAuthStatus AuthStatus { get; private set; } = MusicAuthStatus.NotConfigured;
+
+        public string RedirectUri => SpotifyOAuth.RedirectUri;
+
+        public MusicTrack? CurrentTrack => null;
+
+        public bool IsPlaying => false;
+
+        public bool CanHandle(MusicSourceType type) => false;
+
+        public bool TryResolveOpenUrl(MusicSource source, out string? url, out string? error)
+        {
+            url = null;
+            error = null;
+            return false;
+        }
+
+        public void RememberClient(string clientId, string? clientSecret) => SavedClientId = clientId;
+
+        public Task<IReadOnlyList<MusicTrack>> SearchAsync(string query, CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<MusicTrack>>(Array.Empty<MusicTrack>());
+
+        public Task PlayAsync(MusicTrack track, CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+        public Task PauseAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+        public Task ResumeAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+        public Task NextAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+        public Task PreviousAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+        public Task ConnectAsync(CancellationToken cancellationToken = default)
+        {
+            AuthStatus = MusicAuthStatus.Connected;
+            return Task.CompletedTask;
+        }
+
+        public Task DisconnectAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+        public Task RefreshPlaybackStateAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+    }
 }
 
 public class MusicTrackSerializationTests

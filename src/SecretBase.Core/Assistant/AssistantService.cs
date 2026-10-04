@@ -228,6 +228,10 @@ public sealed class AssistantService : IAssistantService
     {
         var settings = AssistantSettingsMigrator.MigrateToCurrent(_settings());
         var provider = _provider();
+        var model = AssistantProviderSelection.ForRuntime(
+            settings,
+            hasOpenAiKey: string.Equals(provider.ProviderId, AssistantProviderIds.OpenAi, StringComparison.OrdinalIgnoreCase),
+            hasGeminiKey: string.Equals(provider.ProviderId, AssistantProviderIds.Gemini, StringComparison.OrdinalIgnoreCase)).Model;
         var maxRounds = Math.Min(MaxToolRounds, Math.Max(1, settings.MaxSteps));
 
         for (var round = 0; round < maxRounds; round++)
@@ -238,7 +242,7 @@ public sealed class AssistantService : IAssistantService
                 response = await provider.ChatAsync(
                     BuildModelMessages(),
                     _registry.Tools,
-                    settings.Model,
+                    model,
                     cancellationToken).ConfigureAwait(false);
             }
             catch (OperationCanceledException)

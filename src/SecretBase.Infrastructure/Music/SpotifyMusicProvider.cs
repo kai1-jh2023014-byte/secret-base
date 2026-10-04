@@ -1,6 +1,5 @@
 using System.Net;
 using System.Net.Http.Headers;
-using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -13,17 +12,18 @@ namespace SecretBase.Infrastructure.Music;
 /// Spotify Web API provider (OAuth PKCE + official REST). Controls playback on the user's
 /// active Spotify device — Secret Base does not stream audio or bypass DRM.
 /// </summary>
-public sealed class SpotifyMusicProvider : IMusicProvider
+public sealed class SpotifyMusicProvider : IMusicProvider, IMusicOAuthClientSource
 {
     public const string Id = "spotify";
 
     private const string Scope =
         "user-read-playback-state user-modify-playback-state user-read-currently-playing";
 
-    private readonly SpotifyOAuthClientConfig? _client;
+    private SpotifyOAuthClientConfig? _client;
     private readonly ISecureSecretStore _secrets;
     private readonly HttpClient _http;
     private readonly Func<string, bool> _openBrowser;
+    private readonly string _clientConfigPath;
 
     private string? _accessToken;
     private DateTimeOffset _accessExpires = DateTimeOffset.MinValue;
@@ -35,12 +35,16 @@ public sealed class SpotifyMusicProvider : IMusicProvider
         SpotifyOAuthClientConfig? client,
         ISecureSecretStore secrets,
         Func<string, bool> openBrowser,
-        HttpClient? http = null)
+        HttpClient? http = null,
+        string? clientConfigPath = null)
     {
         _client = client;
         _secrets = secrets ?? throw new ArgumentNullException(nameof(secrets));
         _openBrowser = openBrowser ?? throw new ArgumentNullException(nameof(openBrowser));
         _http = http ?? new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
+        _clientConfigPath = string.IsNullOrWhiteSpace(clientConfigPath)
+            ? SpotifyOAuthClientConfig.DefaultClientConfigPath
+            : clientConfigPath;
         _authStatus = _secrets.TryGetSecret(MusicSecretKeys.SpotifyRefreshToken, out var token)
                       && !string.IsNullOrWhiteSpace(token)
             ? MusicAuthStatus.Connected
@@ -65,6 +69,46 @@ public sealed class SpotifyMusicProvider : IMusicProvider
 
     public MusicAuthStatus AuthStatus => _authStatus;
 
+    public string RedirectUri => SpotifyOAuth.RedirectUri;
+
+    public void RememberClient(string clientId, string? clientSecret)
+    {
+        var id = clientId?.Trim() ?? string.Empty;
+        if (id.Length is < 16 or > 64 || id.Any(c => !char.IsAsciiHexDigit(c)))
+        {
+            throw new ArgumentException("Spotify Client ID should be the hex id from the Spotify dashboard.");
+        }
+
+        string? secret = string.IsNullOrWhiteSpace(clientSecret) ? null : clientSecret.Trim();
+        if (secret is { Length: > 256 } || secret?.Contains('\n') == true || secret?.Contains('\r') == true)
+        {
+            throw new ArgumentException("Spotify Client Secret is not valid.");
+        }
+
+        var changed = _client is null
+                      || !string.Equals(_client.ClientId, id, StringComparison.Ordinal);
+        _client = new SpotifyOAuthClientConfig
+        {
+            ClientId = id,
+            ClientSecret = secret
+        };
+        SpotifyOAuthClientConfig.Save(_clientConfigPath, _client);
+        if (!changed)
+        {
+            if (_authStatus == MusicAuthStatus.NotConfigured)
+            {
+                _authStatus = MusicAuthStatus.Disconnected;
+            }
+
+            return;
+        }
+
+        _secrets.DeleteSecret(MusicSecretKeys.SpotifyRefreshToken);
+        _accessToken = null;
+        _accessExpires = DateTimeOffset.MinValue;
+        _authStatus = MusicAuthStatus.Disconnected;
+    }
+
     public MusicTrack? CurrentTrack => _current;
 
     public bool IsPlaying => _isPlaying;
@@ -84,10 +128,11 @@ public sealed class SpotifyMusicProvider : IMusicProvider
         {
             _authStatus = MusicAuthStatus.NotConfigured;
             throw new InvalidOperationException(
-                "Spotify OAuth client file missing. Place spotify-oauth-client.json under SecretBase credentials.");
+                "Spotify Client ID is missing. Enter it in Connect Spotify. Register this Redirect URI in the Spotify dashboard: "
+                + SpotifyOAuth.RedirectUri);
         }
 
-        var redirect = $"http://127.0.0.1:{GetFreePort()}/";
+        var redirect = SpotifyOAuth.RedirectUri;
         var verifier = CreateCodeVerifier();
         var challenge = CreateCodeChallenge(verifier);
         var state = Convert.ToBase64String(RandomNumberGenerator.GetBytes(16));
@@ -103,8 +148,20 @@ public sealed class SpotifyMusicProvider : IMusicProvider
             + "&state=" + Uri.EscapeDataString(state);
 
         using var listener = new HttpListener();
-        listener.Prefixes.Add(redirect);
-        listener.Start();
+        listener.Prefixes.Add(SpotifyOAuth.LoopbackPrefix);
+        try
+        {
+            listener.Start();
+        }
+        catch (HttpListenerException)
+        {
+            throw new InvalidOperationException(
+                "Could not listen on "
+                + SpotifyOAuth.RedirectUri
+                + ". Close anything using port "
+                + SpotifyOAuth.LoopbackPort
+                + " and try again.");
+        }
 
         if (!_openBrowser(authUrl))
         {
@@ -298,7 +355,9 @@ public sealed class SpotifyMusicProvider : IMusicProvider
         if (!_secrets.TryGetSecret(MusicSecretKeys.SpotifyRefreshToken, out var refresh)
             || string.IsNullOrWhiteSpace(refresh))
         {
-            _authStatus = MusicAuthStatus.Disconnected;
+            _authStatus = _client is null || string.IsNullOrWhiteSpace(_client.ClientId)
+                ? MusicAuthStatus.NotConfigured
+                : MusicAuthStatus.Disconnected;
             return false;
         }
 
@@ -313,14 +372,8 @@ public sealed class SpotifyMusicProvider : IMusicProvider
             ["grant_type"] = "refresh_token",
             ["refresh_token"] = refresh
         };
-        if (!string.IsNullOrWhiteSpace(_client.ClientSecret))
-        {
-            form["client_secret"] = _client.ClientSecret!;
-        }
-
+        ApplyClientAuthentication(form, request, _client.ClientId, _client.ClientSecret);
         request.Content = new FormUrlEncodedContent(form);
-        var basic = Convert.ToBase64String(Encoding.UTF8.GetBytes($"{_client.ClientId}:{_client.ClientSecret ?? string.Empty}"));
-        request.Headers.Authorization = new AuthenticationHeaderValue("Basic", basic);
         using var response = await _http.SendAsync(request, cancellationToken).ConfigureAwait(false);
         if (!response.IsSuccessStatusCode)
         {
@@ -366,11 +419,7 @@ public sealed class SpotifyMusicProvider : IMusicProvider
             ["client_id"] = _client.ClientId,
             ["code_verifier"] = verifier
         };
-        if (!string.IsNullOrWhiteSpace(_client.ClientSecret))
-        {
-            form["client_secret"] = _client.ClientSecret!;
-        }
-
+        ApplyClientAuthentication(form, request, _client.ClientId, _client.ClientSecret);
         request.Content = new FormUrlEncodedContent(form);
         using var response = await _http.SendAsync(request, cancellationToken).ConfigureAwait(false);
         if (!response.IsSuccessStatusCode)
@@ -440,13 +489,23 @@ public sealed class SpotifyMusicProvider : IMusicProvider
                 ? "No active Spotify device found. Open Spotify on a device, then try again."
                 : "Spotify request failed.";
 
-    private static int GetFreePort()
+    public static void ApplyClientAuthentication(
+        IDictionary<string, string> form,
+        HttpRequestMessage request,
+        string clientId,
+        string? clientSecret)
     {
-        var listener = new TcpListener(IPAddress.Loopback, 0);
-        listener.Start();
-        var port = ((IPEndPoint)listener.LocalEndpoint).Port;
-        listener.Stop();
-        return port;
+        ArgumentNullException.ThrowIfNull(form);
+        ArgumentNullException.ThrowIfNull(request);
+        form["client_id"] = clientId;
+        if (string.IsNullOrWhiteSpace(clientSecret))
+        {
+            return;
+        }
+
+        form["client_secret"] = clientSecret;
+        var basic = Convert.ToBase64String(Encoding.UTF8.GetBytes($"{clientId}:{clientSecret}"));
+        request.Headers.Authorization = new AuthenticationHeaderValue("Basic", basic);
     }
 
     private static string CreateCodeVerifier()

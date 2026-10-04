@@ -58,4 +58,35 @@ public sealed class SpotifyOAuthClientConfig
             return false;
         }
     }
+
+    public static void Save(string? path, SpotifyOAuthClientConfig config)
+    {
+        ArgumentNullException.ThrowIfNull(config);
+        if (string.IsNullOrWhiteSpace(config.ClientId))
+        {
+            throw new ArgumentException("Spotify Client ID is required.", nameof(config));
+        }
+
+        var resolved = string.IsNullOrWhiteSpace(path) ? DefaultClientConfigPath : path.Trim();
+        var dir = Path.GetDirectoryName(resolved);
+        if (!string.IsNullOrWhiteSpace(dir))
+        {
+            Directory.CreateDirectory(dir);
+        }
+
+        var payload = new Dictionary<string, string>
+        {
+            ["client_id"] = config.ClientId.Trim()
+        };
+        if (!string.IsNullOrWhiteSpace(config.ClientSecret))
+        {
+            payload["client_secret"] = config.ClientSecret.Trim();
+        }
+
+        var json = JsonSerializer.Serialize(payload);
+        var temp = resolved + ".tmp";
+        File.WriteAllText(temp, json);
+        File.Copy(temp, resolved, overwrite: true);
+        File.Delete(temp);
+    }
 }
