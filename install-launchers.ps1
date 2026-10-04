@@ -45,6 +45,17 @@ try {
     $commit = ""
 }
 
+$running = @(Get-Process -Name "SecretBase.App" -ErrorAction SilentlyContinue)
+if ($running.Count -gt 0) {
+    Write-Host "Stopping running SecretBase.App so build outputs are not locked…"
+    $running | Stop-Process -Force -ErrorAction SilentlyContinue
+    Start-Sleep -Milliseconds 800
+    $still = @(Get-Process -Name "SecretBase.App" -ErrorAction SilentlyContinue)
+    if ($still.Count -gt 0) {
+        throw "SecretBase.App is still running and locking DLLs. Close it (Ctrl+Shift+Q), then run .\install-launchers.ps1 again."
+    }
+}
+
 Write-Host "Cleaning App and Widgets so a stale XAML binary is not reused…"
 dotnet clean (Join-Path $root "src\SecretBase.App\SecretBase.App.csproj") -c Debug -p:Platform=x64 --nologo
 if ($LASTEXITCODE -ne 0) {
