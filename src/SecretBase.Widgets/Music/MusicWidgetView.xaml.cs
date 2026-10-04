@@ -1,4 +1,3 @@
-using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
@@ -36,7 +35,7 @@ public sealed partial class MusicWidgetView : UserControl
     private IIntegrationMemory? _integrations;
     private OverlayDialogInput? _dialogInput;
     private ISystemNowPlayingSource? _systemNowPlaying;
-    private DispatcherQueueTimer? _nowPlayingTimer;
+    private Microsoft.UI.Dispatching.DispatcherQueueTimer? _nowPlayingTimer;
     private bool _showingSystemNowPlaying;
     private string? _shownArtKey;
     private int _nowPlayingGate;
@@ -92,7 +91,7 @@ public sealed partial class MusicWidgetView : UserControl
             return;
         }
 
-        var queue = DispatcherQueue.GetForCurrentThread();
+        var queue = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
         if (queue is null)
         {
             return;
