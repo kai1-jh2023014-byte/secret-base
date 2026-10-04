@@ -62,7 +62,7 @@
                     MinWidth="72"
                     VerticalAlignment="Top"
                     Click="SettingsButton_Click"
-                    ToolTipService.ToolTip="AI provider and API key" />
+                    ToolTipService.ToolTip="Conversation AI and Jev" />
             </Grid>
 
             <TextBlock

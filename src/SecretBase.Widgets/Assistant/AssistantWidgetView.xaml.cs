@@ -662,7 +662,7 @@ public sealed partial class AssistantWidgetView : UserControl
             FontSize = 12,
             Opacity = 0.85,
             TextWrapping = TextWrapping.WrapWholeWords,
-            Text = "Jev decides the situation, the next step, and whether to confirm. It is not a chat provider and it cannot run the PC. A connection check sends only the words \"Secret Base connection check.\" A real decision sends the time, a local intent label, counts, and the current message with secrets removed."
+            Text = "Separate from the provider list above. Jev only decides. It does not chat and it does not run the PC."
         };
         var jevStatus = new TextBlock
         {
@@ -704,13 +704,11 @@ public sealed partial class AssistantWidgetView : UserControl
                 : "Jev API Key  (not set)";
         };
 
-        var panel = new StackPanel { Spacing = 8 };
+        var panel = new StackPanel { Spacing = 8, MinWidth = 360 };
         panel.Children.Add(conversationHeader);
         panel.Children.Add(providerBox);
         panel.Children.Add(providerHelp);
         panel.Children.Add(modelBox);
-        panel.Children.Add(maxStepsBox);
-        panel.Children.Add(confirmNote);
         panel.Children.Add(keyStatus);
         panel.Children.Add(keyBox);
         panel.Children.Add(testButton);
@@ -721,6 +719,16 @@ public sealed partial class AssistantWidgetView : UserControl
         panel.Children.Add(jevKeyBox);
         panel.Children.Add(jevTestButton);
         panel.Children.Add(jevTestStatus);
+        panel.Children.Add(maxStepsBox);
+        panel.Children.Add(confirmNote);
+
+        var scroll = new ScrollViewer
+        {
+            Content = panel,
+            MaxHeight = 460,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto
+        };
 
         var dialog = new ContentDialog
         {
@@ -728,7 +736,7 @@ public sealed partial class AssistantWidgetView : UserControl
             PrimaryButtonText = "Save",
             CloseButtonText = "Cancel",
             DefaultButton = ContentDialogButton.Primary,
-            Content = panel,
+            Content = scroll,
             XamlRoot = XamlRoot
         };
 
