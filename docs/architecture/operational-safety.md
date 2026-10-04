@@ -12,8 +12,8 @@ Hardening for daily-driver use: one overlay process, visible startup failures, a
 
 Mutex name: `Local\SecretBase.App.SingleInstance` (per-user `Local\` namespace, no elevation).
 
-- First launch: `TryAcquire()` succeeds → normal startup.
-- Second launch: `TryAcquire()` fails → log, dispose bootstrap logger, `Exit()` (no overlay, no IPC).
+- First launch: `TryAcquire()` succeeds → normal startup. An abandoned mutex (previous process crashed) is taken over.
+- Second launch: `TryAcquire()` fails → signal `WindowsInstanceActivation` so the running window is shown above the desktop. If `startup-last.txt` is not `window-visible`, or the mutex itself cannot be opened, a Win32 message box explains the failure instead of exiting with no UI.
 - Release: `Dispose()` on main window `Closed` (process exit also releases the mutex).
 
 Automated tests: `tests/SecretBase.Platform.Windows.Tests/SingleInstanceGuardTests.cs` (Windows only).
@@ -28,8 +28,8 @@ Automated tests: `tests/SecretBase.Platform.Windows.Tests/SingleInstanceGuardTes
 
 `App.OnLaunched` wraps startup in `try/catch`:
 
-1. Log the exception via `FileAppLogger` (`startup` category).
-2. Show `StartupFailurePresenter` (minimal `ContentDialog`: message, **Open Data Folder**, **Close**).
+1. Log the exception via `FileAppLogger` (`startup` category) and overwrite `startup-last.txt` with `status=failed`.
+2. Show a Win32 message box (`WindowsUserNotice`) with the exception text, the data folder, and the log path. `StartupFailurePresenter` remains the fallback when that notice cannot be shown. Auto-start stays silent.
 3. Exit the process (`Exit()` with `Environment.Exit(1)` fallback).
 
 Does **not** delete AppData, change the registry, or start external tools. Recovery UI failures are swallowed so shutdown still completes.

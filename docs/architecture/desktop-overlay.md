@@ -34,7 +34,7 @@ Normal UX: **widgets only**. Transparent/empty areas pass input to Windows. No t
 | `SetWindowSubclass` + `WM_ERASEBKGND` FillRect | Skip opaque client erase (black→glass) |
 | `SetWindowRgn` (union of widget client rects) | Cross-process click-through outside widgets |
 | `SetWindowRgn` on `DesktopChildSiteBridge` child | WinUI island hit-test surface (in addition to top-level HWND) |
-| `SetWindowPos(..., HWND_BOTTOM, ...)` | Keep overlay under other top-level apps |
+| `GetShellWindow` + `SetWindowPos` insert-after the window above that shell window | Keep widgets above the wallpaper and under other top-level apps |
 | Transparent page / canvas brushes | XAML layer stays clear |
 
 All of the above are public Windows App SDK / documented Win32 APIs in `IDesktopOverlayService` → `AppWindowDesktopOverlayService`.
@@ -46,14 +46,15 @@ Investigation notes: [overlay-input-and-edges.md](overlay-input-and-edges.md).
 - App computes widget (+ optional debug chrome) client rects in physical pixels.
 - Platform applies documented `SetWindowRgn` so the HWND shape is the union of those rects.
 - The same region is also applied to WinUI's `DesktopChildSiteBridge` child when present (island input surface).
-- Regions are cached and reapplied when the overlay is parked at `HWND_BOTTOM` after activation.
+- Regions are cached and reapplied when the overlay is parked just above the shell desktop after activation.
 - Outside the region, Explorer / other apps receive mouse input (cross-process).
 - `WM_NCHITTEST` / `HTTRANSPARENT` alone is **not** used for Desktop passthrough (same-thread limitation per Win32 docs).
 
 ## Z-order policy
 
 - Overlay is **not** always-on-top.
-- On configure and on each activation, Platform calls documented `SetWindowPos` with `HWND_BOTTOM` + `SWP_NOACTIVATE`.
+- On configure and on each activation, Platform calls documented `GetShellWindow` and `SetWindowPos` so the overlay is inserted immediately above the shell desktop (`SWP_NOACTIVATE`). The window passed as insert-after is the one already above the shell; that window stays in front of the overlay.
+- `HWND_BOTTOM` is only the fallback when the shell window cannot be resolved. On Windows 10/11 it places the host behind the wallpaper, so the process looks like it flashed and closed.
 - Result: widgets sit above the wallpaper, **under** normal applications.
 - Does **not** use Explorer WorkerW / shell subclassing.
 

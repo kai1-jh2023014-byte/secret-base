@@ -1,5 +1,7 @@
 using System.Runtime.InteropServices;
 using SecretBase.Core;
+using SecretBase.Infrastructure.Startup;
+using SecretBase.Infrastructure.Storage;
 
 namespace SecretBase.Platform.Windows;
 
@@ -47,10 +49,36 @@ public sealed class WindowsDesktopShortcutService
                 Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),
                 ShortcutFileName);
 
-            CreateShortcut(startMenu, exe, workDir, "Secret Base — personal desktop overlay");
-            CreateShortcut(desktop, exe, workDir, "Secret Base — personal desktop overlay");
+            const string description = "Secret Base — personal desktop overlay";
+            var dotnetRoot = AppHostLaunchScript.ResolveDotNetRootForExplorerLaunch();
+            if (dotnetRoot is null)
+            {
+                DeleteLauncherScripts();
+                CreateShortcut(startMenu, exe, string.Empty, workDir, description, exe);
+                CreateShortcut(desktop, exe, string.Empty, workDir, description, exe);
+                detail = $"Start Menu and Desktop shortcuts launch:{Environment.NewLine}{exe}";
+                return true;
+            }
 
-            detail = $"Start Menu and Desktop shortcuts point to:{Environment.NewLine}{exe}";
+            var launcherPath = Path.Combine(AppDataPaths.RootDirectory, AppHostLaunchScript.FileName);
+            AppHostLaunchScript.WriteFile(launcherPath, exe, dotnetRoot);
+            TryDelete(Path.Combine(AppDataPaths.RootDirectory, AppHostLaunchScript.LegacyFileName));
+
+            var commandProcessor = Path.Combine(Environment.SystemDirectory, "cmd.exe");
+            if (!File.Exists(commandProcessor))
+            {
+                CreateShortcut(startMenu, exe, string.Empty, workDir, description, exe);
+                CreateShortcut(desktop, exe, string.Empty, workDir, description, exe);
+                detail = $"Start Menu and Desktop shortcuts launch:{Environment.NewLine}{exe}";
+                return true;
+            }
+
+            var arguments = AppHostLaunchScript.BuildShortcutArguments(launcherPath);
+            CreateShortcut(startMenu, commandProcessor, arguments, workDir, description, exe);
+            CreateShortcut(desktop, commandProcessor, arguments, workDir, description, exe);
+
+            detail =
+                $"Start Menu and Desktop shortcuts launch:{Environment.NewLine}{exe}{Environment.NewLine}DOTNET_ROOT={dotnetRoot}";
             return true;
         }
         catch (Exception ex)
@@ -60,7 +88,13 @@ public sealed class WindowsDesktopShortcutService
         }
     }
 
-    private static void CreateShortcut(string shortcutPath, string targetPath, string workingDirectory, string description)
+    private static void CreateShortcut(
+        string shortcutPath,
+        string targetPath,
+        string arguments,
+        string workingDirectory,
+        string description,
+        string iconPath)
     {
         var shellType = Type.GetTypeFromProgID("WScript.Shell")
             ?? throw new InvalidOperationException("WScript.Shell is not available on this PC.");
@@ -83,9 +117,11 @@ public sealed class WindowsDesktopShortcutService
 
             var shortcutType = shortcut.GetType();
             shortcutType.InvokeMember("TargetPath", System.Reflection.BindingFlags.SetProperty, null, shortcut, [targetPath]);
+            shortcutType.InvokeMember("Arguments", System.Reflection.BindingFlags.SetProperty, null, shortcut, [arguments]);
             shortcutType.InvokeMember("WorkingDirectory", System.Reflection.BindingFlags.SetProperty, null, shortcut, [workingDirectory]);
             shortcutType.InvokeMember("Description", System.Reflection.BindingFlags.SetProperty, null, shortcut, [description]);
-            shortcutType.InvokeMember("IconLocation", System.Reflection.BindingFlags.SetProperty, null, shortcut, [targetPath + ",0"]);
+            shortcutType.InvokeMember("WindowStyle", System.Reflection.BindingFlags.SetProperty, null, shortcut, [1]);
+            shortcutType.InvokeMember("IconLocation", System.Reflection.BindingFlags.SetProperty, null, shortcut, [iconPath + ",0"]);
             shortcutType.InvokeMember("Save", System.Reflection.BindingFlags.InvokeMethod, null, shortcut, null);
         }
         finally
@@ -99,6 +135,30 @@ public sealed class WindowsDesktopShortcutService
             {
                 Marshal.FinalReleaseComObject(shell);
             }
+        }
+    }
+
+    private static void DeleteLauncherScripts()
+    {
+        TryDelete(Path.Combine(AppDataPaths.RootDirectory, AppHostLaunchScript.FileName));
+        TryDelete(Path.Combine(AppDataPaths.RootDirectory, AppHostLaunchScript.LegacyFileName));
+    }
+
+    private static void TryDelete(string path)
+    {
+        try
+        {
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+        }
+        catch (IOException)
+        {
+            // An old launcher left in place is unused once the shortcut points at the exe.
+        }
+        catch (UnauthorizedAccessException)
+        {
         }
     }
 }

@@ -4,12 +4,33 @@ namespace SecretBase.Platform.Windows.Tests;
 
 public class AutoStartServiceTests
 {
-    [Theory]
-    [InlineData(@"C:\Apps\SecretBase.App.exe", @"""C:\Apps\SecretBase.App.exe"" --autostart")]
-    [InlineData(@"C:\Apps\Secret Base\SecretBase.App.exe", @"""C:\Apps\Secret Base\SecretBase.App.exe"" --autostart")]
-    public void BuildStartupCommand_QuotesExecutableAndAddsSwitch(string executable, string expected)
+    [Fact]
+    public void BuildStartupCommand_DirectExe_DoesNotUseWscript()
     {
-        Assert.Equal(expected, WindowsRegistryAutoStartService.BuildStartupCommand(executable));
+        var command = WindowsRegistryAutoStartService.BuildStartupCommand(
+            @"C:\Apps\SecretBase.App.exe",
+            dotnetRoot: null,
+            @"C:\Windows\System32\cmd.exe",
+            @"C:\Users\me\AppData\Local\SecretBase\launch-secretbase.cmd");
+
+        Assert.Equal("\"C:\\Apps\\SecretBase.App.exe\" --autostart", command);
+        Assert.DoesNotContain("wscript", command, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("//B", command, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void BuildStartupCommand_UserLocalRuntime_UsesCmdScript()
+    {
+        var command = WindowsRegistryAutoStartService.BuildStartupCommand(
+            @"C:\Apps\SecretBase.App.exe",
+            @"C:\Users\me\AppData\Local\Microsoft\dotnet",
+            @"C:\Windows\System32\cmd.exe",
+            @"C:\Users\me\AppData\Local\SecretBase\launch-secretbase.cmd");
+
+        Assert.Contains("cmd.exe", command, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("launch-secretbase.cmd", command, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("//B", command, StringComparison.Ordinal);
+        Assert.EndsWith("--autostart", command, StringComparison.Ordinal);
     }
 
     [Theory]

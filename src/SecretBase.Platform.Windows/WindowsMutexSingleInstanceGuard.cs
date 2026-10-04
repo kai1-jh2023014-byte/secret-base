@@ -21,6 +21,12 @@ public sealed class WindowsMutexSingleInstanceGuard : ISingleInstanceGuard
 
     public bool IsHeld => _held;
 
+    /// <summary>
+    /// Set when <see cref="TryAcquire"/> fails because the mutex could not be opened,
+    /// rather than because another live instance holds it.
+    /// </summary>
+    public string? FailureMessage { get; private set; }
+
     public bool TryAcquire()
     {
         if (_held)
@@ -28,29 +34,30 @@ public sealed class WindowsMutexSingleInstanceGuard : ISingleInstanceGuard
             return true;
         }
 
+        FailureMessage = null;
         try
         {
-            var mutex = new Mutex(initiallyOwned: true, name: _mutexName, out var createdNew);
-            if (!createdNew)
+            var mutex = new Mutex(initiallyOwned: false, name: _mutexName);
+            try
             {
-                mutex.Dispose();
-                return false;
+                if (!mutex.WaitOne(TimeSpan.Zero))
+                {
+                    mutex.Dispose();
+                    return false;
+                }
+            }
+            catch (AbandonedMutexException)
+            {
+                // The previous owner exited without releasing. This process owns the mutex now.
             }
 
             _mutex = mutex;
             _held = true;
             return true;
         }
-        catch (UnauthorizedAccessException)
+        catch (Exception ex) when (ex is UnauthorizedAccessException or IOException or WaitHandleCannotBeOpenedException)
         {
-            return false;
-        }
-        catch (IOException)
-        {
-            return false;
-        }
-        catch (WaitHandleCannotBeOpenedException)
-        {
+            FailureMessage = ex.Message;
             return false;
         }
     }

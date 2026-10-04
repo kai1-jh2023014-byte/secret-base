@@ -1,5 +1,7 @@
 using Microsoft.Win32;
 using SecretBase.Core;
+using SecretBase.Infrastructure.Startup;
+using SecretBase.Infrastructure.Storage;
 using SecretBase.Platform.Abstractions;
 
 namespace SecretBase.Platform.Windows;
@@ -84,7 +86,7 @@ public sealed class WindowsRegistryAutoStartService : IAutoStartService
 
         try
         {
-            var command = BuildStartupCommand(executablePath);
+            var command = WriteLauncherAndBuildCommand(executablePath);
             using var key = Registry.CurrentUser.CreateSubKey(RunKeyPath, writable: true);
             if (key is null)
             {
@@ -137,8 +139,28 @@ public sealed class WindowsRegistryAutoStartService : IAutoStartService
     public bool TryGetStartupExecutablePath(out string executablePath, out string? errorMessage) =>
         TryResolveExecutablePath(out executablePath, out errorMessage);
 
-    internal static string BuildStartupCommand(string executablePath) =>
-        $"{QuotePath(executablePath)} {AutoStartCommandLineSwitch}";
+    internal static string BuildStartupCommand(
+        string executablePath,
+        string? dotnetRoot,
+        string commandProcessorPath,
+        string launcherScriptPath) =>
+        string.IsNullOrWhiteSpace(dotnetRoot)
+            ? AppHostLaunchScript.BuildDirectStartupCommand(executablePath)
+            : AppHostLaunchScript.BuildScriptStartupCommand(commandProcessorPath, launcherScriptPath);
+
+    internal static string WriteLauncherAndBuildCommand(string executablePath)
+    {
+        var dotnetRoot = AppHostLaunchScript.ResolveDotNetRootForExplorerLaunch();
+        if (string.IsNullOrWhiteSpace(dotnetRoot))
+        {
+            return AppHostLaunchScript.BuildDirectStartupCommand(executablePath);
+        }
+
+        var launcherPath = Path.Combine(AppDataPaths.RootDirectory, AppHostLaunchScript.FileName);
+        AppHostLaunchScript.WriteFile(launcherPath, executablePath, dotnetRoot);
+        var commandProcessor = Path.Combine(Environment.SystemDirectory, "cmd.exe");
+        return BuildStartupCommand(executablePath, dotnetRoot, commandProcessor, launcherPath);
+    }
 
     internal static bool TryResolveExecutablePath(out string executablePath, out string? errorMessage)
     {
@@ -172,7 +194,8 @@ public sealed class WindowsRegistryAutoStartService : IAutoStartService
     /// <summary>
     /// Prefers the live process path when it is already SecretBase.App.exe.
     /// Under <c>dotnet run</c> / run.ps1, falls back to the built apphost beside AppContext.BaseDirectory
-    /// so login registration still points at a double-clickable exe.
+    /// so login registration still starts SecretBase.App.exe (directly, or via a cmd script when
+    /// only a user-local .NET 10 runtime exists).
     /// </summary>
     internal static IEnumerable<string> EnumerateCandidateExecutablePaths()
     {
@@ -217,6 +240,23 @@ public sealed class WindowsRegistryAutoStartService : IAutoStartService
         }
 
         var trimmed = command.Trim();
+        if (AppHostLaunchScript.TryExtractScriptPath(trimmed, out var launcherPath)
+            && File.Exists(launcherPath))
+        {
+            try
+            {
+                return AppHostLaunchScript.TryReadExecutable(AppHostLaunchScript.ReadText(launcherPath), out executablePath);
+            }
+            catch (IOException)
+            {
+                return false;
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return false;
+            }
+        }
+
         if (trimmed.StartsWith('"'))
         {
             var endQuote = trimmed.IndexOf('"', 1);
@@ -246,6 +286,4 @@ public sealed class WindowsRegistryAutoStartService : IAutoStartService
             Path.GetFullPath(right),
             StringComparison.OrdinalIgnoreCase);
     }
-
-    private static string QuotePath(string path) => $"\"{path}\"";
 }

@@ -25,13 +25,18 @@ public sealed class ShellTargetLaunchService : ITargetLaunchService
         try
         {
             // Documented Process.Start + UseShellExecute: opens the path with its association
-            // (.exe runs, .lnk resolves, folders open in Explorer as a normal user action).
-            var psi = new ProcessStartInfo
+            // (.exe runs, folders open in Explorer as a normal user action).
+            // .lnk files are resolved first so the shortcut's own "Start in" folder is used.
+            // Launching the .lnk path alone often ignores that folder after the file is moved
+            // off the Desktop, and the target process exits immediately.
+            var psi = TryBuildStartInfo(target, itemType);
+            if (itemType == BlockItemType.Shortcut
+                && !string.Equals(psi.FileName, target, StringComparison.OrdinalIgnoreCase)
+                && !File.Exists(psi.FileName)
+                && !Directory.Exists(psi.FileName))
             {
-                FileName = target,
-                UseShellExecute = true,
-                ErrorDialog = false
-            };
+                return new TargetLaunchResult(false, "The shortcut's target was not found.");
+            }
 
             var process = Process.Start(psi);
             if (process is null && itemType is BlockItemType.Application)
@@ -49,5 +54,36 @@ public sealed class ShellTargetLaunchService : ITargetLaunchService
         {
             return new TargetLaunchResult(false, ex.Message);
         }
+    }
+
+    private static ProcessStartInfo TryBuildStartInfo(string target, BlockItemType itemType)
+    {
+        if (itemType == BlockItemType.Shortcut
+            && target.EndsWith(".lnk", StringComparison.OrdinalIgnoreCase)
+            && WindowsShortcutReader.TryRead(target, out var resolved)
+            && !string.IsNullOrWhiteSpace(resolved.TargetPath))
+        {
+            var work = resolved.WorkingDirectory;
+            if (string.IsNullOrWhiteSpace(work) || !Directory.Exists(work))
+            {
+                work = Path.GetDirectoryName(resolved.TargetPath);
+            }
+
+            return new ProcessStartInfo
+            {
+                FileName = resolved.TargetPath,
+                Arguments = resolved.Arguments ?? string.Empty,
+                WorkingDirectory = work ?? string.Empty,
+                UseShellExecute = true,
+                ErrorDialog = false
+            };
+        }
+
+        return new ProcessStartInfo
+        {
+            FileName = target,
+            UseShellExecute = true,
+            ErrorDialog = false
+        };
     }
 }

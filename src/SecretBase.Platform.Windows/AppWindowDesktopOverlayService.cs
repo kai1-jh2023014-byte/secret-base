@@ -12,8 +12,6 @@ namespace SecretBase.Platform.Windows;
 /// </summary>
 public sealed class AppWindowDesktopOverlayService : IDesktopOverlayService
 {
-    // https://learn.microsoft.com/windows/win32/api/winuser/nf-winuser-setwindowpos
-    private static readonly nint HwndBottom = 1;
 
     // Keep subclass proc / GDI brush alive for the process lifetime.
     private static NativeMethods.SubclassProc? s_eraseSubclassProc;
@@ -72,19 +70,45 @@ public sealed class AppWindowDesktopOverlayService : IDesktopOverlayService
             return;
         }
 
-        // Documented user32 SetWindowPos: park at bottom of Z-order without activating.
-        _ = NativeMethods.SetWindowPos(
-            target.WindowHandle,
-            HwndBottom,
-            0,
-            0,
-            0,
-            0,
-            NativeMethods.SwpNomove | NativeMethods.SwpNosize | NativeMethods.SwpNoactivate);
+        // Documented user32 only. HWND_BOTTOM sinks the host behind the shell desktop
+        // (Progman), so the process stays alive while the user sees a flash and nothing else.
+        // Insert after the window already above the shell desktop: widgets stay above the
+        // wallpaper and under other applications. No WorkerW, no shell subclassing.
+        var insertAfter = ResolveInsertAfter(target.WindowHandle);
+        if (insertAfter is not null)
+        {
+            _ = NativeMethods.SetWindowPos(
+                target.WindowHandle,
+                insertAfter.Value,
+                0,
+                0,
+                0,
+                0,
+                NativeMethods.SwpNomove | NativeMethods.SwpNosize | NativeMethods.SwpNoactivate);
+        }
 
         // WinUI/DWM may reset window regions around activation — reapply cached shape.
         TrySuppressSystemEdgeChrome(target.WindowHandle);
         ReapplyCachedInteractiveRegions(target.WindowHandle);
+    }
+
+    private static nint? ResolveInsertAfter(nint ourWindow)
+    {
+        var shell = NativeMethods.GetShellWindow();
+        var above = shell == nint.Zero
+            ? nint.Zero
+            : NativeMethods.GetWindow(shell, NativeMethods.GwHwndPrev);
+        var topMost = above != nint.Zero && (GetExtendedStyle(above) & NativeMethods.WsExTopMost) != 0;
+        var placement = DesktopOverlayPlacement.AboveDesktop(shell, above, ourWindow, topMost);
+        return placement.Change ? placement.InsertAfter : null;
+    }
+
+    private static int GetExtendedStyle(nint hwnd)
+    {
+        var value = nint.Size == 8
+            ? NativeMethods.GetWindowLongPtr64(hwnd, NativeMethods.GwlExStyle)
+            : (nint)NativeMethods.GetWindowLong32(hwnd, NativeMethods.GwlExStyle);
+        return unchecked((int)value);
     }
 
     public void UpdateInteractiveInputRegions(
@@ -179,6 +203,7 @@ public sealed class AppWindowDesktopOverlayService : IDesktopOverlayService
         }
 
         var transferred = false;
+        var pieces = 0;
         try
         {
             foreach (var rect in rects)
@@ -205,6 +230,14 @@ public sealed class AppWindowDesktopOverlayService : IDesktopOverlayService
 
                 _ = NativeMethods.CombineRgn(combined, combined, piece, NativeMethods.RgnOr);
                 _ = NativeMethods.DeleteObject(piece);
+                pieces++;
+            }
+
+            // An empty region hides the whole window (the shortcut appears, then vanishes).
+            // Leave the previous shape until real widget rects exist.
+            if (pieces == 0)
+            {
+                return;
             }
 
             if (NativeMethods.SetWindowRgn(hwnd, combined, redraw: true))
@@ -432,6 +465,9 @@ public sealed class AppWindowDesktopOverlayService : IDesktopOverlayService
 
         public const int RgnOr = 2;
         public const uint GaRoot = 2;
+        public const uint GwHwndPrev = 3;
+        public const int GwlExStyle = -20;
+        public const int WsExTopMost = 0x00000008;
 
         [StructLayout(LayoutKind.Sequential)]
         public struct MARGINS
@@ -521,6 +557,18 @@ public sealed class AppWindowDesktopOverlayService : IDesktopOverlayService
 
         [DllImport("user32.dll", SetLastError = true)]
         public static extern bool SetWindowRgn(nint hWnd, nint hRgn, bool redraw);
+
+        [DllImport("user32.dll")]
+        public static extern nint GetShellWindow();
+
+        [DllImport("user32.dll")]
+        public static extern nint GetWindow(nint hWnd, uint uCmd);
+
+        [DllImport("user32.dll", EntryPoint = "GetWindowLong", SetLastError = true)]
+        public static extern int GetWindowLong32(nint hWnd, int nIndex);
+
+        [DllImport("user32.dll", EntryPoint = "GetWindowLongPtr", SetLastError = true)]
+        public static extern nint GetWindowLongPtr64(nint hWnd, int nIndex);
 
         [DllImport("user32.dll", SetLastError = true)]
         public static extern bool SetWindowPos(

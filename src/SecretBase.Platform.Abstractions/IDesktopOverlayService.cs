@@ -15,9 +15,11 @@ public interface IDesktopOverlayService
     void ApplyChromelessWorkAreaOverlay(DesktopOverlayTarget target);
 
     /// <summary>
-    /// Places the overlay at the bottom of the top-level Z-order (documented SetWindowPos /
-    /// HWND_BOTTOM) so normal apps stay above widgets, while the overlay remains above the
-    /// desktop wallpaper layer. Does not use Explorer WorkerW or shell hooks.
+    /// Parks the overlay just above the shell desktop window (documented GetShellWindow +
+    /// SetWindowPos) so normal apps stay above widgets and the wallpaper stays behind them.
+    /// HWND_BOTTOM is only the fallback when the shell window cannot be resolved — it sits
+    /// behind the desktop and looks like an immediate exit. Does not use Explorer WorkerW
+    /// or shell hooks.
     /// </summary>
     void KeepBehindApplicationWindows(DesktopOverlayTarget target);
 
