@@ -113,16 +113,7 @@ public partial class App : Application
             try
             {
                 var silent = StartupLaunchMode.IsAutoStartLaunch;
-                var shown = !silent && ShowLaunchNotice(
-                    "Secret Base could not start."
-                    + Environment.NewLine + Environment.NewLine
-                    + ex.Message
-                    + Environment.NewLine + Environment.NewLine
-                    + "Your data was not deleted."
-                    + Environment.NewLine
-                    + "Data folder: " + AppDataPaths.RootDirectory
-                    + Environment.NewLine
-                    + TracePath());
+                var shown = !silent && ShowLaunchNotice(FormatStartupFailure(ex));
                 if (!shown)
                 {
                     StartupFailurePresenter.ShowBlocking(ex.Message, AppDataPaths.RootDirectory, silentUi: silent);
@@ -160,6 +151,25 @@ public partial class App : Application
         {
             return false;
         }
+    }
+
+    private static string FormatStartupFailure(Exception ex)
+    {
+        var frames = (ex.StackTrace ?? string.Empty)
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var where = frames.Length == 0
+            ? string.Empty
+            : Environment.NewLine + string.Join(Environment.NewLine, frames.Take(4));
+        return "Secret Base could not start."
+            + Environment.NewLine + Environment.NewLine
+            + ex.GetType().Name + ": " + ex.Message
+            + where
+            + Environment.NewLine + Environment.NewLine
+            + "Your data was not deleted."
+            + Environment.NewLine
+            + "Data folder: " + AppDataPaths.RootDirectory
+            + Environment.NewLine
+            + TracePath();
     }
 
     private static string TracePath() =>

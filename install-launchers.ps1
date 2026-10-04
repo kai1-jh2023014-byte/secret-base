@@ -45,6 +45,16 @@ try {
     $commit = ""
 }
 
+Write-Host "Cleaning App and Widgets so a stale XAML binary is not reused…"
+dotnet clean (Join-Path $root "src\SecretBase.App\SecretBase.App.csproj") -c Debug -p:Platform=x64 --nologo
+if ($LASTEXITCODE -ne 0) {
+    throw "Clean failed (exit $LASTEXITCODE). Shortcuts were not updated."
+}
+dotnet clean (Join-Path $root "src\SecretBase.Widgets\SecretBase.Widgets.csproj") -c Debug -p:Platform=x64 --nologo
+if ($LASTEXITCODE -ne 0) {
+    throw "Clean failed (exit $LASTEXITCODE). Shortcuts were not updated."
+}
+
 Write-Host "Building Secret Base (Debug | x64) from this checkout…"
 if ($branch) {
     Write-Host "  Branch: $branch"

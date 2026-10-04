@@ -108,6 +108,7 @@ public sealed partial class DesktopPage : Page
     private bool _debugChromeVisible;
     private OverlayDialogInput? _dialogInput;
     private readonly WindowsDesktopShortcutService _shortcuts = new();
+    private TaskbarAiChatBar TaskbarAiChat = null!;
     /// <summary>
     /// While &gt; 0, a ContentDialog is open. Do not shrink SetWindowRgn to widget-only
     /// regions — that makes the modal unreachable and looks like a freeze.
@@ -117,6 +118,16 @@ public sealed partial class DesktopPage : Page
     public DesktopPage()
     {
         InitializeComponent();
+        // Built here, not in XAML. A named shelf in this page made WinUI cast
+        // WinRT.IInspectable to TextBlock while connecting the page and abort startup.
+        TaskbarAiChat = new TaskbarAiChatBar
+        {
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            VerticalAlignment = VerticalAlignment.Bottom,
+            Margin = new Thickness(312, 0, 16, 6)
+        };
+        var canvasIndex = RootGrid.Children.IndexOf(WidgetCanvas);
+        RootGrid.Children.Insert(canvasIndex < 0 ? 0 : canvasIndex + 1, TaskbarAiChat);
         Unloaded += OnUnloaded;
         SizeChanged += (_, _) =>
         {

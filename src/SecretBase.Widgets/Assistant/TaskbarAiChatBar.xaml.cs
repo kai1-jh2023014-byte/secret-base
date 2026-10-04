@@ -22,9 +22,219 @@ public sealed partial class TaskbarAiChatBar : UserControl
     private bool _busy;
     private readonly List<(string Kind, string Text)> _lines = [];
 
+    private Border ResultsShell = null!;
+    private ScrollViewer TranscriptScroll = null!;
+    private StackPanel Transcript = null!;
+    private StackPanel ConfirmPanel = null!;
+    private TextBlock ConfirmText = null!;
+    private Button ConfirmCancelButton = null!;
+    private Button ConfirmRunButton = null!;
+    private TextBlock StatusLabel = null!;
+    private Border Pill = null!;
+    private TextBlock ClockText = null!;
+    private TextBlock DateText = null!;
+    private TextBlock BrandText = null!;
+    private TextBlock ProviderText = null!;
+    private TextBox InputBox = null!;
+    private Button SendButton = null!;
+    private TextBlock FocusText = null!;
+    private TextBlock NextText = null!;
+
     public TaskbarAiChatBar()
     {
         InitializeComponent();
+        Content = BuildInterface();
+    }
+
+    private Grid BuildInterface()
+    {
+        ClockText = new TextBlock
+        {
+            Text = "--:--",
+            FontSize = 20,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
+        };
+        DateText = new TextBlock
+        {
+            FontSize = 11,
+            Opacity = 0.75
+        };
+        var clockColumn = new StackPanel
+        {
+            VerticalAlignment = VerticalAlignment.Center,
+            MinWidth = 88,
+            Spacing = 0
+        };
+        clockColumn.Children.Add(ClockText);
+        clockColumn.Children.Add(DateText);
+
+        BrandText = new TextBlock
+        {
+            Text = "Base",
+            FontSize = 10,
+            CharacterSpacing = 40,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
+        };
+        ProviderText = new TextBlock
+        {
+            Text = "AI",
+            FontSize = 10,
+            Opacity = 0.8
+        };
+        var brandColumn = new StackPanel
+        {
+            VerticalAlignment = VerticalAlignment.Center,
+            Spacing = 0
+        };
+        brandColumn.Children.Add(BrandText);
+        brandColumn.Children.Add(ProviderText);
+
+        InputBox = new TextBox
+        {
+            PlaceholderText = "Ask Secret Base…",
+            BorderThickness = new Thickness(0),
+            Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        InputBox.KeyDown += InputBox_KeyDown;
+
+        SendButton = new Button
+        {
+            Content = "➤",
+            MinWidth = 40,
+            MinHeight = 32,
+            Padding = new Thickness(8, 4, 8, 4)
+        };
+        SendButton.Click += SendButton_Click;
+        ToolTipService.SetToolTip(SendButton, "Send (Enter)");
+
+        var inputRow = new Grid { ColumnSpacing = 8 };
+        inputRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        inputRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        inputRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        Grid.SetColumn(brandColumn, 0);
+        Grid.SetColumn(InputBox, 1);
+        Grid.SetColumn(SendButton, 2);
+        inputRow.Children.Add(brandColumn);
+        inputRow.Children.Add(InputBox);
+        inputRow.Children.Add(SendButton);
+
+        FocusText = new TextBlock
+        {
+            Text = "Focus idle",
+            FontSize = 12,
+            TextTrimming = TextTrimming.CharacterEllipsis
+        };
+        NextText = new TextBlock
+        {
+            Text = "Nothing queued",
+            FontSize = 11,
+            Opacity = 0.8,
+            TextTrimming = TextTrimming.CharacterEllipsis
+        };
+        var statusColumn = new StackPanel
+        {
+            VerticalAlignment = VerticalAlignment.Center,
+            MinWidth = 140,
+            MaxWidth = 240,
+            Spacing = 2
+        };
+        statusColumn.Children.Add(FocusText);
+        statusColumn.Children.Add(NextText);
+
+        var pillRow = new Grid { ColumnSpacing = 16 };
+        pillRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        pillRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        pillRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        Grid.SetColumn(clockColumn, 0);
+        Grid.SetColumn(inputRow, 1);
+        Grid.SetColumn(statusColumn, 2);
+        pillRow.Children.Add(clockColumn);
+        pillRow.Children.Add(inputRow);
+        pillRow.Children.Add(statusColumn);
+
+        Pill = new Border
+        {
+            Padding = new Thickness(16, 8, 16, 8),
+            CornerRadius = new CornerRadius(18),
+            BorderThickness = new Thickness(1),
+            MinHeight = 56,
+            Child = pillRow
+        };
+
+        Transcript = new StackPanel { Spacing = 6 };
+        TranscriptScroll = new ScrollViewer
+        {
+            MaxHeight = 220,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            Content = Transcript
+        };
+
+        ConfirmText = new TextBlock
+        {
+            FontSize = 12,
+            TextWrapping = TextWrapping.WrapWholeWords
+        };
+        ConfirmCancelButton = new Button { Content = "Cancel", MinWidth = 80 };
+        ConfirmCancelButton.Click += ConfirmCancel_Click;
+        ConfirmRunButton = new Button { Content = "Run", MinWidth = 88 };
+        ConfirmRunButton.Click += ConfirmRun_Click;
+        var confirmButtons = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8
+        };
+        confirmButtons.Children.Add(ConfirmCancelButton);
+        confirmButtons.Children.Add(ConfirmRunButton);
+        ConfirmPanel = new StackPanel
+        {
+            Spacing = 6,
+            Visibility = Visibility.Collapsed
+        };
+        ConfirmPanel.Children.Add(ConfirmText);
+        ConfirmPanel.Children.Add(confirmButtons);
+
+        StatusLabel = new TextBlock
+        {
+            FontSize = 11,
+            Opacity = 0.8,
+            TextWrapping = TextWrapping.WrapWholeWords
+        };
+
+        var resultsGrid = new Grid { RowSpacing = 8 };
+        resultsGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        resultsGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        resultsGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        Grid.SetRow(TranscriptScroll, 0);
+        Grid.SetRow(ConfirmPanel, 1);
+        Grid.SetRow(StatusLabel, 2);
+        resultsGrid.Children.Add(TranscriptScroll);
+        resultsGrid.Children.Add(ConfirmPanel);
+        resultsGrid.Children.Add(StatusLabel);
+
+        ResultsShell = new Border
+        {
+            Visibility = Visibility.Collapsed,
+            Padding = new Thickness(14, 12, 14, 12),
+            CornerRadius = new CornerRadius(16),
+            BorderThickness = new Thickness(1),
+            Child = resultsGrid
+        };
+
+        var root = new Grid
+        {
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            MinWidth = 520,
+            RowSpacing = 8
+        };
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        Grid.SetRow(ResultsShell, 0);
+        Grid.SetRow(Pill, 1);
+        root.Children.Add(ResultsShell);
+        root.Children.Add(Pill);
+        return root;
     }
 
     public event Action? LayoutChanged;
