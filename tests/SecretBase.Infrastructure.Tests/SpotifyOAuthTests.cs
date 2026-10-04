@@ -67,7 +67,7 @@ public class SpotifyOAuthTests
         var message = SpotifyMusicProvider.MapSpotifyError(
             System.Net.HttpStatusCode.Forbidden,
             """{"error":{"status":403,"message":"Check settings on developer.spotify.com/dashboard, the user may not be registered."}}""");
-        Assert.Contains("User Management", message, StringComparison.Ordinal);
+        Assert.Contains("free account", message, StringComparison.Ordinal);
         Assert.Contains("not be registered", message, StringComparison.Ordinal);
         Assert.DoesNotContain("does not indicate success", message, StringComparison.Ordinal);
     }

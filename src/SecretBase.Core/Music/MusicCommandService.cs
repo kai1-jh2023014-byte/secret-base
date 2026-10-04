@@ -122,7 +122,8 @@ public sealed class MusicCommandService
 
             if (lastError is not null)
             {
-                return MusicCommandResult.Fail(MusicCommandKind.SearchTrack, lastError);
+                SpotifyWebSearch.TryCreateSearchUrl(query, out var webSearchUrl, out _);
+                return MusicCommandResult.Fail(MusicCommandKind.SearchTrack, lastError, webSearchUrl);
             }
         }
 

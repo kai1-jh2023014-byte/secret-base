@@ -178,6 +178,24 @@ public class MusicCommandServiceTests
     }
 
     [Fact]
+    public async Task Search_ApiRefusal_OffersSpotifyWebSearch()
+    {
+        var music = new MusicService([new RefusingSpotifySearchProvider()]);
+        var result = await new MusicCommandService(music).ExecuteAsync(MusicCommand.SearchTrack("Pretender"));
+        Assert.False(result.Succeeded);
+        Assert.True(SpotifyWebSearch.TryCreateSearchUrl("Pretender", out var expected, out _));
+        Assert.Equal(expected, result.WebSearchUrl);
+        Assert.StartsWith("https://open.spotify.com/search/", result.WebSearchUrl, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void SpotifyWebSearch_RejectsSchemeLikeQuery()
+    {
+        Assert.False(SpotifyWebSearch.TryCreateSearchUrl("https://evil.example", out var url, out _));
+        Assert.Null(url);
+    }
+
+    [Fact]
     public async Task Connect_RemembersClientId_BeforeConnect()
     {
         var provider = new RememberingMusicProvider();
@@ -226,6 +244,50 @@ public class MusicCommandServiceTests
         public Task NextAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
 
         public Task PreviousAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public Task ConnectAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+        public Task DisconnectAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+        public Task RefreshPlaybackStateAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+    }
+
+    private sealed class RefusingSpotifySearchProvider : IMusicProvider
+    {
+        public string ProviderId => "spotify";
+
+        public string DisplayName => "Spotify";
+
+        public MusicProviderCapabilities Capabilities =>
+            MusicProviderCapabilities.Search | MusicProviderCapabilities.Authentication;
+
+        public MusicAuthStatus AuthStatus => MusicAuthStatus.Connected;
+
+        public MusicTrack? CurrentTrack => null;
+
+        public bool IsPlaying => false;
+
+        public bool CanHandle(MusicSourceType type) => false;
+
+        public bool TryResolveOpenUrl(MusicSource source, out string? url, out string? error)
+        {
+            url = null;
+            error = null;
+            return false;
+        }
+
+        public Task<IReadOnlyList<MusicTrack>> SearchAsync(string query, CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("Spotify's catalog API refused this account.");
+
+        public Task PlayAsync(MusicTrack track, CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+        public Task PauseAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+        public Task ResumeAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+        public Task NextAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+        public Task PreviousAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
 
         public Task ConnectAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
 

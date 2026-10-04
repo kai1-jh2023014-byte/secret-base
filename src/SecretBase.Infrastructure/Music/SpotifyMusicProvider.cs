@@ -522,7 +522,7 @@ public sealed class SpotifyMusicProvider : IMusicProvider, IMusicOAuthClientSour
     private static string UserNotAllowlistedMessage(string? detail)
     {
         var message =
-            "Spotify refused this account (403). In the Spotify dashboard, open the app → User Management and add the Spotify account you just signed in with. The app owner also needs Spotify Premium. Then disconnect and connect again.";
+            "Spotify's catalog API refused this account. Open the search in Spotify to listen on a free account. In-app track lists and device controls need the app owner to have Spotify Premium.";
         if (string.IsNullOrWhiteSpace(detail))
         {
             return message;

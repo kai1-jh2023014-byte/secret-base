@@ -23,6 +23,9 @@ public sealed class MusicCommandResult
 
     public MusicAuthStatus AuthStatus { get; init; } = MusicAuthStatus.NotConfigured;
 
+    /// <summary>Validated https Spotify search page when the catalog API cannot answer.</summary>
+    public string? WebSearchUrl { get; init; }
+
     public static MusicCommandResult Ok(
         MusicCommandKind kind,
         IReadOnlyList<MusicTrack>? tracks = null,
@@ -45,11 +48,12 @@ public sealed class MusicCommandResult
             AuthStatus = authStatus
         };
 
-    public static MusicCommandResult Fail(MusicCommandKind kind, string error) =>
+    public static MusicCommandResult Fail(MusicCommandKind kind, string error, string? webSearchUrl = null) =>
         new()
         {
             Succeeded = false,
             Kind = kind,
-            ErrorMessage = error
+            ErrorMessage = error,
+            WebSearchUrl = webSearchUrl
         };
 }

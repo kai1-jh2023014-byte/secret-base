@@ -31,7 +31,7 @@ Music is a first-class Creative OS surface — **Secret Base UI first**, externa
 4. **Demo catalog** provider (honest in-memory catalog — used when Spotify is not connected)
 5. Optional “Open web source…” → system browser (https via `WebUrlValidator`)
 6. Layout persistence of sources + current track metadata (no tokens / artwork URLs)
-7. **Spotify connect** from the Music widget: paste the Client ID (Client Secret optional). PKCE uses one fixed redirect URI, `http://127.0.0.1:43821/callback`, which must be registered in the Spotify dashboard. The signed-in Spotify account must also be listed under that app’s User Management (Development Mode, up to five users), and the app owner needs Spotify Premium. Search asks Spotify for at most 10 tracks per request. The client file stays in `%LocalAppData%\SecretBase\credentials\` and is not committed. Playback controls an active Spotify device. Secret Base does not stream audio.
+7. **Spotify connect** from the Music widget: paste the Client ID (Client Secret optional). PKCE uses one fixed redirect URI, `http://127.0.0.1:43821/callback`, which must be registered in the Spotify dashboard. Search asks Spotify for at most 10 tracks per request. Spotify's catalog API and device playback control require the app owner to have Spotify Premium. A free account still gets an **Open this search in Spotify** button (`https://open.spotify.com/search/…`) when the API refuses the account. The client file stays in `%LocalAppData%\SecretBase\credentials\` and is not committed. Secret Base does not stream audio.
 
 ## What is deferred
 

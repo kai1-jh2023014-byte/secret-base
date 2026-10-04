@@ -146,7 +146,7 @@ public sealed partial class MusicWidgetView : UserControl
             Text =
                 "In the Spotify developer dashboard, add this exact Redirect URI:\n"
                 + SpotifyOAuth.RedirectUri
-                + "\n\nAlso open User Management and add the Spotify account you will sign in with. The app owner needs Spotify Premium.\n\nPlayback controls Spotify on an active device. Secret Base does not play audio itself."
+                + "\n\nA free Spotify account can open searches in the Spotify app or browser. In-app track lists and device controls use Spotify's API, which requires the app owner to have Spotify Premium.\n\nSecret Base does not play audio itself."
         };
         var panel = new StackPanel { Spacing = 8 };
         panel.Children.Add(help);
@@ -261,7 +261,14 @@ public sealed partial class MusicWidgetView : UserControl
             if (!result.Succeeded)
             {
                 ResultsList.Children.Add(CreateMuted(result.ErrorMessage ?? "Search failed."));
-                StatusLabel.Text = result.ErrorMessage ?? "Search failed.";
+                if (!string.IsNullOrWhiteSpace(result.WebSearchUrl))
+                {
+                    ResultsList.Children.Add(CreateOpenSpotifyButton(result.WebSearchUrl));
+                }
+
+                StatusLabel.Text = string.IsNullOrWhiteSpace(result.WebSearchUrl)
+                    ? result.ErrorMessage ?? "Search failed."
+                    : "Open this search in Spotify. A free account can play it there.";
                 return;
             }
 
@@ -288,6 +295,39 @@ public sealed partial class MusicWidgetView : UserControl
         {
             Interlocked.Exchange(ref _searchGate, 0);
         }
+    }
+
+    private UIElement CreateOpenSpotifyButton(string url)
+    {
+        var button = new Button
+        {
+            Content = "Open this search in Spotify",
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            Tag = url
+        };
+        button.Click += OpenSpotifySearchButton_Click;
+        if (_theme is not null)
+        {
+            WidgetSurfaceStyle.ApplyActionButton(button, _theme, accent: true);
+        }
+
+        return button;
+    }
+
+    private void OpenSpotifySearchButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: string url })
+        {
+            return;
+        }
+
+        if (_openUrl?.Invoke(url) == true)
+        {
+            StatusLabel.Text = "Opened the search in Spotify.";
+            return;
+        }
+
+        StatusLabel.Text = "Could not open Spotify.";
     }
 
     private UIElement CreateResultRow(MusicTrack track)
