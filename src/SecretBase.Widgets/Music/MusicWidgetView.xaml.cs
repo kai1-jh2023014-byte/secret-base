@@ -146,7 +146,7 @@ public sealed partial class MusicWidgetView : UserControl
             Text =
                 "In the Spotify developer dashboard, add this exact Redirect URI:\n"
                 + SpotifyOAuth.RedirectUri
-                + "\n\nPlayback controls Spotify on an active device. Secret Base does not play audio itself."
+                + "\n\nAlso open User Management and add the Spotify account you will sign in with. The app owner needs Spotify Premium.\n\nPlayback controls Spotify on an active device. Secret Base does not play audio itself."
         };
         var panel = new StackPanel { Spacing = 8 };
         panel.Children.Add(help);

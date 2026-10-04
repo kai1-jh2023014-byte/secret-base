@@ -16,6 +16,9 @@ public sealed class SpotifyMusicProvider : IMusicProvider, IMusicOAuthClientSour
 {
     public const string Id = "spotify";
 
+    /// <summary>Spotify caps <c>GET /search</c> at 10 results per request.</summary>
+    public const int SearchPageSize = 10;
+
     private const string Scope =
         "user-read-playback-state user-modify-playback-state user-read-currently-playing";
 
@@ -258,15 +261,14 @@ public sealed class SpotifyMusicProvider : IMusicProvider, IMusicOAuthClientSour
             throw new InvalidOperationException("Spotify is not connected.");
         }
 
-        var url =
-            "https://api.spotify.com/v1/search?q="
-            + Uri.EscapeDataString(query.Trim())
-            + "&type=track&limit=20";
-        using var request = new HttpRequestMessage(HttpMethod.Get, url);
+        using var request = new HttpRequestMessage(HttpMethod.Get, BuildSearchUrl(query));
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken);
         using var response = await _http.SendAsync(request, cancellationToken).ConfigureAwait(false);
-        response.EnsureSuccessStatusCode();
         var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new InvalidOperationException(MapSpotifyError(response.StatusCode, body));
+        }
         using var doc = JsonDocument.Parse(body);
         if (!doc.RootElement.TryGetProperty("tracks", out var tracksRoot)
             || !tracksRoot.TryGetProperty("items", out var items)
@@ -482,12 +484,83 @@ public sealed class SpotifyMusicProvider : IMusicProvider, IMusicOAuthClientSour
         };
     }
 
-    private static string MapSpotifyError(HttpStatusCode status, string body) =>
-        status == HttpStatusCode.Forbidden && body.Contains("PREMIUM_REQUIRED", StringComparison.Ordinal)
-            ? "Spotify Premium and an active device are required for playback control."
-            : status == HttpStatusCode.NotFound
-                ? "No active Spotify device found. Open Spotify on a device, then try again."
-                : "Spotify request failed.";
+    public static string BuildSearchUrl(string query) =>
+        "https://api.spotify.com/v1/search?q="
+        + Uri.EscapeDataString(query.Trim())
+        + "&type=track&limit="
+        + SearchPageSize;
+
+    public static string MapSpotifyError(HttpStatusCode status, string body)
+    {
+        var detail = TryReadSpotifyErrorMessage(body);
+        if (status == HttpStatusCode.Forbidden)
+        {
+            if (body.Contains("PREMIUM_REQUIRED", StringComparison.Ordinal)
+                || Contains(detail, "premium"))
+            {
+                return "Spotify Premium and an active device are required for playback control.";
+            }
+
+            return UserNotAllowlistedMessage(detail);
+        }
+
+        if (status == HttpStatusCode.NotFound)
+        {
+            return "No active Spotify device found. Open Spotify on a device, then try again.";
+        }
+
+        if (status == HttpStatusCode.BadRequest && Contains(detail, "invalid limit"))
+        {
+            return "Spotify rejected the search size. Search again after updating Secret Base.";
+        }
+
+        return string.IsNullOrWhiteSpace(detail)
+            ? "Spotify request failed."
+            : "Spotify request failed: " + detail;
+    }
+
+    private static string UserNotAllowlistedMessage(string? detail)
+    {
+        var message =
+            "Spotify refused this account (403). In the Spotify dashboard, open the app → User Management and add the Spotify account you just signed in with. The app owner also needs Spotify Premium. Then disconnect and connect again.";
+        if (string.IsNullOrWhiteSpace(detail))
+        {
+            return message;
+        }
+
+        return message + " Spotify said: " + detail;
+    }
+
+    private static string? TryReadSpotifyErrorMessage(string body)
+    {
+        if (string.IsNullOrWhiteSpace(body))
+        {
+            return null;
+        }
+
+        try
+        {
+            using var doc = JsonDocument.Parse(body);
+            if (doc.RootElement.TryGetProperty("error", out var error)
+                && error.ValueKind == JsonValueKind.Object
+                && error.TryGetProperty("message", out var message)
+                && message.ValueKind == JsonValueKind.String)
+            {
+                var text = message.GetString()?.Trim();
+                return string.IsNullOrWhiteSpace(text) ? null : text;
+            }
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+
+        return null;
+    }
+
+    private static bool Contains(string? text, string value) =>
+        !string.IsNullOrWhiteSpace(text)
+        && text.Contains(value, StringComparison.OrdinalIgnoreCase);
 
     public static void ApplyClientAuthentication(
         IDictionary<string, string> form,

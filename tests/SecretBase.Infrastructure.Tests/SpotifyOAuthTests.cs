@@ -53,6 +53,26 @@ public class SpotifyOAuthTests
     }
 
     [Fact]
+    public void SearchUrl_UsesTheCurrentPageSizeCap()
+    {
+        var url = SpotifyMusicProvider.BuildSearchUrl("lilac");
+        Assert.Contains("limit=10", url, StringComparison.Ordinal);
+        Assert.DoesNotContain("limit=20", url, StringComparison.Ordinal);
+        Assert.Equal(10, SpotifyMusicProvider.SearchPageSize);
+    }
+
+    [Fact]
+    public void ForbiddenSearch_ExplainsTheDashboardAllowlist()
+    {
+        var message = SpotifyMusicProvider.MapSpotifyError(
+            System.Net.HttpStatusCode.Forbidden,
+            """{"error":{"status":403,"message":"Check settings on developer.spotify.com/dashboard, the user may not be registered."}}""");
+        Assert.Contains("User Management", message, StringComparison.Ordinal);
+        Assert.Contains("not be registered", message, StringComparison.Ordinal);
+        Assert.DoesNotContain("does not indicate success", message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void RememberClient_WritesConfigBesideTheProvider()
     {
         var dir = Path.Combine(Path.GetTempPath(), "sb-spotify-" + Guid.NewGuid().ToString("N"));
