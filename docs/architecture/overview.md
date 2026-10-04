@@ -44,7 +44,7 @@ Highest principle:
 - ✅ Secret Base AI (`IAiProvider` + tool registry over existing Commands; OpenAI HTTP MVP)
 - ✅ Secret Base AI v0.3 Context Layer (read-only snapshot + suggest vs confirm)
 - ✅ Secret Base AI v0.4 Personal AI Workspace (Plan / Confirm / Action / Result; AI MVP complete)
-- ✅ v0.6 Base Experience: Base AI, context aggregator, Workspace session, Todo, Focus, time-aware suggestions, File Intelligence (suggest-only), onboarding that does not wipe existing layouts, Clock Base style, design tokens (`SurfaceElevated`, `MotionDurationMs`)
+- ✅ v0.6 Base Experience: Base AI, context aggregator, Workspace session, Todo, Focus / Pomodoro widget (Safe Auto `focus_start` opens + starts), time-aware suggestions, File Intelligence (suggest-only), onboarding that does not wipe existing layouts, Clock Base style, design tokens (`SurfaceElevated`, `MotionDurationMs`)
 - ✅ Provider fallback: preferred remote → Local → graceful unavailable
 - ⏭ Gemini tool-calling, YouTube Music official API (when available), autonomous agents — out of scope
 

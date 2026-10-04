@@ -166,13 +166,13 @@ public static class AssistantPlanner
     private static AssistantPlan BuildFocusPlan() =>
         new()
         {
-            Summary = "Pomodoro を開始します。",
+            Summary = "Pomodoro を開いて開始します。",
             Steps =
             [
                 new AssistantPlanStep
                 {
                     Index = 1,
-                    Title = "Focus timer",
+                    Title = "Open Pomodoro and start",
                     Kind = AssistantPlanStepKind.Read,
                     ToolName = AssistantToolNames.FocusStart
                 }
@@ -409,12 +409,22 @@ public static class AssistantPlanner
 
     private static bool LooksLikeFocus(string text) =>
         text.Contains("ポモドーロ", StringComparison.Ordinal)
+        || text.Contains("ぽもどーろ", StringComparison.Ordinal)
         || text.Contains("pomodoro", StringComparison.OrdinalIgnoreCase)
+        || text.Contains("ポモドロ", StringComparison.Ordinal)
+        || ((text.Contains("タイマー", StringComparison.Ordinal) || text.Contains("timer", StringComparison.OrdinalIgnoreCase))
+            && (text.Contains("集中", StringComparison.Ordinal)
+                || text.Contains("focus", StringComparison.OrdinalIgnoreCase)
+                || text.Contains("ポモ", StringComparison.Ordinal)))
         || ((text.Contains("focus", StringComparison.OrdinalIgnoreCase)
              || text.Contains("集中", StringComparison.Ordinal))
             && (text.Contains("開始", StringComparison.Ordinal)
                 || text.Contains("start", StringComparison.OrdinalIgnoreCase)
-                || text.Contains("始めて", StringComparison.Ordinal)));
+                || text.Contains("始めて", StringComparison.Ordinal)
+                || text.Contains("したい", StringComparison.Ordinal)
+                || text.Contains("やりたい", StringComparison.Ordinal)
+                || text.Contains("now", StringComparison.OrdinalIgnoreCase)
+                || text.Contains("今", StringComparison.Ordinal)));
 
     private static bool LooksLikeCleanup(string text) =>
         text.Contains("cleanup", StringComparison.OrdinalIgnoreCase)

@@ -22,8 +22,10 @@ It is **not** a wallpaper overlay with click-through (no `SetWindowRgn` equivale
 ## What v1 is not
 
 - Dock / menu bar / Finder replacement or injection
-- A 1:1 port of every WinUI widget (WebView2, overlay hit-testing, Blocks chrome)
+- A 1:1 port of every WinUI widget (WebView2, overlay hit-testing, Blocks chrome, Pomodoro timer UI)
 - Signed `.app` notarization (publish the apphost; packaging can follow)
+
+`focus_start` still runs through Base AI on macOS (shared `FocusSessionStore`), but there is no Avalonia Pomodoro widget yet — the WinUI Pomodoro surface is Windows-only for now.
 
 ## Platform adapters (`SecretBase.Platform.Mac`)
 

@@ -117,7 +117,7 @@ public class TimeAwareAdvisorTests
     public void StaysQuiet_WhenFocusIsRunning()
     {
         var now = DateTimeOffset.UtcNow;
-        var focus = new FocusSessionStore().Start(now);
+        var focus = new FocusSessionStore().Start(now).Session;
         var suggestion = TimeAwareAdvisor.Suggest(
             now,
             [

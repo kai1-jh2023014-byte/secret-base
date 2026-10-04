@@ -71,5 +71,6 @@ public class TaskbarShelfComposerTests
 
         Assert.Contains("Pomodoro", snap.Focus);
         Assert.Contains("20:00", snap.Focus);
+        Assert.Contains("Focus", snap.Focus);
     }
 }

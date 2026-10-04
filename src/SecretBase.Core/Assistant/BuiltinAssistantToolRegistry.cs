@@ -432,14 +432,16 @@ public sealed class BuiltinAssistantToolRegistry : IAiToolRegistry
         {
             Name = AssistantToolNames.FocusStart,
             Description =
-                "Start a local Pomodoro / focus timer in Secret Base. Safe Auto — does not launch apps.",
+                "Open the Pomodoro widget and start (or show) a local focus timer. "
+                + "Use when the user wants a Pomodoro / focus timer now (ポモドーロ・集中タイマー・pomodoro). "
+                + "Safe Auto — does not launch apps. If a timer is already running, shows it instead of stacking.",
             Parameters =
             [
                 new AssistantToolParameter
                 {
                     Name = "minutes",
                     Type = "integer",
-                    Description = "Duration 5-90. Default 25.",
+                    Description = "Focus duration 5-90. Default 25. Ignored when a session is already running.",
                     Required = false
                 },
                 new AssistantToolParameter
