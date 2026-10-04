@@ -18,6 +18,7 @@ using SecretBase.Core.Creative;
 using SecretBase.Core.Desktop;
 using SecretBase.Core.Focus;
 using SecretBase.Core.Integration;
+using SecretBase.Core.Jev;
 using SecretBase.Core.Music;
 using SecretBase.Core.Themes;
 using SecretBase.Core.Time;
@@ -35,6 +36,7 @@ using SecretBase.Core.Widgets.Web;
 using SecretBase.Core.Widgets.Workspace;
 using SecretBase.Core.Workspace;
 using SecretBase.Infrastructure.Assistant;
+using SecretBase.Infrastructure.Jev;
 using SecretBase.Infrastructure.Integration;
 using SecretBase.Infrastructure.Music;
 using SecretBase.Infrastructure.Calendar;
@@ -102,6 +104,7 @@ public sealed partial class DesktopPage : Page
     private IAppLaunchSettingsStore? _launchSettingsStore;
     private bool _autoStartToggleSync;
     private IAiProviderFactory? _assistantProviders;
+    private IJevDecisionService? _jevDecisions;
     private DesktopLayout? _layout;
     private ThemeDefinition? _theme;
     private CompatibilityInfo? _compatibility;
@@ -223,6 +226,18 @@ public sealed partial class DesktopPage : Page
         _autoStart = args.AutoStart ?? new WindowsRegistryAutoStartService();
         _launchSettingsStore = args.LaunchSettingsStore ?? new JsonAppLaunchSettingsStore();
         _assistantProviders = new AssistantProviderFactory(_secretStore);
+        _jevDecisions = new JevDecisionService(
+            new JevApiClient(new HttpClient { Timeout = TimeSpan.FromSeconds(20) }),
+            () =>
+            {
+                if (_secretStore is null
+                    || !_secretStore.TryGetSecret(JevSecretKeys.ApiKey, out var jevKey))
+                {
+                    return null;
+                }
+
+                return jevKey;
+            });
         var assistantRegistry = BuiltinAssistantToolRegistry.Instance;
         var assistantContext = new AssistantContextService(
             calendar: _calendarCommands,
@@ -276,7 +291,8 @@ public sealed partial class DesktopPage : Page
                 _baseExperience),
             () => _assistantProviders.Create(_assistantSettings.LoadOrCreate()),
             () => _assistantSettings.LoadOrCreate(),
-            assistantContext);
+            assistantContext,
+            _jevDecisions);
 
         _theme = _themeStore.LoadOrCreateDefault();
         _layout = _layoutStore.LoadOrCreateDefault(RoomId.DefaultRoomId);
@@ -1009,7 +1025,8 @@ public sealed partial class DesktopPage : Page
                 _secretStore,
                 _assistantProviders,
                 TryApplyAssistantLaunch,
-                dialogInput: _dialogInput);
+                dialogInput: _dialogInput,
+                jev: _jevDecisions);
             if (_theme is not null)
             {
                 view.ApplyTheme(_theme);
@@ -1058,7 +1075,8 @@ public sealed partial class DesktopPage : Page
                 _secretStore,
                 _assistantProviders,
                 TryApplyAssistantLaunch,
-                dialogInput: _dialogInput);
+                dialogInput: _dialogInput,
+                jev: _jevDecisions);
             if (_theme is not null)
             {
                 view.ApplyTheme(_theme);

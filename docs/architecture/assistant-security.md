@@ -35,8 +35,9 @@ Host (Platform launch APIs only)
 ## Secrets
 
 - Store: `ISecureSecretStore` / Windows Credential Manager only
-- Key id: `Assistant/OpenAI/ApiKey`
-- Settings JSON: provider/model/maxSteps only
+- Conversation key ids: `Assistant/OpenAI/ApiKey`, `Assistant/Gemini/ApiKey`
+- Decision key id: `Jev/ApiKey` (never written into the conversation slots)
+- Settings JSON: provider/model/maxSteps only. Jev's key is not in `assistant.json`
 - Chat: reject/strip `sk-`, Bearer, passwords
 
 ## Confirmation

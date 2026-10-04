@@ -1,5 +1,11 @@
 # Decision Log
 
+## 2026-10-04 — Jev is a decision layer, not a chat provider
+
+**Decision:** Jev is called through its documented decide API (`choice` / `score` / `noul`). Secret Base asks three choice questions: situation, next step, and gate. A `jv_live_` key posts to `https://jevtypesafeai.com/api/v1/decide`. Any other key posts to `https://api.typesafe.ai/v1/systemone`. The key is stored as `Jev/ApiKey`, separate from the OpenAI and Gemini credentials. Jev is not an `AssistantProviderIds` value. Its answer is validated and passed through `AutomationSafety`. Invalid or denied decisions do not run tools. A missing or unreachable Jev uses a local rule that asks before an action and does not auto-run uncertain work.
+
+**Why:** Conversation models (Gemini, OpenAI, Ollama) write replies. Jev only classifies a decision. Giving it a chat-provider slot, or a shared API key, would let a decision call turn into PC execution.
+
 ## 2026-10-04 — A song change still answers when the catalog API refuses
 
 **Decision:** If Spotify search fails, `music_search` and confirmed `music_play` open `https://open.spotify.com/search/…` and that sentence is the Base AI reply. The turn does not wait for a second model call to narrate an external link. If a later model call times out after any tool already ran, the tool text is the reply instead of a bare timeout.

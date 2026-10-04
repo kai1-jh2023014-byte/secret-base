@@ -87,4 +87,7 @@ public static class AssistantUserMessages
         "Resolve the pending confirmation with Run or Cancel before sending a new message.";
     public const string DiskDeleteRefused =
         "Secret Base will not delete files on disk. Confirm to return a Block item to Desktop or unregister a Secret Base item.";
+
+    public const string JevDenied =
+        "Jev decision gate denied this action. Secret Base did not run it.";
 }

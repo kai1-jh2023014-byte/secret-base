@@ -1,3 +1,5 @@
+using SecretBase.Core.Jev;
+
 namespace SecretBase.Core.Assistant;
 
 /// <summary>
@@ -41,6 +43,7 @@ public sealed class AssistantService : IAssistantService
     private readonly Func<IAiProvider> _provider;
     private readonly Func<AssistantSettings> _settings;
     private readonly IAssistantContextService? _context;
+    private readonly IJevDecisionService? _jev;
     private readonly List<AiMessage> _history = [];
     private AssistantPendingConfirmation? _pending;
     private readonly List<AssistantActivity> _turnActivities = [];
@@ -53,19 +56,22 @@ public sealed class AssistantService : IAssistantService
     private string? _lastProjectName;
     private int _stepsUsed;
     private readonly List<string> _turnToolNotes = [];
+    private JevSafetyVerdict? _jevVerdict;
 
     public AssistantService(
         IAiToolRegistry registry,
         IAiToolExecutor executor,
         Func<IAiProvider> provider,
         Func<AssistantSettings>? settings = null,
-        IAssistantContextService? context = null)
+        IAssistantContextService? context = null,
+        IJevDecisionService? jev = null)
     {
         _registry = registry ?? throw new ArgumentNullException(nameof(registry));
         _executor = executor ?? throw new ArgumentNullException(nameof(executor));
         _provider = provider ?? throw new ArgumentNullException(nameof(provider));
         _settings = settings ?? (() => new AssistantSettings());
         _context = context;
+        _jev = jev;
     }
 
     public IReadOnlyList<AiMessage> VisibleHistory =>
@@ -105,6 +111,7 @@ public sealed class AssistantService : IAssistantService
         _lastLaunch = null;
         _stepsUsed = 0;
         _turnToolNotes.Clear();
+        _jevVerdict = null;
 
         var text = userText?.Trim() ?? string.Empty;
         if (string.IsNullOrWhiteSpace(text))
@@ -150,6 +157,7 @@ public sealed class AssistantService : IAssistantService
 
         _history.Add(new AiMessage { Role = AiMessageRole.User, Content = text });
         TrimHistory();
+        await ConsultJevAsync(text, snapshot, cancellationToken).ConfigureAwait(false);
         return await ContinueModelAsync(cancellationToken).ConfigureAwait(false);
     }
 
@@ -233,6 +241,62 @@ public sealed class AssistantService : IAssistantService
         _actionResults.Clear();
         _lastLaunch = null;
         return ContinueModelAsync(cancellationToken);
+    }
+
+    private async Task ConsultJevAsync(
+        string text,
+        AssistantContextSnapshot? snapshot,
+        CancellationToken cancellationToken)
+    {
+        if (_jev is null)
+        {
+            return;
+        }
+
+        JevDecisionOutcome outcome;
+        try
+        {
+            outcome = await _jev.DecideAsync(
+                new JevObservation
+                {
+                    LocalNow = DateTimeOffset.Now,
+                    Intent = _turnIntent,
+                    Message = text,
+                    CalendarTodayCount = snapshot?.TodayEvents.Count
+                },
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception)
+        {
+            _turnActivities.Add(new AssistantActivity
+            {
+                Text = "Jev unavailable — local rule, no automatic action",
+                Domain = "Jev",
+                Status = AssistantActivityStatus.Failed
+            });
+            return;
+        }
+
+        _turnActivities.Add(new AssistantActivity
+        {
+            Text = outcome.Summary,
+            Domain = "Jev",
+            Status = outcome.Decision.IsValid ? AssistantActivityStatus.Done : AssistantActivityStatus.Failed
+        });
+
+        var note = outcome.Decision.Explain();
+        _turnContextNote = string.IsNullOrWhiteSpace(_turnContextNote)
+            ? note
+            : _turnContextNote + "\n" + note;
+
+        if (!outcome.UsedFallback)
+        {
+            _jevVerdict = outcome.Verdict;
+        }
     }
 
     private async Task<AssistantTurnResult> ContinueModelAsync(CancellationToken cancellationToken)
@@ -372,6 +436,53 @@ public sealed class AssistantService : IAssistantService
                         Content = AssistantUserMessages.ToolUnavailable
                     });
                     continue;
+                }
+
+                if (_jevVerdict is { } jevVerdict)
+                {
+                    var permission = JevSafetyGate.PermissionFor(jevVerdict, tool);
+                    if (permission == JevToolPermission.Refuse)
+                    {
+                        _history.Add(new AiMessage
+                        {
+                            Role = AiMessageRole.Tool,
+                            ToolCallId = call.Id,
+                            Content = AssistantUserMessages.JevDenied
+                        });
+                        _turnToolNotes.Add(AssistantUserMessages.JevDenied);
+                        _turnActivities.Add(new AssistantActivity
+                        {
+                            Text = "Jev denied this action",
+                            Domain = DomainFor(call.Name),
+                            Status = AssistantActivityStatus.Failed
+                        });
+                        continue;
+                    }
+
+                    if (permission == JevToolPermission.Confirm
+                        && !AssistantConfirmationPolicy.RequiresConfirmation(tool))
+                    {
+                        if (!HasStepBudget(pendingActions.Count, additionalSteps: 1))
+                        {
+                            _history.Add(new AiMessage
+                            {
+                                Role = AiMessageRole.Tool,
+                                ToolCallId = call.Id,
+                                Content = AssistantUserMessages.MaxStepsReached
+                            });
+                            continue;
+                        }
+
+                        pendingActions.Add(new AssistantPendingAction
+                        {
+                            ToolCallId = call.Id,
+                            ToolName = tool.Name,
+                            ArgumentsJson = call.ArgumentsJson,
+                            Label = AssistantConfirmationPolicy.Label(tool.Name, call.ArgumentsJson)
+                        });
+                        risky |= AssistantConfirmationPolicy.IsRisky(tool);
+                        continue;
+                    }
                 }
 
                 if (AssistantConfirmationPolicy.RequiresConfirmation(tool))
