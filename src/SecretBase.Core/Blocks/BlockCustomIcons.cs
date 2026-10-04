@@ -12,11 +12,23 @@ public static class BlockCustomIcons
         ".png",
         ".jpg",
         ".jpeg",
+        ".jfif",
         ".bmp",
         ".gif",
         ".ico",
-        ".webp"
+        ".webp",
+        ".tif",
+        ".tiff"
     };
+
+    private static long _storedNameSequence;
+
+    /// <summary>
+    /// Unique PNG name per import. Reusing one path per item left the old BitmapImage
+    /// cached and could fail when that file was still open.
+    /// </summary>
+    public static string CreateStoredFileName(Guid itemId) =>
+        $"{itemId:N}_{DateTime.UtcNow.Ticks:x}_{Interlocked.Increment(ref _storedNameSequence):x}.png";
 
     public static readonly IReadOnlyList<BlockIconPreset> Presets =
     [

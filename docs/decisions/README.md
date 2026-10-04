@@ -1,5 +1,11 @@
 # Decision Log
 
+## 2026-10-04 — Block custom icons use a new file per import
+
+**Decision:** Each custom Block icon import writes a unique PNG under `icons/custom` (`{itemId}_{ticks}_{seq}.png`). The tile loads with `BitmapCreateOptions.IgnoreImageCache` and a cache-busting URI. Missing icon files fall back to the shell icon for display without clearing `item.Icon`. Windows decoding prefers Windows Imaging (PNG/JPG/BMP/GIF/ICO/WEBP/TIFF), then GDI+.
+
+**Why:** Overwriting one path per item left WinUI showing a cached bitmap, failed when the old file was still open, and made PNG/WEBP imports look like “JPG only.” Clearing `Icon` when `File.Exists` failed briefly wiped good custom icons.
+
 ## 2026-10-04 — Jev is a decision layer, not a chat provider
 
 **Decision:** Jev is called through its documented decide API (`choice` / `score` / `noul`). Secret Base asks three choice questions: situation, next step, and gate. A `jv_live_` key posts to `https://jevtypesafeai.com/api/v1/decide`. Any other key posts to `https://api.typesafe.ai/v1/systemone`. The key is stored as `Jev/ApiKey`, separate from the OpenAI and Gemini credentials. Jev is not an `AssistantProviderIds` value. Its answer is validated and passed through `AutomationSafety`. Invalid or denied decisions do not run tools. A missing or unreachable Jev uses a local rule that asks before an action and does not auto-run uncertain work.

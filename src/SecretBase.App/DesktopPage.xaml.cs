@@ -172,7 +172,8 @@ public sealed partial class DesktopPage : Page
         _launcher = args.Launcher;
         _icons = args.Icons;
         _intake = args.Intake;
-        _secretStore = args.SecretStore ?? new WindowsCredentialSecretStore();
+        var secretStore = args.SecretStore ?? new WindowsCredentialSecretStore();
+        _secretStore = secretStore;
         _calendarCache = args.CalendarCache ?? new JsonCalendarAgendaCache();
         _pathPicker = args.PathPicker;
         _customIcons = args.CustomIcons;
@@ -196,16 +197,14 @@ public sealed partial class DesktopPage : Page
         _calendarService = CalendarServiceFactory.Create(
             CalendarWidgetConfiguration.CreateDefault(),
             time,
-            secretStore: _secretStore,
+            secretStore: secretStore,
             openBrowser: url => TryOpenHttpsUrl(url),
             localStore: _localCalendarStore);
         _calendarCommands = new CalendarCommandService(_calendarService, time);
-        _musicCommands = new MusicCommandService(MusicServiceFactory.Create(_secretStore, TryOpenHttpsUrl));
+        var musicCommands = new MusicCommandService(MusicServiceFactory.Create(secretStore, TryOpenHttpsUrl));
+        _musicCommands = musicCommands;
         _integrationMemory = new JsonIntegrationMemoryStore();
-        if (_secretStore is not null)
-        {
-            IntegrationMemorySynchronizer.SyncFromSecrets(_integrationMemory, _secretStore);
-        }
+        IntegrationMemorySynchronizer.SyncFromSecrets(_integrationMemory, secretStore);
         _workspaceCatalog = _intake is null
             ? null
             : new DesktopWorkspaceCatalog(
@@ -219,41 +218,33 @@ public sealed partial class DesktopPage : Page
             creative: _creativeCommands,
             apps: _appCommands,
             ai: _aiCommands);
-        _assistantSettings = new JsonAssistantSettingsStore();
+        var assistantSettings = new JsonAssistantSettingsStore();
+        _assistantSettings = assistantSettings;
         _todoStore = new JsonTodoStore();
         _focus = new FocusSessionStore();
         var layoutExisted = _layoutStore.Exists(RoomId.DefaultRoomId);
         _baseSettingsStore = new JsonBaseSettingsStore();
-        _baseSettings = _baseSettingsStore.LoadOrCreate(layoutExisted);
+        var baseSettings = _baseSettingsStore.LoadOrCreate(layoutExisted);
+        _baseSettings = baseSettings;
         _autoStart = args.AutoStart ?? new WindowsRegistryAutoStartService();
         _launchSettingsStore = args.LaunchSettingsStore ?? new JsonAppLaunchSettingsStore();
-        _assistantProviders = new AssistantProviderFactory(_secretStore);
+        var assistantProviders = new AssistantProviderFactory(secretStore);
+        _assistantProviders = assistantProviders;
         _jevDecisions = new JevDecisionService(
             new JevApiClient(new HttpClient { Timeout = TimeSpan.FromSeconds(20) }),
-            () =>
-            {
-                if (_secretStore is null
-                    || !_secretStore.TryGetSecret(JevSecretKeys.ApiKey, out var jevKey))
-                {
-                    return null;
-                }
-
-                return jevKey;
-            });
+            () => secretStore.TryGetSecret(JevSecretKeys.ApiKey, out var jevKey) ? jevKey : null);
         var assistantRegistry = BuiltinAssistantToolRegistry.Instance;
         var assistantContext = new AssistantContextService(
             calendar: _calendarCommands,
             creative: _creativeCommands,
             apps: _appCommands,
-            music: _musicCommands,
-            settings: () => _assistantSettings.LoadOrCreate(),
+            music: musicCommands,
+            settings: () => assistantSettings.LoadOrCreate(),
             isOpenAiKeyConfigured: () =>
-                _secretStore is not null
-                && _secretStore.TryGetSecret(AssistantSecretKeys.OpenAiApiKey, out var key)
+                secretStore.TryGetSecret(AssistantSecretKeys.OpenAiApiKey, out var key)
                 && !string.IsNullOrWhiteSpace(key),
             isGeminiKeyConfigured: () =>
-                _secretStore is not null
-                && _secretStore.TryGetSecret(AssistantSecretKeys.GeminiApiKey, out var gemini)
+                secretStore.TryGetSecret(AssistantSecretKeys.GeminiApiKey, out var gemini)
                 && !string.IsNullOrWhiteSpace(gemini),
             integrations: _integrationMemory);
         var workspaceCommands = new WorkspaceCommandService(
@@ -276,7 +267,7 @@ public sealed partial class DesktopPage : Page
             },
             () => _upcomingEvents,
             () => (_timeProvider ?? new SystemTimeProvider()).GetLocalNow());
-        _baseExperience.CurrentWorkspace = _baseSettings.LastWorkspace;
+        _baseExperience.CurrentWorkspace = baseSettings.LastWorkspace;
         _assistant = new AssistantService(
             assistantRegistry,
             new AssistantToolExecutor(
@@ -286,13 +277,13 @@ public sealed partial class DesktopPage : Page
                 _aiCommands,
                 _integrationCommands,
                 _appCommands,
-                _musicCommands,
+                musicCommands,
                 assistantContext,
                 workspaceCommands,
                 _integrationMemory,
                 _baseExperience),
-            () => _assistantProviders.Create(_assistantSettings.LoadOrCreate()),
-            () => _assistantSettings.LoadOrCreate(),
+            () => assistantProviders.Create(assistantSettings.LoadOrCreate()),
+            () => assistantSettings.LoadOrCreate(),
             assistantContext,
             _jevDecisions);
 
@@ -953,6 +944,11 @@ public sealed partial class DesktopPage : Page
 
         if (instance.Type == WidgetTypes.Music)
         {
+            if (_musicCommands is null)
+            {
+                return null;
+            }
+
             var config = MusicWidgetConfiguration.FromDictionary(instance.Configuration);
             instance.Configuration = config.ToDictionary();
 
@@ -1762,10 +1758,12 @@ public sealed partial class DesktopPage : Page
 
     private async Task MaybeShowOnboardingAsync()
     {
-        if (_baseSettings is { OnboardingCompleted: true } || _layout is null || _theme is null)
+        if (_baseSettings is null || _baseSettings.OnboardingCompleted || _layout is null || _theme is null)
         {
             return;
         }
+
+        var baseSettings = _baseSettings;
 
         var ai = new CheckBox { Content = "AI", IsChecked = true };
         var clock = new CheckBox { Content = "Clock", IsChecked = true };
@@ -1850,11 +1848,11 @@ public sealed partial class DesktopPage : Page
         ApplyDesktopTheme(_theme);
         RenderDesktopObjects();
 
-        _baseSettings.OnboardingCompleted = true;
-        _baseSettings.OnboardingCompletedAt = DateTimeOffset.UtcNow;
-        _baseSettings.Atmosphere = chosen;
-        _baseSettings.SelectedModules = modules;
-        _baseSettingsStore?.Save(_baseSettings);
+        baseSettings.OnboardingCompleted = true;
+        baseSettings.OnboardingCompletedAt = DateTimeOffset.UtcNow;
+        baseSettings.Atmosphere = chosen;
+        baseSettings.SelectedModules = modules;
+        _baseSettingsStore?.Save(baseSettings);
         ShowHostStatus("Your base is ready.");
     }
 

@@ -12,7 +12,7 @@ public interface IPathPickService
 
     Task<PathPickResult> PickFolderAsync();
 
-    /// <summary>Image picker for Block / widget custom icons (png, jpg, bmp, gif, ico, webp).</summary>
+    /// <summary>Image picker for Block / widget custom icons (png, jpg, bmp, gif, ico, webp, tiff).</summary>
     Task<PathPickResult> PickImageAsync();
 }
 

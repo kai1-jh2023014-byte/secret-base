@@ -164,25 +164,14 @@ public sealed partial class BlockFrame : UserControl
             Background = new SolidColorBrush(Windows.UI.Color.FromArgb(0x33, 0xFF, 0xFF, 0xFF))
         };
 
-        // Persist only user/custom icons. Shell cache paths are display-only.
-        var customPath = !string.IsNullOrWhiteSpace(item.Icon) && File.Exists(item.Icon)
-            ? item.Icon
-            : null;
-        if (!string.IsNullOrWhiteSpace(item.Icon) && customPath is null)
-        {
-            item.Icon = string.Empty;
-        }
-
+        // Custom icons are user imports under AppData. Missing files fall back for display
+        // only — do not clear item.Icon here (that wiped icons when a file was briefly locked).
+        var customPath = ResolveCustomIconPath(item);
         var displayPath = customPath ?? _icons.TryGetCachedIconPath(item.Target);
-        if (!string.IsNullOrWhiteSpace(displayPath) && File.Exists(displayPath))
+        var image = TryCreateIconImage(displayPath);
+        if (image is not null)
         {
-            iconHost.Child = new Image
-            {
-                Source = new BitmapImage(new Uri(displayPath)),
-                Stretch = Stretch.UniformToFill,
-                Width = 36,
-                Height = 36
-            };
+            iconHost.Child = image;
         }
         else
         {
@@ -504,7 +493,7 @@ public sealed partial class BlockFrame : UserControl
                 {
                     new TextBlock
                     {
-                        Text = "Choose a design color, or import your own image (PNG, JPG, BMP, GIF, ICO, WEBP).",
+                        Text = "Choose a design color, or import an image (PNG, JPG, BMP, GIF, ICO, WEBP, TIFF).",
                         FontSize = 12,
                         Opacity = 0.8,
                         TextWrapping = TextWrapping.WrapWholeWords
@@ -593,10 +582,64 @@ public sealed partial class BlockFrame : UserControl
 
     private void ApplyStoredIcon(BlockItem item, string storedPath)
     {
+        var previous = item.Icon;
         item.Icon = storedPath;
+        if (!string.IsNullOrWhiteSpace(previous)
+            && !string.Equals(previous, storedPath, StringComparison.OrdinalIgnoreCase)
+            && _customIcons is not null
+            && _customIcons.IsUserIcon(previous))
+        {
+            _customIcons.TryDeleteUserIcon(previous);
+        }
+
         RefreshItems(arrangeIfNeeded: false);
         _onLayoutCommitted();
         _onBoundsChanged?.Invoke();
+    }
+
+    private string? ResolveCustomIconPath(BlockItem item)
+    {
+        if (string.IsNullOrWhiteSpace(item.Icon))
+        {
+            return null;
+        }
+
+        if (_customIcons is not null && !_customIcons.IsUserIcon(item.Icon))
+        {
+            // Shell cache paths must not be treated as persisted custom icons.
+            return null;
+        }
+
+        return File.Exists(item.Icon) ? item.Icon : null;
+    }
+
+    private static Image? TryCreateIconImage(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+        {
+            return null;
+        }
+
+        try
+        {
+            // Bust WinUI's URI cache and avoid sharing one decoded bitmap across tiles.
+            var uri = new Uri(path, UriKind.Absolute);
+            var cacheBust = File.GetLastWriteTimeUtc(path).Ticks;
+            var bitmap = new BitmapImage();
+            bitmap.CreateOptions = BitmapCreateOptions.IgnoreImageCache;
+            bitmap.UriSource = new Uri($"{uri.AbsoluteUri}?v={cacheBust}", UriKind.Absolute);
+            return new Image
+            {
+                Source = bitmap,
+                Stretch = Stretch.UniformToFill,
+                Width = 36,
+                Height = 36
+            };
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     private static Windows.UI.Color ParsePresetColor(string hex)

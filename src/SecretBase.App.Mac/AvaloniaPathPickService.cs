@@ -90,7 +90,7 @@ public sealed class AvaloniaPathPickService : IPathPickService
                 [
                     new FilePickerFileType("Images")
                     {
-                        Patterns = ["*.png", "*.jpg", "*.jpeg", "*.bmp", "*.gif", "*.webp", "*.ico"],
+                        Patterns = ["*.png", "*.jpg", "*.jpeg", "*.jfif", "*.bmp", "*.gif", "*.webp", "*.ico", "*.tif", "*.tiff"],
                         AppleUniformTypeIdentifiers = ["public.image"],
                         MimeTypes = ["image/*"]
                     }

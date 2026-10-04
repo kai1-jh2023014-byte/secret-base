@@ -98,10 +98,13 @@ public sealed class WindowsPathPickService : IPathPickService
             picker.FileTypeFilter.Add(".png");
             picker.FileTypeFilter.Add(".jpg");
             picker.FileTypeFilter.Add(".jpeg");
+            picker.FileTypeFilter.Add(".jfif");
             picker.FileTypeFilter.Add(".bmp");
             picker.FileTypeFilter.Add(".gif");
             picker.FileTypeFilter.Add(".ico");
             picker.FileTypeFilter.Add(".webp");
+            picker.FileTypeFilter.Add(".tif");
+            picker.FileTypeFilter.Add(".tiff");
 
             var file = await picker.PickSingleFileAsync();
             if (file is null)
