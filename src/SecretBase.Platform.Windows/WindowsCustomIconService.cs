@@ -3,11 +3,14 @@ using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
 using SecretBase.Core.Blocks;
 using SecretBase.Platform.Abstractions;
+using Windows.Graphics.Imaging;
+using Windows.Storage.Streams;
 
 namespace SecretBase.Platform.Windows;
 
 /// <summary>
 /// Stores user/preset Block icons as PNG under %LocalAppData%\SecretBase\icons\custom.
+/// Each import writes a new file name so WinUI does not keep showing a cached bitmap.
 /// </summary>
 public sealed class WindowsCustomIconService : ICustomIconService
 {
@@ -36,9 +39,15 @@ public sealed class WindowsCustomIconService : ICustomIconService
         storedPath = null;
         errorMessage = null;
 
+        if (itemId == Guid.Empty)
+        {
+            errorMessage = "Block item id is missing.";
+            return false;
+        }
+
         if (!BlockCustomIcons.IsAllowedImagePath(sourcePath))
         {
-            errorMessage = "Choose a PNG, JPG, BMP, GIF, ICO, or WEBP image.";
+            errorMessage = "Choose a PNG, JPG, BMP, GIF, ICO, WEBP, or TIFF image.";
             return false;
         }
 
@@ -51,16 +60,12 @@ public sealed class WindowsCustomIconService : ICustomIconService
         try
         {
             Directory.CreateDirectory(_customDirectory);
-            var dest = Path.Combine(_customDirectory, $"{itemId:N}.png");
-            using var bitmap = LoadAsBitmap(sourcePath);
-            if (bitmap is null)
+            var dest = Path.Combine(_customDirectory, BlockCustomIcons.CreateStoredFileName(itemId));
+            if (!TryWriteNormalizedPng(sourcePath, dest, out errorMessage))
             {
-                errorMessage = "Could not read that image.";
                 return false;
             }
 
-            using var sized = new Bitmap(bitmap, OutputSize, OutputSize);
-            sized.Save(dest, ImageFormat.Png);
             storedPath = dest;
             return File.Exists(dest);
         }
@@ -80,6 +85,12 @@ public sealed class WindowsCustomIconService : ICustomIconService
     {
         storedPath = null;
         errorMessage = null;
+        if (itemId == Guid.Empty)
+        {
+            errorMessage = "Block item id is missing.";
+            return false;
+        }
+
         var preset = BlockCustomIcons.Presets.FirstOrDefault(p =>
             string.Equals(p.Id, presetId, StringComparison.OrdinalIgnoreCase));
         if (preset is null)
@@ -91,7 +102,7 @@ public sealed class WindowsCustomIconService : ICustomIconService
         try
         {
             Directory.CreateDirectory(_customDirectory);
-            var dest = Path.Combine(_customDirectory, $"{itemId:N}.png");
+            var dest = Path.Combine(_customDirectory, BlockCustomIcons.CreateStoredFileName(itemId));
             using var bitmap = new Bitmap(OutputSize, OutputSize);
             using (var g = Graphics.FromImage(bitmap))
             {
@@ -113,7 +124,7 @@ public sealed class WindowsCustomIconService : ICustomIconService
                 g.DrawString(letter, font, textBrush, rect, format);
             }
 
-            bitmap.Save(dest, ImageFormat.Png);
+            SavePngAtomic(bitmap, dest);
             storedPath = dest;
             return File.Exists(dest);
         }
@@ -144,16 +155,144 @@ public sealed class WindowsCustomIconService : ICustomIconService
         }
     }
 
+    private static bool TryWriteNormalizedPng(string sourcePath, string destPath, out string? errorMessage)
+    {
+        errorMessage = null;
+        if (TryDecodeWithWindowsImaging(sourcePath, destPath, out errorMessage))
+        {
+            return true;
+        }
+
+        var imagingError = errorMessage;
+        if (TryDecodeWithGdi(sourcePath, destPath, out errorMessage))
+        {
+            return true;
+        }
+
+        errorMessage = string.IsNullOrWhiteSpace(imagingError)
+            ? errorMessage
+            : imagingError + (string.IsNullOrWhiteSpace(errorMessage) ? string.Empty : " " + errorMessage);
+        if (string.IsNullOrWhiteSpace(errorMessage))
+        {
+            errorMessage = "Could not read that image.";
+        }
+
+        return false;
+    }
+
+    private static bool TryDecodeWithWindowsImaging(string sourcePath, string destPath, out string? errorMessage)
+    {
+        errorMessage = null;
+        try
+        {
+            var bytes = File.ReadAllBytes(sourcePath);
+            if (bytes.Length == 0)
+            {
+                errorMessage = "The selected image is empty.";
+                return false;
+            }
+
+            using var input = new InMemoryRandomAccessStream();
+            using (var writer = new DataWriter(input))
+            {
+                writer.WriteBytes(bytes);
+                writer.StoreAsync().AsTask().GetAwaiter().GetResult();
+                writer.DetachStream();
+            }
+
+            input.Seek(0);
+            var decoder = BitmapDecoder.CreateAsync(input).AsTask().GetAwaiter().GetResult();
+            using var software = decoder.GetSoftwareBitmapAsync().AsTask().GetAwaiter().GetResult();
+            if (software is null)
+            {
+                errorMessage = "Could not decode that image.";
+                return false;
+            }
+
+            using var converted = SoftwareBitmap.Convert(software, BitmapPixelFormat.Bgra8, BitmapAlphaMode.Premultiplied);
+            using var output = new InMemoryRandomAccessStream();
+            var encoder = BitmapEncoder.CreateAsync(BitmapEncoder.PngEncoderId, output).AsTask().GetAwaiter().GetResult();
+            encoder.SetSoftwareBitmap(converted);
+            encoder.BitmapTransform.ScaledWidth = OutputSize;
+            encoder.BitmapTransform.ScaledHeight = OutputSize;
+            encoder.BitmapTransform.InterpolationMode = BitmapInterpolationMode.Fant;
+            encoder.FlushAsync().AsTask().GetAwaiter().GetResult();
+
+            output.Seek(0);
+            var png = new byte[output.Size];
+            using (var reader = new DataReader(output))
+            {
+                reader.LoadAsync((uint)output.Size).AsTask().GetAwaiter().GetResult();
+                reader.ReadBytes(png);
+            }
+
+            var dir = Path.GetDirectoryName(destPath);
+            if (!string.IsNullOrWhiteSpace(dir))
+            {
+                Directory.CreateDirectory(dir);
+            }
+
+            var tmp = destPath + ".tmp";
+            File.WriteAllBytes(tmp, png);
+            File.Copy(tmp, destPath, overwrite: true);
+            File.Delete(tmp);
+            return File.Exists(destPath);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+            return false;
+        }
+    }
+
+    private static bool TryDecodeWithGdi(string sourcePath, string destPath, out string? errorMessage)
+    {
+        errorMessage = null;
+        try
+        {
+            using var bitmap = LoadAsBitmap(sourcePath);
+            if (bitmap is null)
+            {
+                errorMessage = "Could not read that image.";
+                return false;
+            }
+
+            SavePngAtomic(bitmap, destPath);
+            return File.Exists(destPath);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+            return false;
+        }
+    }
+
+    private static void SavePngAtomic(Bitmap bitmap, string destPath)
+    {
+        var tmp = destPath + ".tmp";
+        bitmap.Save(tmp, ImageFormat.Png);
+        File.Copy(tmp, destPath, overwrite: true);
+        File.Delete(tmp);
+    }
+
     private static Bitmap? LoadAsBitmap(string path)
     {
+        var bytes = File.ReadAllBytes(path);
+        if (bytes.Length == 0)
+        {
+            return null;
+        }
+
         var ext = Path.GetExtension(path);
         if (ext.Equals(".ico", StringComparison.OrdinalIgnoreCase))
         {
-            using var icon = new Icon(path, OutputSize, OutputSize);
+            using var ms = new MemoryStream(bytes);
+            using var icon = new Icon(ms, OutputSize, OutputSize);
             return new Bitmap(icon.ToBitmap(), OutputSize, OutputSize);
         }
 
-        using var original = Image.FromFile(path);
+        using var stream = new MemoryStream(bytes);
+        using var original = Image.FromStream(stream, useEmbeddedColorManagement: false, validateImageData: true);
         return new Bitmap(original, OutputSize, OutputSize);
     }
 

@@ -7,14 +7,33 @@ public class BlockCustomIconsTests
     [Theory]
     [InlineData("photo.png", true)]
     [InlineData("photo.JPG", true)]
+    [InlineData("photo.jfif", true)]
     [InlineData("icon.ico", true)]
     [InlineData("shot.webp", true)]
+    [InlineData("scan.tiff", true)]
     [InlineData("notes.txt", false)]
+    [InlineData("script.bat", false)]
     [InlineData("", false)]
     [InlineData(null, false)]
     public void IsAllowedImagePath_FiltersByExtension(string? path, bool expected)
     {
         Assert.Equal(expected, BlockCustomIcons.IsAllowedImagePath(path));
+    }
+
+    [Fact]
+    public void CreateStoredFileName_IsUniquePerCallAndScopedToItem()
+    {
+        var id = Guid.Parse("11111111-1111-1111-1111-111111111111");
+        var other = Guid.Parse("22222222-2222-2222-2222-222222222222");
+        var first = BlockCustomIcons.CreateStoredFileName(id);
+        var second = BlockCustomIcons.CreateStoredFileName(id);
+        var third = BlockCustomIcons.CreateStoredFileName(other);
+
+        Assert.StartsWith(id.ToString("N"), first, StringComparison.OrdinalIgnoreCase);
+        Assert.EndsWith(".png", first, StringComparison.OrdinalIgnoreCase);
+        Assert.NotEqual(first, second);
+        Assert.DoesNotContain(other.ToString("N"), first, StringComparison.OrdinalIgnoreCase);
+        Assert.StartsWith(other.ToString("N"), third, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

@@ -4,7 +4,8 @@ using SecretBase.Platform.Abstractions;
 namespace SecretBase.Platform.Mac;
 
 /// <summary>
-/// Copies raster images into AppData for custom Block icons. ICO/preset tiles are limited on macOS.
+/// Copies raster images into AppData for custom Block icons.
+/// Each import uses a unique file name so the UI does not keep a stale bitmap.
 /// </summary>
 public sealed class MacCustomIconService : ICustomIconService
 {
@@ -30,9 +31,15 @@ public sealed class MacCustomIconService : ICustomIconService
     {
         storedPath = null;
         errorMessage = null;
+        if (itemId == Guid.Empty)
+        {
+            errorMessage = "Block item id is missing.";
+            return false;
+        }
+
         if (!BlockCustomIcons.IsAllowedImagePath(sourcePath))
         {
-            errorMessage = "Choose a PNG, JPG, BMP, GIF, or WEBP image.";
+            errorMessage = "Choose a PNG, JPG, BMP, GIF, WEBP, or TIFF image.";
             return false;
         }
 
@@ -51,16 +58,22 @@ public sealed class MacCustomIconService : ICustomIconService
         try
         {
             Directory.CreateDirectory(_customDirectory);
+            var storedName = BlockCustomIcons.CreateStoredFileName(itemId);
             var ext = Path.GetExtension(sourcePath);
-            if (string.IsNullOrWhiteSpace(ext))
+            if (!ext.Equals(".png", StringComparison.OrdinalIgnoreCase)
+                && !string.IsNullOrWhiteSpace(ext))
             {
-                ext = ".png";
+                storedName = Path.GetFileNameWithoutExtension(storedName) + ext.ToLowerInvariant();
             }
 
-            var dest = Path.Combine(_customDirectory, $"{itemId:N}{ext.ToLowerInvariant()}");
-            File.Copy(sourcePath, dest, overwrite: true);
+            var dest = Path.Combine(_customDirectory, storedName);
+
+            var tmp = dest + ".tmp";
+            File.Copy(sourcePath, tmp, overwrite: true);
+            File.Copy(tmp, dest, overwrite: true);
+            File.Delete(tmp);
             storedPath = dest;
-            return true;
+            return File.Exists(dest);
         }
         catch (Exception ex)
         {
@@ -79,6 +92,12 @@ public sealed class MacCustomIconService : ICustomIconService
         storedPath = null;
         errorMessage = null;
         _ = glyph;
+        if (itemId == Guid.Empty)
+        {
+            errorMessage = "Block item id is missing.";
+            return false;
+        }
+
         var preset = BlockCustomIcons.Presets.FirstOrDefault(p =>
             string.Equals(p.Id, presetId, StringComparison.OrdinalIgnoreCase));
         if (preset is null)
@@ -96,7 +115,7 @@ public sealed class MacCustomIconService : ICustomIconService
         try
         {
             Directory.CreateDirectory(_customDirectory);
-            var dest = Path.Combine(_customDirectory, $"{itemId:N}.png");
+            var dest = Path.Combine(_customDirectory, BlockCustomIcons.CreateStoredFileName(itemId));
             if (!BlockIconPng.TryWriteSolidTile(dest, 96, a, r, g, b, out errorMessage))
             {
                 return false;
