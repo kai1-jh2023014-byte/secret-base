@@ -256,34 +256,58 @@ public sealed class SpotifyMusicProvider : IMusicProvider, IMusicOAuthClientSour
 
     public async Task<IReadOnlyList<MusicTrack>> SearchAsync(string query, CancellationToken cancellationToken = default)
     {
-        if (!await EnsureAccessTokenAsync(cancellationToken).ConfigureAwait(false))
+        using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        budget.CancelAfter(TimeSpan.FromSeconds(8));
+        if (!await EnsureAccessTokenAsync(budget.Token).ConfigureAwait(false))
         {
             throw new InvalidOperationException("Spotify is not connected.");
         }
 
         using var request = new HttpRequestMessage(HttpMethod.Get, BuildSearchUrl(query));
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken);
-        using var response = await _http.SendAsync(request, cancellationToken).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-        if (!response.IsSuccessStatusCode)
+        HttpResponseMessage response;
+        try
         {
-            throw new InvalidOperationException(MapSpotifyError(response.StatusCode, body));
+            response = await _http.SendAsync(request, budget.Token).ConfigureAwait(false);
         }
-        using var doc = JsonDocument.Parse(body);
-        if (!doc.RootElement.TryGetProperty("tracks", out var tracksRoot)
-            || !tracksRoot.TryGetProperty("items", out var items)
-            || items.ValueKind != JsonValueKind.Array)
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
-            return Array.Empty<MusicTrack>();
+            throw new InvalidOperationException("Spotify search took too long.");
         }
 
-        var list = new List<MusicTrack>();
-        foreach (var item in items.EnumerateArray())
+        using (response)
         {
-            list.Add(MapTrack(item));
-        }
+            string body;
+            try
+            {
+                body = await response.Content.ReadAsStringAsync(budget.Token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
+                throw new InvalidOperationException("Spotify search took too long.");
+            }
 
-        return list;
+            if (!response.IsSuccessStatusCode)
+            {
+                throw new InvalidOperationException(MapSpotifyError(response.StatusCode, body));
+            }
+
+            using var doc = JsonDocument.Parse(body);
+            if (!doc.RootElement.TryGetProperty("tracks", out var tracksRoot)
+                || !tracksRoot.TryGetProperty("items", out var items)
+                || items.ValueKind != JsonValueKind.Array)
+            {
+                return Array.Empty<MusicTrack>();
+            }
+
+            var list = new List<MusicTrack>();
+            foreach (var item in items.EnumerateArray())
+            {
+                list.Add(MapTrack(item));
+            }
+
+            return list;
+        }
     }
 
     public async Task PlayAsync(MusicTrack track, CancellationToken cancellationToken = default)

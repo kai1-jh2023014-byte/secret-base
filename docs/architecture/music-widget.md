@@ -33,6 +33,7 @@ Music is a first-class Creative OS surface — **Secret Base UI first**, externa
 6. Layout persistence of sources + current track metadata (no tokens / artwork URLs)
 7. **Spotify connect** from the Music widget: paste the Client ID (Client Secret optional). PKCE uses one fixed redirect URI, `http://127.0.0.1:43821/callback`, which must be registered in the Spotify dashboard. Search asks Spotify for at most 10 tracks per request. Spotify's catalog API requires the app owner to have Spotify Premium. A free account still gets an **Open this search in Spotify** button (`https://open.spotify.com/search/…`) when the API refuses the account. The client file stays in `%LocalAppData%\SecretBase\credentials\` and is not committed. Secret Base does not stream audio.
 8. **Now playing** on Windows reads the current OS media session (SMTC — the same session FluentFlyout uses). Spotify, browsers, and other players that publish a session show title, artist, artwork, and position here without the Spotify Web API. Play, pause, next, and previous go to that session. This does not replace the taskbar.
+9. **Base AI song change:** `music_search`, and `music_play` after confirmation, open the same Spotify search page when the catalog API returns no tracks. The chat shows that sentence even if the follow-up model call times out. This does not play the track inside Secret Base.
 
 ## What is deferred
 

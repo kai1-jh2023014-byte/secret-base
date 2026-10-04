@@ -267,7 +267,7 @@ public sealed class BuiltinAssistantToolRegistry : IAiToolRegistry
         {
             Name = AssistantToolNames.MusicSearch,
             Description =
-                "Search the Secret Base music catalog. Demo catalog only unless a real provider is wired.",
+                "Search music. If Spotify's catalog API refuses the account, this opens the Spotify search page for the query.",
             Parameters =
             [
                 new AssistantToolParameter
@@ -293,7 +293,7 @@ public sealed class BuiltinAssistantToolRegistry : IAiToolRegistry
         {
             Name = AssistantToolNames.MusicPlay,
             Description =
-                "Play a track in the Secret Base Music widget. Pass track_id from music_search, or query to search then play the first result (Spotify if connected, otherwise the demo catalog). Requires confirmation.",
+                "Play or change the current song. Pass query (song or artist) or track_id from music_search. If Spotify's catalog API cannot play it, this opens the Spotify search page. Requires confirmation.",
             Parameters =
             [
                 new AssistantToolParameter

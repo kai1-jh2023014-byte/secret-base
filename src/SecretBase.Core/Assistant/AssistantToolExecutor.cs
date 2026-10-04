@@ -617,6 +617,17 @@ public sealed class AssistantToolExecutor : IAiToolExecutor
             .ConfigureAwait(false);
         if (!result.Succeeded)
         {
+            if (!string.IsNullOrWhiteSpace(result.WebSearchUrl))
+            {
+                return AssistantToolResult.Ok(
+                    $"Spotify's catalog API did not return tracks for \"{query}\". Opened that search in Spotify.",
+                    activity: "Music ✓",
+                    activityDomain: AssistantActivityDomains.Music,
+                    shouldLaunch: true,
+                    launchTarget: result.WebSearchUrl,
+                    launchIsExternalLink: true);
+            }
+
             return AssistantToolResult.Fail(
                 result.ErrorMessage ?? AssistantUserMessages.ToolUnavailable,
                 activityDomain: AssistantActivityDomains.Music);
@@ -703,6 +714,18 @@ public sealed class AssistantToolExecutor : IAiToolExecutor
         {
             var search = await _music.ExecuteAsync(MusicCommand.SearchTrack(query), cancellationToken)
                 .ConfigureAwait(false);
+            if (!string.IsNullOrWhiteSpace(search.WebSearchUrl)
+                && (!search.Succeeded || search.Tracks.Count == 0))
+            {
+                return AssistantToolResult.Ok(
+                    $"Spotify's catalog API did not return tracks for \"{query}\". Opened that search in Spotify.",
+                    activity: "Music ✓",
+                    activityDomain: AssistantActivityDomains.Music,
+                    shouldLaunch: true,
+                    launchTarget: search.WebSearchUrl,
+                    launchIsExternalLink: true);
+            }
+
             if (!search.Succeeded || search.Tracks.Count == 0)
             {
                 return AssistantToolResult.Fail(

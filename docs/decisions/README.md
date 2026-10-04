@@ -1,5 +1,11 @@
 # Decision Log
 
+## 2026-10-04 — A song change still answers when the catalog API refuses
+
+**Decision:** If Spotify search fails, `music_search` and confirmed `music_play` open `https://open.spotify.com/search/…` and that sentence is the Base AI reply. The turn does not wait for a second model call to narrate an external link. If a later model call times out after any tool already ran, the tool text is the reply instead of a bare timeout.
+
+**Why:** "Change this song" called `music_search`, Spotify returned an error, then the follow-up Gemini call hit the HTTP timeout. The widget showed only "AI response timed out." A free account cannot play from the catalog API.
+
 ## 2026-10-04 — Now playing comes from the Windows media session
 
 **Decision:** The Music widget reads the current OS media session through documented SMTC (`GlobalSystemMediaTransportControlsSessionManager`). Title, artist, artwork, and transport controls follow that session. This is the same session FluentFlyout uses. It does not call the Spotify Web API and does not replace the taskbar.
