@@ -19,7 +19,7 @@ public class ClockDisplayFormatterTests
         var (time, date) = ClockDisplayFormatter.Format(provider, config);
 
         Assert.Equal("19:42:31", time);
-        Assert.Contains("August 11", date, StringComparison.Ordinal);
+        Assert.Equal("Tue, Aug 11", date);
     }
 
     [Fact]
@@ -71,6 +71,21 @@ public class ClockDisplayFormatterTests
         {
             CultureInfo.CurrentCulture = previous;
         }
+    }
+
+    [Fact]
+    public void FormatDate_BaseAndMinimal_IncludeWeekday()
+    {
+        var instant = new DateTimeOffset(2026, 10, 5, 13, 0, 0, TimeSpan.Zero);
+        var baseDate = ClockDisplayFormatter.FormatDate(
+            instant,
+            new ClockWidgetConfiguration { DisplayStyle = ClockWidgetConfiguration.StyleBase, ShowDate = true });
+        var minimalDate = ClockDisplayFormatter.FormatDate(
+            instant,
+            new ClockWidgetConfiguration { DisplayStyle = ClockWidgetConfiguration.StyleMinimal, ShowDate = true });
+
+        Assert.Equal("Mon, Oct 5", baseDate);
+        Assert.Equal("Mon, Oct 5", minimalDate);
     }
 
     [Fact]

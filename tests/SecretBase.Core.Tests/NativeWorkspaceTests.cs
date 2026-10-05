@@ -63,5 +63,14 @@ public class ClockCustomizationTests
         var config = new ClockWidgetConfiguration { DisplayStyle = ClockWidgetConfiguration.StyleFocus, ShowDate = true };
         var date = ClockDisplayFormatter.FormatDate(new DateTimeOffset(2026, 9, 2, 9, 0, 0, TimeSpan.Zero), config);
         Assert.Contains("September", date, StringComparison.Ordinal);
+        Assert.Contains("Wednesday", date, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ClockFormatter_BaseStyle_IncludesAbbreviatedWeekday()
+    {
+        var config = new ClockWidgetConfiguration { DisplayStyle = ClockWidgetConfiguration.StyleBase, ShowDate = true };
+        var date = ClockDisplayFormatter.FormatDate(new DateTimeOffset(2026, 10, 5, 9, 0, 0, TimeSpan.Zero), config);
+        Assert.Equal("Mon, Oct 5", date);
     }
 }

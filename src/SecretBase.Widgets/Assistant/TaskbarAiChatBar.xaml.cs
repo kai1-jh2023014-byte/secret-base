@@ -11,8 +11,8 @@ using Windows.System;
 namespace SecretBase.Widgets.Assistant;
 
 /// <summary>
-/// Work-area shelf just above the Windows taskbar: clock, focus, next item, and AI chat.
-/// Does not hook Explorer, the taskbar, SearchHost, or Windows Search.
+/// Work-area shelf just above the Windows taskbar: focus, next item, and AI chat.
+/// Clock/time lives on the Clock widget. Does not hook Explorer, the taskbar, SearchHost, or Windows Search.
 /// </summary>
 public sealed partial class TaskbarAiChatBar : UserControl
 {
@@ -32,8 +32,6 @@ public sealed partial class TaskbarAiChatBar : UserControl
     private Button DismissResultsButton = null!;
     private TextBlock StatusLabel = null!;
     private Border Pill = null!;
-    private TextBlock ClockText = null!;
-    private TextBlock DateText = null!;
     private TextBlock BrandText = null!;
     private TextBlock ProviderText = null!;
     private TextBox InputBox = null!;
@@ -69,28 +67,6 @@ public sealed partial class TaskbarAiChatBar : UserControl
 
     private Grid BuildInterface()
     {
-        ClockText = new TextBlock
-        {
-            Text = "--:--",
-            FontSize = 22,
-            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-            CharacterSpacing = 40
-        };
-        DateText = new TextBlock
-        {
-            FontSize = 10,
-            Opacity = 0.7,
-            CharacterSpacing = 20
-        };
-        var clockColumn = new StackPanel
-        {
-            VerticalAlignment = VerticalAlignment.Center,
-            MinWidth = 78,
-            Spacing = 0
-        };
-        clockColumn.Children.Add(ClockText);
-        clockColumn.Children.Add(DateText);
-
         BrandText = new TextBlock
         {
             Text = "Base",
@@ -173,14 +149,12 @@ public sealed partial class TaskbarAiChatBar : UserControl
         statusColumn.Children.Add(FocusText);
         statusColumn.Children.Add(NextText);
 
+        // Brand + chat + focus/next — no clock (Clock widget owns time/weekday).
         var pillRow = new Grid { ColumnSpacing = 14 };
-        pillRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         pillRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         pillRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        Grid.SetColumn(clockColumn, 0);
-        Grid.SetColumn(inputRow, 1);
-        Grid.SetColumn(statusColumn, 2);
-        pillRow.Children.Add(clockColumn);
+        Grid.SetColumn(inputRow, 0);
+        Grid.SetColumn(statusColumn, 1);
         pillRow.Children.Add(inputRow);
         pillRow.Children.Add(statusColumn);
 
@@ -390,13 +364,6 @@ public sealed partial class TaskbarAiChatBar : UserControl
         BrandText.FontSize = 10;
         BrandText.CharacterSpacing = 60;
         ProviderText.FontSize = 9;
-        WidgetSurfaceStyle.ApplyHeader(ClockText, DateText, theme);
-        ClockText.FontSize = 22;
-        ClockText.FontWeight = Microsoft.UI.Text.FontWeights.SemiBold;
-        ClockText.CharacterSpacing = 40;
-        DateText.FontSize = 10;
-        DateText.CharacterSpacing = 20;
-        DateText.Opacity = 0.7;
         WidgetSurfaceStyle.ApplyBody(FocusText, theme);
         FocusText.FontSize = 11;
         WidgetSurfaceStyle.ApplyMuted(NextText, theme);
@@ -417,8 +384,6 @@ public sealed partial class TaskbarAiChatBar : UserControl
 
     public void ApplyShelf(TaskbarShelfSnapshot snapshot)
     {
-        ClockText.Text = snapshot.Clock;
-        DateText.Text = snapshot.Date;
         FocusText.Text = snapshot.Focus;
         NextText.Text = snapshot.Next;
         RefreshProvider();

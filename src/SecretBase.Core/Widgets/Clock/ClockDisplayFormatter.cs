@@ -39,8 +39,10 @@ public static class ClockDisplayFormatter
             ClockWidgetConfiguration.StyleLarge => instant.ToString("dddd, MMMM dd", English),
             ClockWidgetConfiguration.StyleDigital => instant.ToString("dddd, MMMM dd", English),
             ClockWidgetConfiguration.StyleFocus => instant.ToString("dddd, MMMM d", English),
-            ClockWidgetConfiguration.StyleMinimal => instant.ToString("MMM d", English),
-            _ => instant.ToString("dddd", English) + "\n" + instant.ToString("MMMM d", English)
+            // Compact weekday + month day (e.g. "Mon, Oct 5") — English en-US.
+            ClockWidgetConfiguration.StyleMinimal => instant.ToString("ddd, MMM d", English),
+            ClockWidgetConfiguration.StyleBase => instant.ToString("ddd, MMM d", English),
+            _ => instant.ToString("ddd, MMM d", English)
         };
     }
 
