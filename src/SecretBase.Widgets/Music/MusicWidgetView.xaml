@@ -163,27 +163,30 @@
                     <Button
                         x:Name="PreviousButton"
                         Grid.Column="0"
-                        Content="⏮"
                         MinWidth="48"
                         MinHeight="40"
                         Click="PreviousButton_Click"
-                        ToolTipService.ToolTip="Previous" />
+                        ToolTipService.ToolTip="Previous">
+                        <SymbolIcon Symbol="Previous" />
+                    </Button>
                     <Button
                         x:Name="PlayPauseButton"
                         Grid.Column="1"
-                        Content="▶"
                         MinWidth="56"
                         MinHeight="40"
                         Click="PlayPauseButton_Click"
-                        ToolTipService.ToolTip="Play / Pause" />
+                        ToolTipService.ToolTip="Play / Pause">
+                        <SymbolIcon x:Name="PlayPauseIcon" Symbol="Play" />
+                    </Button>
                     <Button
                         x:Name="NextButton"
                         Grid.Column="2"
-                        Content="⏭"
                         MinWidth="48"
                         MinHeight="40"
                         Click="NextButton_Click"
-                        ToolTipService.ToolTip="Next" />
+                        ToolTipService.ToolTip="Next">
+                        <SymbolIcon Symbol="Next" />
+                    </Button>
                 </Grid>
 
                 <StackPanel Grid.Row="7" Spacing="4">

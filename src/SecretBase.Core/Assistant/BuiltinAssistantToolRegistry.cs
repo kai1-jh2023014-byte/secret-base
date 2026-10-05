@@ -43,7 +43,7 @@ public sealed class BuiltinAssistantToolRegistry : IAiToolRegistry
         {
             Name = AssistantToolNames.CalendarAddEvent,
             Description =
-                "Add a local Secret Base calendar event for today (title + time). Shows in the Calendar widget. Does not write to Google. Requires confirmation.",
+                "Add a calendar event for today (title + time) to Google Calendar. Requires Google to be connected in the Calendar widget. Requires confirmation.",
             Parameters =
             [
                 new AssistantToolParameter
@@ -441,7 +441,14 @@ public sealed class BuiltinAssistantToolRegistry : IAiToolRegistry
                 {
                     Name = "minutes",
                     Type = "integer",
-                    Description = "Focus duration 5-90. Default 25. Ignored when a session is already running.",
+                    Description = "Focus duration 5-120. Default 25. Ignored when a session is already running.",
+                    Required = false
+                },
+                new AssistantToolParameter
+                {
+                    Name = "break_minutes",
+                    Type = "integer",
+                    Description = "Short break duration 1-60. Default 5. Ignored when a session is already running.",
                     Required = false
                 },
                 new AssistantToolParameter

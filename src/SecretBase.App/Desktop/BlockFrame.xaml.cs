@@ -92,24 +92,28 @@ public sealed partial class BlockFrame : UserControl
 
     private void ApplyTheme(ThemeDefinition theme)
     {
-        var radius = Math.Max(12, theme.CornerRadius);
+        var radius = Math.Max(14, theme.CornerRadius);
         DragBar.CornerRadius = new CornerRadius(radius, radius, 0, 0);
         Surface.CornerRadius = new CornerRadius(0, 0, radius, radius);
-        Surface.Background = ThemePainter.Brush(theme.WidgetBackground, ThemePainter.EffectiveWidgetOpacity(theme));
-        Surface.BorderBrush = ThemePainter.Brush(theme.Border, 0.4);
+        // Launchpad-like glass: lighter fill so wallpaper reads through Blocks.
+        var blockOpacity = Math.Clamp(ThemePainter.EffectiveWidgetOpacity(theme) * 0.42, 0.18, 0.48);
+        Surface.Background = ThemePainter.Brush(theme.WidgetBackground, blockOpacity);
+        Surface.BorderBrush = ThemePainter.Brush(theme.Border, 0.18);
         Surface.BorderThickness = new Thickness(1, 0, 1, 1);
         NameText.Text = _block.Name;
         NameText.Foreground = ThemePainter.Brush(theme.WidgetForeground);
         NameText.FontFamily = new FontFamily(theme.FontFamily);
-        NameText.CharacterSpacing = 30;
+        NameText.CharacterSpacing = 20;
         EmptyHint.Foreground = ThemePainter.Brush(theme.ForegroundMuted);
         EmptyHint.FontFamily = new FontFamily(theme.FontFamily);
         WidgetSurfaceStyle.ApplyGhostButton(DeleteButton, theme);
         WidgetSurfaceStyle.ApplyGhostButton(ArrangeButton, theme);
-        ResizeHandle.Background = ThemePainter.Brush(theme.Border, 0.55);
+        DeleteButton.Opacity = 0.75;
+        ArrangeButton.Opacity = 0.75;
+        ResizeHandle.Background = ThemePainter.Brush(theme.Border, 0.35);
 
         var grip = ThemePainter.ParseColor(theme.WidgetForeground);
-        grip.A = 0x18;
+        grip.A = 0x10;
         DragBar.Background = new SolidColorBrush(grip);
     }
 
@@ -161,13 +165,14 @@ public sealed partial class BlockFrame : UserControl
             Height = 40,
             CornerRadius = new CornerRadius(8),
             HorizontalAlignment = HorizontalAlignment.Center,
-            Background = new SolidColorBrush(Windows.UI.Color.FromArgb(0x33, 0xFF, 0xFF, 0xFF))
+            Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent)
         };
 
         // Custom icons are user imports under AppData. Missing files fall back for display
         // only — do not clear item.Icon here (that wiped icons when a file was briefly locked).
         var customPath = ResolveCustomIconPath(item);
-        var displayPath = customPath ?? _icons.TryGetCachedIconPath(item.Target);
+        // Prefer 128px shell cache so DPI / 36px display stays sharp.
+        var displayPath = customPath ?? _icons.TryGetCachedIconPath(item.Target, sizePx: 128);
         var image = TryCreateIconImage(displayPath);
         if (image is not null)
         {
@@ -204,13 +209,15 @@ public sealed partial class BlockFrame : UserControl
         {
             Width = BlockItem.TileWidth,
             Height = BlockItem.TileHeight,
-            Background = new SolidColorBrush(Windows.UI.Color.FromArgb(0x22, 0xFF, 0xFF, 0xFF)),
+            Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
             CornerRadius = new CornerRadius(8),
             Child = stack,
             Tag = item,
             CanDrag = false
         };
 
+        tile.PointerEntered += ItemTile_PointerEntered;
+        tile.PointerExited += ItemTile_PointerExited;
         tile.PointerPressed += ItemTile_PointerPressed;
         tile.PointerMoved += ItemTile_PointerMoved;
         tile.PointerReleased += ItemTile_PointerReleased;
@@ -285,6 +292,37 @@ public sealed partial class BlockFrame : UserControl
         }
     }
 
+    private void ItemTile_PointerEntered(object sender, PointerRoutedEventArgs e)
+    {
+        if (sender is Border tile)
+        {
+            SetTileHighlight(tile, active: true);
+        }
+    }
+
+    private void ItemTile_PointerExited(object sender, PointerRoutedEventArgs e)
+    {
+        if (sender is Border tile && !ReferenceEquals(tile, _activeTile))
+        {
+            SetTileHighlight(tile, active: false);
+        }
+    }
+
+    private static void SetTileHighlight(Border tile, bool active)
+    {
+        tile.Background = active
+            ? new SolidColorBrush(Windows.UI.Color.FromArgb(0x28, 0xFF, 0xFF, 0xFF))
+            : new SolidColorBrush(Microsoft.UI.Colors.Transparent);
+
+        if (tile.Child is StackPanel stack
+            && stack.Children.OfType<Border>().FirstOrDefault() is { } iconHost)
+        {
+            iconHost.Background = active
+                ? new SolidColorBrush(Windows.UI.Color.FromArgb(0x22, 0xFF, 0xFF, 0xFF))
+                : new SolidColorBrush(Microsoft.UI.Colors.Transparent);
+        }
+    }
+
     private void ItemTile_PointerPressed(object sender, PointerRoutedEventArgs e)
     {
         if (sender is not FrameworkElement tile || tile.Tag is not BlockItem item)
@@ -302,6 +340,11 @@ public sealed partial class BlockFrame : UserControl
         _itemDragging = false;
         _itemPressPoint = e.GetCurrentPoint(ItemCanvas).Position;
         _itemLastPoint = _itemPressPoint;
+        if (tile is Border border)
+        {
+            SetTileHighlight(border, active: true);
+        }
+
         tile.CapturePointer(e.Pointer);
         e.Handled = true;
     }
@@ -353,6 +396,7 @@ public sealed partial class BlockFrame : UserControl
 
         var item = _activeItem;
         var dragged = _itemDragging;
+        var tile = _activeTile;
         if (!captureLost && sender is UIElement el)
         {
             el.ReleasePointerCapture(e.Pointer);
@@ -361,6 +405,11 @@ public sealed partial class BlockFrame : UserControl
         _activeTile = null;
         _activeItem = null;
         _itemDragging = false;
+
+        if (tile is Border border)
+        {
+            SetTileHighlight(border, active: false);
+        }
 
         if (dragged)
         {
@@ -627,11 +676,14 @@ public sealed partial class BlockFrame : UserControl
             var cacheBust = File.GetLastWriteTimeUtc(path).Ticks;
             var bitmap = new BitmapImage();
             bitmap.CreateOptions = BitmapCreateOptions.IgnoreImageCache;
+            // Decode near display size at high quality; source PNGs are typically 96–128px.
+            bitmap.DecodePixelType = DecodePixelType.Logical;
+            bitmap.DecodePixelWidth = 72;
             bitmap.UriSource = new Uri($"{uri.AbsoluteUri}?v={cacheBust}", UriKind.Absolute);
             return new Image
             {
                 Source = bitmap,
-                Stretch = Stretch.UniformToFill,
+                Stretch = Stretch.Uniform,
                 Width = 36,
                 Height = 36
             };

@@ -659,7 +659,7 @@ public sealed partial class MusicWidgetView : UserControl
             TrackTitleText.Text = "No track selected";
             TrackArtistText.Text = "Search and pick a track";
             SourceLabel.Text = "Source: Demo catalog";
-            PlayPauseButton.Content = "▶";
+            SetPlayPauseIcon(isPlaying: false);
             return;
         }
 
@@ -668,7 +668,18 @@ public sealed partial class MusicWidgetView : UserControl
         SourceLabel.Text = string.IsNullOrWhiteSpace(track.Source)
             ? $"Source: {track.ProviderId}"
             : $"Source: {track.Source}";
-        PlayPauseButton.Content = isPlaying ? "⏸" : "▶";
+        SetPlayPauseIcon(isPlaying);
+    }
+
+    private void SetPlayPauseIcon(bool isPlaying)
+    {
+        if (PlayPauseIcon is null)
+        {
+            PlayPauseButton.Content = new SymbolIcon { Symbol = isPlaying ? Symbol.Pause : Symbol.Play };
+            return;
+        }
+
+        PlayPauseIcon.Symbol = isPlaying ? Symbol.Pause : Symbol.Play;
     }
 
     private void UpdateTransportEnabled()

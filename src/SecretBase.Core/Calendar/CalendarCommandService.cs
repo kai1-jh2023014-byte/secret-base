@@ -6,7 +6,8 @@ namespace SecretBase.Core.Calendar;
 
 /// <summary>
 /// Thin Command boundary over <see cref="CalendarService"/>. Does not replace the Calendar Widget.
-/// Local create/delete stay in Secret Base storage — never OS files, never invented Google writes.
+/// AI add-event writes go to Google when a connected writer exists; local create/delete stay in
+/// Secret Base storage. Never OS files, never invented credentials.
 /// </summary>
 public sealed class CalendarCommandService
 {
@@ -41,7 +42,7 @@ public sealed class CalendarCommandService
             CalendarCommandKind.GetUpcoming =>
                 await GetUpcomingAsync(command, cancellationToken).ConfigureAwait(false),
             CalendarCommandKind.Open => Open(),
-            CalendarCommandKind.AddEvent => AddEvent(command),
+            CalendarCommandKind.AddEvent => await AddEventAsync(command, cancellationToken).ConfigureAwait(false),
             CalendarCommandKind.RememberUsual => RememberUsual(command),
             CalendarCommandKind.ApplyUsual => ApplyUsual(),
             CalendarCommandKind.RemoveEvent => RemoveEvent(command),
@@ -51,6 +52,13 @@ public sealed class CalendarCommandService
 
     internal LocalCalendarProvider? Local =>
         _calendar.Providers.OfType<LocalCalendarProvider>().FirstOrDefault();
+
+    internal ICalendarProvider? GoogleWriteProvider =>
+        _calendar.Providers.FirstOrDefault(p =>
+            p.Capabilities.HasFlag(CalendarProviderCapabilities.CreateEvents)
+            && p is ICalendarEventWriter);
+
+    internal ICalendarEventWriter? GoogleWriter => GoogleWriteProvider as ICalendarEventWriter;
 
     public IReadOnlyList<CalendarEvent> ListLocalEvents() =>
         Local?.ListAll() ?? [];
@@ -92,14 +100,10 @@ public sealed class CalendarCommandService
             launchIsExternalLink: true);
     }
 
-    private CalendarCommandResult AddEvent(CalendarCommand command)
+    private async Task<CalendarCommandResult> AddEventAsync(
+        CalendarCommand command,
+        CancellationToken cancellationToken)
     {
-        var local = Local;
-        if (local is null)
-        {
-            return CalendarCommandResult.Fail(CalendarCommandKind.AddEvent, "Local calendar is unavailable.");
-        }
-
         var title = command.Title?.Trim() ?? string.Empty;
         if (string.IsNullOrWhiteSpace(title))
         {
@@ -124,8 +128,35 @@ public sealed class CalendarCommandService
             end = start.AddMinutes(duration);
         }
 
-        var created = local.AddEvent(title, start, end, command.IsAllDay);
-        return CalendarCommandResult.Ok(CalendarCommandKind.AddEvent, [created]);
+        var google = GoogleWriteProvider;
+        var writer = GoogleWriter;
+        if (google is null || writer is null)
+        {
+            return CalendarCommandResult.Fail(
+                CalendarCommandKind.AddEvent,
+                "Google Calendar is not configured. Add google-oauth-client.json and connect Google in the Calendar widget.");
+        }
+
+        if (google.AuthStatus != CalendarAuthStatus.Connected)
+        {
+            return CalendarCommandResult.Fail(
+                CalendarCommandKind.AddEvent,
+                "Google Calendar is not connected. Open the Calendar widget and connect Google, then try again.");
+        }
+
+        try
+        {
+            var created = await writer
+                .CreateEventAsync(title, start, end, command.IsAllDay, cancellationToken)
+                .ConfigureAwait(false);
+            return CalendarCommandResult.Ok(CalendarCommandKind.AddEvent, [created]);
+        }
+        catch (Exception ex)
+        {
+            return CalendarCommandResult.Fail(
+                CalendarCommandKind.AddEvent,
+                "Could not write to Google Calendar: " + ex.Message);
+        }
     }
 
     private CalendarCommandResult RememberUsual(CalendarCommand command)

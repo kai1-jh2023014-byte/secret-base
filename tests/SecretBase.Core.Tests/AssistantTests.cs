@@ -367,7 +367,7 @@ public class AssistantToolExecutorTests
     }
 
     [Fact]
-    public async Task AgentTools_AddLocalEvent_AndRefuseUnregisteredFileDelete()
+    public async Task AgentTools_AddEvent_RequiresGoogle_AndRefuseUnregisteredFileDelete()
     {
         var day = new DateOnly(2026, 9, 3);
         var offset = TimeSpan.FromHours(9);
@@ -386,15 +386,38 @@ public class AssistantToolExecutorTests
         var added = await executor.ExecuteAsync(
             AssistantToolNames.CalendarAddEvent,
             """{"title":"東進","hour":14,"minute":0}""");
-        Assert.True(added.Succeeded);
-        Assert.Contains("東進", added.ContentForModel, StringComparison.Ordinal);
-        Assert.Contains("local", added.ContentForModel, StringComparison.OrdinalIgnoreCase);
+        Assert.False(added.Succeeded);
+        Assert.Contains("Google Calendar", added.ErrorMessage, StringComparison.OrdinalIgnoreCase);
 
         var deleted = await executor.ExecuteAsync(
             AssistantToolNames.FilesDelete,
             """{"name":"homework.pdf"}""");
         Assert.False(deleted.Succeeded);
         Assert.Contains("will not delete files on disk", deleted.ErrorMessage, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task AgentTools_AddEvent_WritesThroughGoogleWriter()
+    {
+        var day = new DateOnly(2026, 9, 3);
+        var offset = TimeSpan.FromHours(9);
+        var google = new FakeGoogleCalendarWriter();
+        var calendar = new CalendarCommandService(
+            new CalendarService([google]),
+            new AgentToolTime(new DateTimeOffset(day.ToDateTime(new TimeOnly(8, 0)), offset)));
+        var executor = new AssistantToolExecutor(
+            BuiltinAssistantToolRegistry.Instance,
+            calendar: calendar);
+
+        var added = await executor.ExecuteAsync(
+            AssistantToolNames.CalendarAddEvent,
+            """{"title":"東進","hour":14,"minute":0,"duration_minutes":60}""");
+        Assert.True(added.Succeeded);
+        Assert.Contains("Google Calendar", added.ContentForModel, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("東進", added.ContentForModel, StringComparison.Ordinal);
+        Assert.Single(google.Created);
+        Assert.Equal("東進", google.Created[0].Title);
+        Assert.Equal(14, google.Created[0].Start.Hour);
     }
 
     [Fact]
@@ -421,6 +444,58 @@ public class AssistantToolExecutorTests
 file sealed class AgentToolTime(DateTimeOffset instant) : ITimeProvider
 {
     public DateTimeOffset GetLocalNow() => instant;
+}
+
+file sealed class FakeGoogleCalendarWriter : ICalendarProvider, ICalendarEventWriter
+{
+    public List<CalendarEvent> Created { get; } = [];
+
+    public string ProviderId => CalendarProviderIds.Google + "-api";
+
+    public string DisplayName => "Google Calendar";
+
+    public string? OpenUrl => "https://calendar.google.com/";
+
+    public CalendarProviderCapabilities Capabilities =>
+        CalendarProviderCapabilities.ReadEvents
+        | CalendarProviderCapabilities.CreateEvents
+        | CalendarProviderCapabilities.Authentication;
+
+    public CalendarAuthStatus AuthStatus => CalendarAuthStatus.Connected;
+
+    public bool IsConfigured => true;
+
+    public Task AuthenticateAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+    public Task DisconnectAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+    public Task<IReadOnlyList<CalendarInfo>> GetCalendarsAsync(CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<CalendarInfo>>([]);
+
+    public Task<IReadOnlyList<CalendarEvent>> GetEventsAsync(
+        CalendarQuery query,
+        CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<CalendarEvent>>(Created);
+
+    public Task<CalendarEvent> CreateEventAsync(
+        string title,
+        DateTimeOffset start,
+        DateTimeOffset end,
+        bool isAllDay = false,
+        CancellationToken cancellationToken = default)
+    {
+        var created = new CalendarEvent
+        {
+            Title = title,
+            Start = start,
+            End = end,
+            IsAllDay = isAllDay,
+            Provider = ProviderId,
+            Source = "Google Calendar"
+        };
+        Created.Add(created);
+        return Task.FromResult(created);
+    }
 }
 
 public class AssistantServiceTests

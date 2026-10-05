@@ -17,25 +17,25 @@
         PointerEntered="RootGrid_PointerEntered"
         PointerExited="RootGrid_PointerExited">
         <Grid.RowDefinitions>
-            <RowDefinition Height="18" />
+            <RowDefinition Height="14" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
         <Border
             x:Name="DragBar"
             Grid.Row="0"
-            Background="#18FFFFFF"
-            CornerRadius="12,12,0,0"
-            Opacity="0.35"
+            Background="#10FFFFFF"
+            CornerRadius="14,14,0,0"
+            Opacity="0.28"
             PointerPressed="DragArea_PointerPressed"
             PointerMoved="DragArea_PointerMoved"
             PointerReleased="DragArea_PointerReleased"
             PointerCaptureLost="DragArea_PointerCaptureLost"
             ToolTipService.ToolTip="Drag to move Block">
             <Ellipse
-                Width="28"
-                Height="4"
-                Fill="#66FFFFFF"
+                Width="22"
+                Height="3"
+                Fill="#55FFFFFF"
                 HorizontalAlignment="Center"
                 VerticalAlignment="Center" />
         </Border>
@@ -43,15 +43,15 @@
         <Border
             x:Name="Surface"
             Grid.Row="1"
-            Padding="10,6,10,10"
-            CornerRadius="0,0,12,12">
+            Padding="8,4,8,8"
+            CornerRadius="0,0,14,14">
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
                 </Grid.RowDefinitions>
 
-                <Grid Grid.Row="0" Margin="0,0,0,6">
+                <Grid Grid.Row="0" Margin="0,0,0,4">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
@@ -60,16 +60,19 @@
                     <TextBlock
                         x:Name="NameText"
                         VerticalAlignment="Center"
-                        FontSize="14"
+                        FontSize="12"
                         FontWeight="SemiBold"
+                        Opacity="0.9"
                         TextTrimming="CharacterEllipsis"
                         IsHitTestVisible="False" />
                     <Button
                         x:Name="ArrangeButton"
                         Grid.Column="1"
                         Content="Grid"
-                        Padding="8,2"
-                        MinWidth="40"
+                        Padding="6,1"
+                        MinWidth="34"
+                        MinHeight="22"
+                        FontSize="11"
                         Margin="0,0,4,0"
                         Click="ArrangeButton_Click"
                         ToolTipService.ToolTip="Arrange icons evenly" />
@@ -77,8 +80,10 @@
                         x:Name="DeleteButton"
                         Grid.Column="2"
                         Content="Del"
-                        Padding="8,2"
-                        MinWidth="32"
+                        Padding="6,1"
+                        MinWidth="28"
+                        MinHeight="22"
+                        FontSize="11"
                         Click="DeleteButton_Click"
                         ToolTipService.ToolTip="Delete Block" />
                 </Grid>

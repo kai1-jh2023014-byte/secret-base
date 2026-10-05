@@ -9,13 +9,17 @@ using SecretBase.Platform.Abstractions;
 namespace SecretBase.Infrastructure.Calendar;
 
 /// <summary>
-/// Google Calendar API v3 read provider (OAuth 2.0 loopback + PKCE).
-/// Requires user-supplied OAuth client JSON under AppData. Tokens via <see cref="ISecureSecretStore"/>.
-/// Never logs token values.
+/// Google Calendar API v3 provider (OAuth 2.0 loopback + PKCE).
+/// Read + create events. Requires user-supplied OAuth client JSON under AppData.
+/// Tokens via <see cref="ISecureSecretStore"/>. Never logs token values.
 /// </summary>
-public sealed class GoogleCalendarApiProvider : ICalendarProvider
+public sealed class GoogleCalendarApiProvider : ICalendarProvider, ICalendarEventWriter
 {
+    /// <summary>Legacy read-only scope (older tokens). New auth requests events scope.</summary>
     public const string ReadonlyScope = "https://www.googleapis.com/auth/calendar.readonly";
+
+    public const string EventsScope = "https://www.googleapis.com/auth/calendar.events";
+
     public const string SecretKeyRefresh = CalendarSecretKeys.GoogleRefreshToken;
 
     private readonly GoogleOAuthClientConfig? _client;
@@ -49,7 +53,8 @@ public sealed class GoogleCalendarApiProvider : ICalendarProvider
         CalendarProviderCapabilities.ReadEvents
         | CalendarProviderCapabilities.ListCalendars
         | CalendarProviderCapabilities.MultipleCalendars
-        | CalendarProviderCapabilities.Authentication;
+        | CalendarProviderCapabilities.Authentication
+        | CalendarProviderCapabilities.CreateEvents;
 
     public CalendarAuthStatus AuthStatus => _authStatus;
 
@@ -74,7 +79,7 @@ public sealed class GoogleCalendarApiProvider : ICalendarProvider
             + "?response_type=code"
             + "&client_id=" + Uri.EscapeDataString(_client.ClientId)
             + "&redirect_uri=" + Uri.EscapeDataString(redirect)
-            + "&scope=" + Uri.EscapeDataString(ReadonlyScope)
+            + "&scope=" + Uri.EscapeDataString(EventsScope)
             + "&code_challenge=" + Uri.EscapeDataString(challenge)
             + "&code_challenge_method=S256"
             + "&state=" + Uri.EscapeDataString(state)
@@ -237,6 +242,101 @@ public sealed class GoogleCalendarApiProvider : ICalendarProvider
         }
 
         return merged.OrderBy(e => e.Start).ToList();
+    }
+
+    public async Task<CalendarEvent> CreateEventAsync(
+        string title,
+        DateTimeOffset start,
+        DateTimeOffset end,
+        bool isAllDay = false,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(title))
+        {
+            throw new ArgumentException("Event title is required.", nameof(title));
+        }
+
+        if (!await EnsureAccessTokenAsync(cancellationToken).ConfigureAwait(false))
+        {
+            throw new InvalidOperationException(
+                "Google Calendar is not connected. Open the Calendar widget and connect Google.");
+        }
+
+        object body = isAllDay
+            ? new
+            {
+                summary = title.Trim(),
+                start = new { date = start.ToString("yyyy-MM-dd") },
+                end = new { date = end.ToString("yyyy-MM-dd") }
+            }
+            : new
+            {
+                summary = title.Trim(),
+                start = new { dateTime = start.ToString("o"), timeZone = TimeZoneInfo.Local.Id },
+                end = new { dateTime = end.ToString("o"), timeZone = TimeZoneInfo.Local.Id }
+            };
+
+        var json = JsonSerializer.Serialize(body);
+        using var req = new HttpRequestMessage(
+            HttpMethod.Post,
+            "https://www.googleapis.com/calendar/v3/calendars/primary/events")
+        {
+            Content = new StringContent(json, Encoding.UTF8, "application/json")
+        };
+        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken);
+        using var resp = await _http.SendAsync(req, cancellationToken).ConfigureAwait(false);
+        if (!resp.IsSuccessStatusCode)
+        {
+            var detail = await resp.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+            if ((int)resp.StatusCode is 401 or 403)
+            {
+                _authStatus = CalendarAuthStatus.Error;
+                throw new InvalidOperationException(
+                    "Google Calendar refused the write. Reconnect Google in the Calendar widget (events scope required).");
+            }
+
+            throw new InvalidOperationException(
+                $"Google Calendar create failed ({(int)resp.StatusCode})."
+                + (string.IsNullOrWhiteSpace(detail) ? string.Empty : " " + Truncate(detail, 160)));
+        }
+
+        await using var stream = await resp.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+        using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken)
+            .ConfigureAwait(false);
+        var cal = new CalendarInfo
+        {
+            Id = "primary",
+            Name = "Primary",
+            ProviderId = ProviderId,
+            Color = "#4285F4",
+            IsPrimary = true
+        };
+        if (GoogleCalendarJsonMapper.TryMapEvent(doc.RootElement, cal, out var mapped))
+        {
+            return mapped;
+        }
+
+        return new CalendarEvent
+        {
+            Id = doc.RootElement.TryGetProperty("id", out var idEl)
+                ? idEl.GetString() ?? Guid.NewGuid().ToString("N")
+                : Guid.NewGuid().ToString("N"),
+            Provider = ProviderId,
+            CalendarId = "primary",
+            CalendarName = "Primary",
+            Title = title.Trim(),
+            Start = start,
+            End = end,
+            IsAllDay = isAllDay,
+            Source = "Google Calendar",
+            Color = "#4285F4"
+        };
+    }
+
+    private static string Truncate(string value, int max)
+    {
+        var trimmed = value.Replace('\n', ' ').Trim();
+        return trimmed.Length <= max ? trimmed : trimmed[..max] + "…";
     }
 
     private CalendarAuthStatus ResolveInitialStatus()

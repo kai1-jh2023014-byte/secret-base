@@ -51,6 +51,8 @@ public sealed partial class WidgetFrame : UserControl
 
     public Guid WidgetId => _instance.Id;
 
+    public string WidgetType => _instance.Type;
+
     private void ApplyFloatingChrome(ThemeDefinition theme)
     {
         var radius = Math.Max(10, theme.CornerRadius);

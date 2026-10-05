@@ -21,12 +21,13 @@
             CornerRadius="18"
             BorderThickness="1"
             BorderBrush="#3DFFFFFF"
-            MinWidth="240"
-            MinHeight="260">
+            MinWidth="260"
+            MinHeight="300">
             <Grid RowSpacing="10">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
@@ -70,8 +71,33 @@
                         HorizontalAlignment="Center" />
                 </StackPanel>
 
+                <Grid Grid.Row="2" ColumnSpacing="8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <NumberBox
+                        x:Name="FocusMinutesBox"
+                        Grid.Column="0"
+                        Header="Focus (min)"
+                        Minimum="1"
+                        Maximum="120"
+                        Value="25"
+                        SpinButtonPlacementMode="Compact"
+                        ValueChanged="DurationBox_ValueChanged" />
+                    <NumberBox
+                        x:Name="BreakMinutesBox"
+                        Grid.Column="1"
+                        Header="Break (min)"
+                        Minimum="1"
+                        Maximum="60"
+                        Value="5"
+                        SpinButtonPlacementMode="Compact"
+                        ValueChanged="DurationBox_ValueChanged" />
+                </Grid>
+
                 <StackPanel
-                    Grid.Row="2"
+                    Grid.Row="3"
                     Orientation="Horizontal"
                     HorizontalAlignment="Center"
                     Spacing="8">
@@ -92,13 +118,20 @@
                         Click="StopButton_Click" />
                 </StackPanel>
 
-                <TextBlock
-                    x:Name="HintText"
-                    Grid.Row="3"
-                    FontSize="11"
-                    Opacity="0.7"
-                    TextWrapping="WrapWholeWords"
-                    Text="25 min focus · 5 min break · long break after 4 rounds" />
+                <StackPanel Grid.Row="4" Spacing="4">
+                    <CheckBox
+                        x:Name="SoundCheckBox"
+                        Content="Play sound when a phase ends"
+                        IsChecked="True"
+                        Checked="SoundCheckBox_Changed"
+                        Unchecked="SoundCheckBox_Changed" />
+                    <TextBlock
+                        x:Name="HintText"
+                        FontSize="11"
+                        Opacity="0.7"
+                        TextWrapping="WrapWholeWords"
+                        Text="Custom focus / break · long break after 4 rounds" />
+                </StackPanel>
             </Grid>
         </Border>
     </Border>
