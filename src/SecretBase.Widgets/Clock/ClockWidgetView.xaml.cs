@@ -1,5 +1,6 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Shapes;
 using SecretBase.Core.Themes;
@@ -22,6 +23,7 @@ public sealed partial class ClockWidgetView : UserControl, IDisposable
     private ThemeDefinition? _theme;
     private bool _disposed;
     private bool _ticksBuilt;
+    private bool _pointerInside;
 
     public ClockWidgetView()
     {
@@ -30,6 +32,16 @@ public sealed partial class ClockWidgetView : UserControl, IDisposable
         _timer.Tick += OnTimerTick;
         Loaded += OnLoaded;
         Unloaded += OnUnloaded;
+        PointerEntered += (_, _) =>
+        {
+            _pointerInside = true;
+            ApplyChromeForStyle();
+        };
+        PointerExited += (_, _) =>
+        {
+            _pointerInside = false;
+            ApplyChromeForStyle();
+        };
     }
 
     public void Initialize(
@@ -178,6 +190,10 @@ public sealed partial class ClockWidgetView : UserControl, IDisposable
         DateText.CharacterSpacing = isLarge ? 20 : 30;
     }
 
+    private static bool IsFloatingWhiteStyle(string style) =>
+        ClockWidgetConfiguration.IsLargeTypography(style)
+        || style == ClockWidgetConfiguration.StyleMinimal;
+
     private void ApplyChromeForStyle()
     {
         if (_theme is null)
@@ -186,22 +202,31 @@ public sealed partial class ClockWidgetView : UserControl, IDisposable
         }
 
         var style = ClockWidgetConfiguration.NormalizeStyle(_configuration.DisplayStyle);
-        var floating = ClockWidgetConfiguration.IsLargeTypography(style)
-            || style == ClockWidgetConfiguration.StyleMinimal;
-
-        if (floating)
+        if (IsFloatingWhiteStyle(style))
         {
-            // Large digital / minimal: near-transparent so type floats on wallpaper.
-            OuterShell.Background = ThemePainter.Brush(_theme.SurfaceElevated, 0.08);
-            OuterShell.BorderBrush = ThemePainter.Brush(_theme.Border, 0.12);
+            // Large / Minimal: clear by default; thin glass only while hovered.
             OuterShell.BorderThickness = new Thickness(0);
             OuterShell.Padding = new Thickness(0);
-            RootBorder.Background = ThemePainter.Brush(_theme.WidgetBackground, 0.12);
-            RootBorder.BorderBrush = ThemePainter.Brush(_theme.Border, 0.12);
             RootBorder.BorderThickness = new Thickness(0);
             RootBorder.Padding = new Thickness(10, 8, 10, 8);
             RootBorder.CornerRadius = new CornerRadius(Math.Max(10, _theme.CornerRadius - 4));
-            SettingsButton.Opacity = 0.35;
+            if (_pointerInside)
+            {
+                OuterShell.Background = ThemePainter.Brush(_theme.SurfaceElevated, 0.08);
+                OuterShell.BorderBrush = ThemePainter.Brush(_theme.Border, 0.12);
+                RootBorder.Background = ThemePainter.Brush(_theme.WidgetBackground, 0.12);
+                RootBorder.BorderBrush = ThemePainter.Brush(_theme.Border, 0.12);
+                SettingsButton.Opacity = 0.55;
+            }
+            else
+            {
+                OuterShell.Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
+                OuterShell.BorderBrush = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
+                RootBorder.Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
+                RootBorder.BorderBrush = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
+                SettingsButton.Opacity = 0.0;
+            }
+
             return;
         }
 

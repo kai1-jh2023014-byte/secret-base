@@ -117,20 +117,18 @@ public sealed partial class BlockFrame : UserControl
         HeaderRow.Children.Insert(1, StyleButton);
     }
 
+    /// <summary>White silhouette / fashion rail — clear until hover glass.</summary>
+    private bool UsesClearSurface =>
+        BlockIconStyle.IsSilhouette(_block.IconStyle) || BlockLayoutMode.IsRail(_block.LayoutMode);
+
     private void ApplyTheme(ThemeDefinition theme)
     {
         var rail = BlockLayoutMode.IsRail(_block.LayoutMode);
         var radius = Math.Max(rail ? 10 : 14, theme.CornerRadius - (rail ? 6 : 0));
         DragBar.CornerRadius = new CornerRadius(radius, radius, 0, 0);
         Surface.CornerRadius = new CornerRadius(0, 0, radius, radius);
-        // Launchpad-like glass; rails go nearly invisible so white icons float.
-        var blockOpacity = rail
-            ? Math.Clamp(ThemePainter.EffectiveWidgetOpacity(theme) * 0.12, 0.04, 0.18)
-            : Math.Clamp(ThemePainter.EffectiveWidgetOpacity(theme) * 0.42, 0.18, 0.48);
-        Surface.Background = ThemePainter.Brush(theme.WidgetBackground, blockOpacity);
-        Surface.BorderBrush = ThemePainter.Brush(theme.Border, rail ? 0.08 : 0.18);
-        Surface.BorderThickness = rail ? new Thickness(0) : new Thickness(1, 0, 1, 1);
         Surface.Padding = rail ? new Thickness(4, 2, 4, 4) : new Thickness(8, 4, 8, 8);
+        ApplySurfaceFill(emphasized: _pointerInside || _dragging || _resizing);
         NameText.Text = _block.Name;
         NameText.Foreground = ThemePainter.Brush(theme.WidgetForeground);
         NameText.FontFamily = new FontFamily(theme.FontFamily);
@@ -151,6 +149,28 @@ public sealed partial class BlockFrame : UserControl
         var grip = ThemePainter.ParseColor(theme.WidgetForeground);
         grip.A = (byte)(rail ? 0x08 : 0x10);
         DragBar.Background = new SolidColorBrush(grip);
+        SetChromeEmphasis(_pointerInside || _dragging || _resizing);
+    }
+
+    private void ApplySurfaceFill(bool emphasized)
+    {
+        var rail = IsRail;
+        var clear = UsesClearSurface;
+        if (clear && !emphasized)
+        {
+            Surface.Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
+            Surface.BorderBrush = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
+            Surface.BorderThickness = new Thickness(0);
+            return;
+        }
+
+        // Hover (or always-on for color grid): thin launchpad glass.
+        var blockOpacity = rail
+            ? Math.Clamp(ThemePainter.EffectiveWidgetOpacity(_theme) * 0.12, 0.04, 0.18)
+            : Math.Clamp(ThemePainter.EffectiveWidgetOpacity(_theme) * 0.42, 0.18, 0.48);
+        Surface.Background = ThemePainter.Brush(_theme.WidgetBackground, blockOpacity);
+        Surface.BorderBrush = ThemePainter.Brush(_theme.Border, rail ? 0.08 : 0.18);
+        Surface.BorderThickness = rail ? new Thickness(0) : new Thickness(1, 0, 1, 1);
     }
 
     private bool IsRail => BlockLayoutMode.IsRail(_block.LayoutMode);
@@ -894,9 +914,22 @@ public sealed partial class BlockFrame : UserControl
 
     private void SetChromeEmphasis(bool emphasized)
     {
-        var opacity = emphasized || _dragging || _resizing ? 0.96 : 0.28;
+        var active = emphasized || _dragging || _resizing;
+        var opacity = active ? 0.96 : 0.28;
         WidgetSurfaceStyle.FadeOpacity(DragBar, opacity, emphasized ? 140 : 220);
         WidgetSurfaceStyle.FadeOpacity(ResizeHandle, opacity, emphasized ? 140 : 220);
+
+        if (UsesClearSurface)
+        {
+            ApplySurfaceFill(active);
+            // White / rail: header chrome stays out of the way until hover.
+            var headerOpacity = active ? 1.0 : 0.0;
+            WidgetSurfaceStyle.FadeOpacity(HeaderRow, headerOpacity, emphasized ? 140 : 220);
+        }
+        else
+        {
+            HeaderRow.Opacity = 1.0;
+        }
     }
 
     private void RootGrid_PointerEntered(object sender, PointerRoutedEventArgs e)
