@@ -18,6 +18,7 @@ public sealed partial class MainWindow : Window
 {
     private readonly IDesktopOverlayService _overlayService;
     private readonly DesktopOverlayTarget _overlayTarget;
+    private RectInt32 _lastWorkArea;
 
     public MainWindow(DesktopPageArgs args, IDesktopOverlayService overlayService)
     {
@@ -38,6 +39,7 @@ public sealed partial class MainWindow : Window
             WindowHandle: hwnd);
 
         _overlayService.ApplyChromelessWorkAreaOverlay(_overlayTarget);
+        _lastWorkArea = CaptureWorkArea();
 
         // When Windows activates us (e.g. click a widget), park just above the shell desktop
         // so normal applications stay above the overlay and the wallpaper stays behind it.
@@ -70,13 +72,8 @@ public sealed partial class MainWindow : Window
         var hwnd = WindowNative.GetWindowHandle(this);
         _ = ShowWindow(hwnd, SwRestore);
         Activate();
-        // RDP / monitor changes often leave the host on a stale work area — resync.
-        _overlayService.ApplyChromelessWorkAreaOverlay(_overlayTarget);
-        if (RootFrame.Content is DesktopPage page)
-        {
-            page.HandleDisplayMetricsChanged();
-        }
-
+        // Second-instance activation: force a full work-area resync (RDP / monitor churn).
+        ResyncWorkAreaAndLayout(force: true);
         _overlayService.KeepBehindApplicationWindows(_overlayTarget);
     }
 
@@ -87,14 +84,39 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        // Re-fit to current DisplayArea.WorkArea when returning from Remote Desktop, etc.
+        // Clicking the AI shelf / widgets activates this HWND. Do NOT MoveAndResize or
+        // FitDesktopObjectsToViewport on every activation — that shifts the Clock and
+        // desktop layout. Only resync when DisplayArea.WorkArea actually changed.
+        ResyncWorkAreaAndLayout(force: false);
+        _overlayService.KeepBehindApplicationWindows(_overlayTarget);
+    }
+
+    private void ResyncWorkAreaAndLayout(bool force)
+    {
+        var work = CaptureWorkArea();
+        var changed = force
+            || work.X != _lastWorkArea.X
+            || work.Y != _lastWorkArea.Y
+            || work.Width != _lastWorkArea.Width
+            || work.Height != _lastWorkArea.Height;
+        if (!changed)
+        {
+            return;
+        }
+
+        _lastWorkArea = work;
         _overlayService.ApplyChromelessWorkAreaOverlay(_overlayTarget);
         if (RootFrame.Content is DesktopPage page)
         {
             page.HandleDisplayMetricsChanged();
         }
+    }
 
-        _overlayService.KeepBehindApplicationWindows(_overlayTarget);
+    private RectInt32 CaptureWorkArea()
+    {
+        var windowId = new WindowId(AppWindow.Id.Value);
+        var display = DisplayArea.GetFromWindowId(windowId, DisplayAreaFallback.Primary);
+        return display.WorkArea;
     }
 
     private const int SwRestore = 9;

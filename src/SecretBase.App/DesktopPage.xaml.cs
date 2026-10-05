@@ -2089,7 +2089,8 @@ public sealed partial class DesktopPage : Page
 
         if (_layout.Widgets.Any(w => string.Equals(w.Type, type, StringComparison.OrdinalIgnoreCase)))
         {
-            BringWidgetTypeToFront(type);
+            // Already on the desktop — do not raise Canvas z-order. Bringing Clock (or any
+            // existing widget) to front on ensure made shelf / AI interactions feel jumpy.
             SyncInteractiveInputRegions();
             return Task.CompletedTask;
         }
