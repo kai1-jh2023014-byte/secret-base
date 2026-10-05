@@ -43,7 +43,7 @@
                             VerticalAlignment="Center" />
                         <Button
                             x:Name="CompactExpandButton"
-                            Content="⤢"
+                            Content="[]"
                             MinWidth="28"
                             MinHeight="26"
                             Padding="2"
@@ -89,13 +89,13 @@
                                 CharacterSpacing="40" />
                             <TextBlock
                                 x:Name="SubtitleText"
-                                Text="Focus · Break · Repeat"
+                                Text="Focus / Break / Repeat"
                                 FontSize="11"
                                 Opacity="0.75" />
                         </StackPanel>
                         <Button
                             x:Name="CompactModeButton"
-                            Content="—"
+                            Content="-"
                             MinWidth="32"
                             MinHeight="28"
                             Padding="4,2"
@@ -189,7 +189,7 @@
                             FontSize="11"
                             Opacity="0.7"
                             TextWrapping="WrapWholeWords"
-                            Text="Custom focus / break · long break after 4 rounds" />
+                            Text="Custom focus / break - long break after 4 rounds" />
                     </StackPanel>
                 </Grid>
             </Grid>

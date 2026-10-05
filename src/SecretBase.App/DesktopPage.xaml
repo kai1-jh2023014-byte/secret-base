@@ -137,13 +137,13 @@
                         x:Name="SetupFab"
                         Width="34"
                         Height="34"
-                        Content="⚙"
-                        FontSize="13"
-                        FontWeight="Normal"
+                        Content="Set"
+                        FontSize="11"
+                        FontWeight="SemiBold"
                         Padding="0"
                         CornerRadius="17"
                         Click="SetupButton_Click"
-                        ToolTipService.ToolTip="Setup — Start Menu, Desktop shortcut, Start at login" />
+                        ToolTipService.ToolTip="Setup: Start Menu, Desktop shortcut, Start at login" />
                 </StackPanel>
             </Border>
         </StackPanel>

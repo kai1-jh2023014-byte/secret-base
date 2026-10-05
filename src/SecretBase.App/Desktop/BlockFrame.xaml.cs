@@ -42,6 +42,7 @@ public sealed partial class BlockFrame : UserControl
 
     private BlockItem? _activeItem;
     private FrameworkElement? _activeTile;
+    private Button StyleButton = null!;
     private bool _itemDragging;
     private Point _itemLastPoint;
     private Point _itemPressPoint;
@@ -74,6 +75,9 @@ public sealed partial class BlockFrame : UserControl
         _onBoundsChanged = onBoundsChanged;
         _onStatus = onStatus;
 
+        // Built in code (not XAML) so the WinUI markup compiler cannot NRE on new chrome.
+        InsertStyleButton();
+
         Width = block.Size.Width;
         Height = block.Size.Height;
         ApplyTheme(theme);
@@ -90,6 +94,28 @@ public sealed partial class BlockFrame : UserControl
     public Guid BlockId => _block.Id;
 
     public Block Block => _block;
+
+    private void InsertStyleButton()
+    {
+        StyleButton = new Button
+        {
+            Content = "Style",
+            Padding = new Thickness(6, 1, 6, 1),
+            MinWidth = 40,
+            MinHeight = 22,
+            FontSize = 11,
+            Margin = new Thickness(0, 0, 4, 0)
+        };
+        StyleButton.Click += StyleButton_Click;
+        ToolTipService.SetToolTip(StyleButton, "Icon style: white silhouette / fashion rail");
+
+        // Name | Style | Arrange | Del
+        HeaderRow.ColumnDefinitions.Insert(1, new ColumnDefinition { Width = GridLength.Auto });
+        Grid.SetColumn(ArrangeButton, 2);
+        Grid.SetColumn(DeleteButton, 3);
+        Grid.SetColumn(StyleButton, 1);
+        HeaderRow.Children.Insert(1, StyleButton);
+    }
 
     private void ApplyTheme(ThemeDefinition theme)
     {

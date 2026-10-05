@@ -41,7 +41,7 @@
                         Opacity="0.85" />
                     <Button
                         x:Name="SettingsButton"
-                        Content="···"
+                        Content="..."
                         HorizontalAlignment="Right"
                         VerticalAlignment="Top"
                         MinWidth="32"
@@ -122,7 +122,7 @@
                                 Canvas.Top="7"
                                 Fill="#22000000"
                                 Stroke="#55FFFFFF"
-                                StrokeThickness="1.2" />
+                                StrokeThickness="1" />
                             <Canvas x:Name="AnalogTicks" Width="132" Height="132" />
                             <TextBlock
                                 x:Name="AnalogMark12"
@@ -162,20 +162,16 @@
                                 Y1="66"
                                 X2="66"
                                 Y2="40"
-                                StrokeThickness="2.5"
-                                Stroke="#FFF3EFE6"
-                                StrokeStartLineCap="Round"
-                                StrokeEndLineCap="Round" />
+                                StrokeThickness="3"
+                                Stroke="#FFF3EFE6" />
                             <Line
                                 x:Name="MinuteHand"
                                 X1="66"
                                 Y1="66"
                                 X2="66"
                                 Y2="28"
-                                StrokeThickness="1.6"
-                                Stroke="#FFF3EFE6"
-                                StrokeStartLineCap="Round"
-                                StrokeEndLineCap="Round" />
+                                StrokeThickness="2"
+                                Stroke="#FFF3EFE6" />
                             <Line
                                 x:Name="SecondHand"
                                 X1="66"
@@ -184,8 +180,6 @@
                                 Y2="24"
                                 StrokeThickness="1"
                                 Stroke="#FF7A9E86"
-                                StrokeStartLineCap="Round"
-                                StrokeEndLineCap="Round"
                                 Opacity="0.9" />
                             <Ellipse
                                 x:Name="AnalogCenter"
