@@ -416,7 +416,7 @@ public sealed partial class BlockFrame : UserControl
 
         _activeItem.X = Canvas.GetLeft(tile) + moveX;
         _activeItem.Y = Canvas.GetTop(tile) + moveY;
-        _activeItem.ClampPlacement(ItemCanvas.ActualWidth, ItemCanvas.ActualHeight);
+        _activeItem.ClampPlacement(ItemCanvas.ActualWidth, ItemCanvas.ActualHeight, TileW, TileH);
         Canvas.SetLeft(tile, _activeItem.X);
         Canvas.SetTop(tile, _activeItem.Y);
         e.Handled = true;
