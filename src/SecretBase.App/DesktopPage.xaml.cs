@@ -2234,7 +2234,9 @@ public sealed partial class DesktopPage : Page
         var widgetBg = CreateColorBox("Widget / Block background (#AARRGGBB)", draft.WidgetBackground);
         var widgetFg = CreateColorBox("Clock / Text / title color", draft.WidgetForeground);
         var mutedFg = CreateColorBox("Date / muted text", draft.ForegroundMuted);
-        var accent = CreateColorBox("Accent (buttons)", draft.Accent);
+        var accent = CreateColorBox("Accent color (#AARRGGBB) — buttons & highlights", draft.Accent);
+        Action? refreshPreview = null;
+        var accentSwatches = BuildAccentSwatchRow(accent, () => refreshPreview?.Invoke());
         var fontBox = new ComboBox
         {
             Header = "Font",
@@ -2290,10 +2292,10 @@ public sealed partial class DesktopPage : Page
         };
         var previewAccent = new Border
         {
-            Width = 24,
-            Height = 2,
+            Width = 48,
+            Height = 4,
             HorizontalAlignment = HorizontalAlignment.Left,
-            CornerRadius = new CornerRadius(1),
+            CornerRadius = new CornerRadius(2),
             Margin = new Thickness(0, 0, 0, 6)
         };
         var previewTime = new TextBlock
@@ -2327,13 +2329,15 @@ public sealed partial class DesktopPage : Page
             preview.Background = ThemePainter.Brush(widgetBg.Text, opacity);
             preview.CornerRadius = new CornerRadius(Math.Max(8, radius - 2));
             preview.BorderBrush = ThemePainter.Brush(draft.Border, 0.55);
-            previewAccent.Background = ThemePainter.Brush(accent.Text, 0.9);
+            previewAccent.Background = ThemePainter.Brush(accent.Text, 0.95);
             previewTime.Foreground = ThemePainter.Brush(widgetFg.Text);
             previewDate.Foreground = ThemePainter.Brush(mutedFg.Text);
             var font = fontBox.SelectedItem as string ?? draft.FontFamily;
             previewTime.FontFamily = new FontFamily(font);
             previewDate.FontFamily = new FontFamily(font);
         }
+
+        refreshPreview = RefreshPreview;
 
         presetBox.SelectionChanged += (_, _) =>
         {
@@ -2360,6 +2364,7 @@ public sealed partial class DesktopPage : Page
         widgetBg.TextChanged += (_, _) => RefreshPreview();
         widgetFg.TextChanged += (_, _) => RefreshPreview();
         mutedFg.TextChanged += (_, _) => RefreshPreview();
+        accent.TextChanged += (_, _) => RefreshPreview();
         radiusBox.ValueChanged += (_, _) => RefreshPreview();
         opacityBox.ValueChanged += (_, _) => RefreshPreview();
         fontBox.SelectionChanged += (_, _) => RefreshPreview();
@@ -2379,6 +2384,7 @@ public sealed partial class DesktopPage : Page
         panel.Children.Add(widgetFg);
         panel.Children.Add(mutedFg);
         panel.Children.Add(accent);
+        panel.Children.Add(accentSwatches);
         panel.Children.Add(fontBox);
         panel.Children.Add(radiusBox);
         panel.Children.Add(opacityBox);
@@ -2466,6 +2472,58 @@ public sealed partial class DesktopPage : Page
             Text = value,
             PlaceholderText = "#AARRGGBB"
         };
+
+    private static StackPanel BuildAccentSwatchRow(TextBox accentBox, Action onPicked)
+    {
+        var row = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            Margin = new Thickness(0, -2, 0, 4)
+        };
+        row.Children.Add(new TextBlock
+        {
+            Text = "Quick:",
+            FontSize = 11,
+            Opacity = 0.75,
+            VerticalAlignment = VerticalAlignment.Center
+        });
+
+        // Jade (default) + cyan / blue / rose / amber / white / red / gold.
+        foreach (var hex in new[]
+                 {
+                     "#FF7A9E86",
+                     "#FF6FD4C8",
+                     "#FF6C8CFF",
+                     "#FFD4849A",
+                     "#FFFFB347",
+                     "#FFF3EFE6",
+                     "#FFE85D5D",
+                     "#FFC9A227"
+                 })
+        {
+            var chip = new Button
+            {
+                Width = 28,
+                Height = 28,
+                Padding = 0,
+                CornerRadius = new CornerRadius(14),
+                Background = ThemePainter.Brush(hex, 1),
+                BorderBrush = ThemePainter.Brush("#66FFFFFF", 1),
+                BorderThickness = new Thickness(1),
+                Tag = hex
+            };
+            ToolTipService.SetToolTip(chip, hex);
+            chip.Click += (_, _) =>
+            {
+                accentBox.Text = hex;
+                onPicked();
+            };
+            row.Children.Add(chip);
+        }
+
+        return row;
+    }
 
     private static bool TryNormalizeHex(string? input, out string normalized)
     {

@@ -11,6 +11,10 @@ public sealed class BlockItem
     public const double TileWidth = 88;
     public const double TileHeight = 84;
 
+    /// <summary>Compact rail tile (icon only, no label).</summary>
+    public const double RailTileWidth = 48;
+    public const double RailTileHeight = 48;
+
     public Guid Id { get; set; } = Guid.NewGuid();
 
     public string Name { get; set; } = string.Empty;
@@ -55,14 +59,17 @@ public sealed class BlockItem
     }
 
     public void ClampPlacement(double maxWidth, double maxHeight)
+        => ClampPlacement(maxWidth, maxHeight, TileWidth, TileHeight);
+
+    public void ClampPlacement(double maxWidth, double maxHeight, double tileWidth, double tileHeight)
     {
         if (!HasPlacement)
         {
             return;
         }
 
-        var maxX = Math.Max(0, maxWidth - TileWidth);
-        var maxY = Math.Max(0, maxHeight - TileHeight);
+        var maxX = Math.Max(0, maxWidth - tileWidth);
+        var maxY = Math.Max(0, maxHeight - tileHeight);
         X = Math.Clamp(X, 0, maxX);
         Y = Math.Clamp(Y, 0, maxY);
     }

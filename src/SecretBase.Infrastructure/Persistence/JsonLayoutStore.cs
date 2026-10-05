@@ -132,6 +132,8 @@ public sealed class JsonLayoutStore : ILayoutStore
                 block.Name = "New Block";
             }
 
+            block.IconStyle = BlockIconStyle.Normalize(block.IconStyle);
+            block.LayoutMode = BlockLayoutMode.Normalize(block.LayoutMode);
             block.ClampSize();
             for (var i = 0; i < block.Items.Count; i++)
             {
@@ -174,6 +176,8 @@ public sealed class JsonLayoutStore : ILayoutStore
                     Position = new WidgetPosition(b.Position.X, b.Position.Y),
                     Size = new WidgetSize(b.Size.Width, b.Size.Height),
                     Theme = b.Theme,
+                    IconStyle = BlockIconStyle.Normalize(b.IconStyle),
+                    LayoutMode = BlockLayoutMode.Normalize(b.LayoutMode),
                     RoomId = roomId,
                     Items = b.Items
                         .Select(i => new BlockItem
@@ -184,7 +188,9 @@ public sealed class JsonLayoutStore : ILayoutStore
                             Target = i.Target,
                             Icon = i.Icon,
                             DesktopOriginPath = i.DesktopOriginPath,
-                            HiddenFromDesktop = i.HiddenFromDesktop
+                            HiddenFromDesktop = i.HiddenFromDesktop,
+                            X = i.X,
+                            Y = i.Y
                         })
                         .ToList()
                 })

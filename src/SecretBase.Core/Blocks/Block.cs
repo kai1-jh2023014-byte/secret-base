@@ -14,6 +14,10 @@ public sealed class Block
     public const double MinWidth = 240;
     public const double MinHeight = 160;
 
+    /// <summary>Narrow min size for fashion icon rails.</summary>
+    public const double RailMinWidth = 72;
+    public const double RailMinHeight = 140;
+
     public Guid Id { get; set; } = Guid.NewGuid();
 
     public string Name { get; set; } = "New Block";
@@ -28,9 +32,26 @@ public sealed class Block
     /// </summary>
     public string? Theme { get; set; }
 
+    /// <summary><see cref="BlockIconStyle"/> — color or white silhouette.</summary>
+    public string IconStyle { get; set; } = BlockIconStyle.Color;
+
+    /// <summary><see cref="BlockLayoutMode"/> — grid or compact rail.</summary>
+    public string LayoutMode { get; set; } = BlockLayoutMode.Grid;
+
     public RoomId RoomId { get; set; } = RoomId.DefaultRoomId;
 
     public List<BlockItem> Items { get; set; } = [];
 
-    public void ClampSize() => Size.Clamp(MinWidth, MinHeight);
+    public void ClampSize()
+    {
+        IconStyle = BlockIconStyle.Normalize(IconStyle);
+        LayoutMode = BlockLayoutMode.Normalize(LayoutMode);
+        if (BlockLayoutMode.IsRail(LayoutMode))
+        {
+            Size.Clamp(RailMinWidth, RailMinHeight);
+            return;
+        }
+
+        Size.Clamp(MinWidth, MinHeight);
+    }
 }

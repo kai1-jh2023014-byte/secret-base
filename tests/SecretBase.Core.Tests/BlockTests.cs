@@ -86,6 +86,45 @@ public class BlockModelTests
     }
 
     [Fact]
+    public void BlockItemLayout_ArrangeRail_StacksVerticallyWhenTall()
+    {
+        var items = Enumerable.Range(0, 3)
+            .Select(i => new BlockItem { Name = $"I{i}", Target = $@"C:\a{i}.lnk" })
+            .ToList();
+
+        BlockItemLayout.ArrangeRail(items, areaWidth: 80, areaHeight: 280);
+
+        Assert.All(items, i => Assert.True(i.HasPlacement));
+        Assert.True(items[0].Y < items[1].Y);
+        Assert.True(items[1].Y < items[2].Y);
+        Assert.Equal(items[0].X, items[1].X, 0.01);
+    }
+
+    [Fact]
+    public void Block_ClampSize_RailAllowsNarrowStrip()
+    {
+        var block = DefaultBlockFactory.Create("Rail");
+        block.LayoutMode = BlockLayoutMode.Rail;
+        block.IconStyle = BlockIconStyle.Silhouette;
+        block.Size.Width = 40;
+        block.Size.Height = 100;
+        block.ClampSize();
+
+        Assert.Equal(Block.RailMinWidth, block.Size.Width);
+        Assert.Equal(Block.RailMinHeight, block.Size.Height);
+        Assert.True(block.Size.Width < Block.MinWidth);
+        Assert.True(BlockIconStyle.IsSilhouette(block.IconStyle));
+        Assert.True(BlockLayoutMode.IsRail(block.LayoutMode));
+    }
+
+    [Fact]
+    public void BlockIconStyle_Normalize_DefaultsToColor()
+    {
+        Assert.Equal(BlockIconStyle.Color, BlockIconStyle.Normalize(null));
+        Assert.Equal(BlockIconStyle.Silhouette, BlockIconStyle.Normalize("SILHOUETTE"));
+    }
+
+    [Fact]
     public void BlockTargetValidator_AcceptsAbsoluteExe()
     {
         var ok = BlockTargetValidator.TryValidate(
