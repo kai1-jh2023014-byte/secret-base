@@ -29,6 +29,7 @@ public sealed partial class TaskbarAiChatBar : UserControl
     private TextBlock ConfirmText = null!;
     private Button ConfirmCancelButton = null!;
     private Button ConfirmRunButton = null!;
+    private Button DismissResultsButton = null!;
     private TextBlock StatusLabel = null!;
     private Border Pill = null!;
     private TextBlock ClockText = null!;
@@ -39,6 +40,7 @@ public sealed partial class TaskbarAiChatBar : UserControl
     private Button SendButton = null!;
     private TextBlock FocusText = null!;
     private TextBlock NextText = null!;
+    private bool _resultsVisible;
 
     public TaskbarAiChatBar()
     {
@@ -202,13 +204,42 @@ public sealed partial class TaskbarAiChatBar : UserControl
             TextWrapping = TextWrapping.WrapWholeWords
         };
 
+        DismissResultsButton = new Button
+        {
+            Content = "✕",
+            MinWidth = 32,
+            MinHeight = 28,
+            Padding = new Thickness(6, 2, 6, 2),
+            HorizontalAlignment = HorizontalAlignment.Right
+        };
+        DismissResultsButton.Click += DismissResultsButton_Click;
+        ToolTipService.SetToolTip(DismissResultsButton, "Dismiss chat (Esc)");
+
+        var resultsHeader = new Grid();
+        resultsHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        resultsHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var headerLabel = new TextBlock
+        {
+            Text = "Base AI",
+            FontSize = 11,
+            Opacity = 0.75,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        Grid.SetColumn(headerLabel, 0);
+        Grid.SetColumn(DismissResultsButton, 1);
+        resultsHeader.Children.Add(headerLabel);
+        resultsHeader.Children.Add(DismissResultsButton);
+
         var resultsGrid = new Grid { RowSpacing = 8 };
+        resultsGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         resultsGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         resultsGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         resultsGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        Grid.SetRow(TranscriptScroll, 0);
-        Grid.SetRow(ConfirmPanel, 1);
-        Grid.SetRow(StatusLabel, 2);
+        Grid.SetRow(resultsHeader, 0);
+        Grid.SetRow(TranscriptScroll, 1);
+        Grid.SetRow(ConfirmPanel, 2);
+        Grid.SetRow(StatusLabel, 3);
+        resultsGrid.Children.Add(resultsHeader);
         resultsGrid.Children.Add(TranscriptScroll);
         resultsGrid.Children.Add(ConfirmPanel);
         resultsGrid.Children.Add(StatusLabel);
@@ -221,6 +252,7 @@ public sealed partial class TaskbarAiChatBar : UserControl
             BorderThickness = new Thickness(1),
             Child = resultsGrid
         };
+        ResultsShell.SizeChanged += (_, _) => NotifyLayoutChanged();
 
         var root = new Grid
         {
@@ -267,8 +299,10 @@ public sealed partial class TaskbarAiChatBar : UserControl
         WidgetSurfaceStyle.ApplyActionButton(SendButton, theme, accent: true);
         WidgetSurfaceStyle.ApplyActionButton(ConfirmRunButton, theme, accent: true);
         WidgetSurfaceStyle.ApplyGhostButton(ConfirmCancelButton, theme);
+        WidgetSurfaceStyle.ApplyGhostButton(DismissResultsButton, theme);
         RefreshProvider();
         RenderTranscript();
+        SyncResultsVisibility();
     }
 
     public void ApplyShelf(TaskbarShelfSnapshot snapshot)
@@ -303,7 +337,7 @@ public sealed partial class TaskbarAiChatBar : UserControl
         if (e.Key == VirtualKey.Escape)
         {
             e.Handled = true;
-            CollapseResults();
+            DismissResults(clearTranscript: true);
             return;
         }
 
@@ -426,26 +460,79 @@ public sealed partial class TaskbarAiChatBar : UserControl
             _busy = false;
             SendButton.IsEnabled = true;
             InputBox.IsEnabled = true;
-            LayoutChanged?.Invoke();
+            SyncResultsVisibility();
         }
     }
 
+    private void DismissResultsButton_Click(object sender, RoutedEventArgs e) =>
+        DismissResults(clearTranscript: true);
+
     private void ExpandResultsIfNeeded()
     {
-        if (ResultsShell.Visibility == Visibility.Visible)
-        {
-            return;
-        }
-
-        ResultsShell.Visibility = Visibility.Visible;
-        LayoutChanged?.Invoke();
+        _resultsVisible = true;
+        SyncResultsVisibility();
     }
 
     private void CollapseResults()
     {
-        ResultsShell.Visibility = Visibility.Collapsed;
+        DismissResults(clearTranscript: false);
+    }
+
+    private void DismissResults(bool clearTranscript)
+    {
+        if (_assistant?.HasPendingConfirmation == true)
+        {
+            _resultsVisible = true;
+            StatusLabel.Text = AssistantUserMessages.PendingConfirmationMustResolve;
+            SyncResultsVisibility();
+            return;
+        }
+
+        if (clearTranscript)
+        {
+            _lines.Clear();
+            Transcript.Children.Clear();
+            StatusLabel.Text = string.Empty;
+        }
+
         ConfirmPanel.Visibility = Visibility.Collapsed;
+        _resultsVisible = false;
+        SyncResultsVisibility();
+    }
+
+    private void SyncResultsVisibility()
+    {
+        var hasContent = _lines.Count > 0
+            || ConfirmPanel.Visibility == Visibility.Visible
+            || _busy
+            || !string.IsNullOrWhiteSpace(StatusLabel.Text);
+
+        var shouldShow = _resultsVisible && hasContent;
+        if (!shouldShow && !_busy && ConfirmPanel.Visibility != Visibility.Visible)
+        {
+            _resultsVisible = false;
+        }
+
+        var next = shouldShow || (_busy && _resultsVisible) || ConfirmPanel.Visibility == Visibility.Visible
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+
+        if (ResultsShell.Visibility != next)
+        {
+            ResultsShell.Visibility = next;
+            NotifyLayoutChanged();
+            return;
+        }
+
+        NotifyLayoutChanged();
+    }
+
+    private void NotifyLayoutChanged()
+    {
         LayoutChanged?.Invoke();
+        // Second pass after measure so SetWindowRgn matches the expanded/collapsed shelf.
+        _ = DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () =>
+            LayoutChanged?.Invoke());
     }
 
     private void RenderTranscript()
@@ -482,6 +569,12 @@ public sealed partial class TaskbarAiChatBar : UserControl
             Transcript.Children.Add(block);
         }
 
+        if (_lines.Count > 0 || ConfirmPanel.Visibility == Visibility.Visible)
+        {
+            _resultsVisible = true;
+        }
+
+        SyncResultsVisibility();
         _ = DispatcherQueue.TryEnqueue(() => TranscriptScroll.ChangeView(null, TranscriptScroll.ScrollableHeight, null));
     }
 }

@@ -3,6 +3,7 @@ using SecretBase.Core.Base;
 using SecretBase.Core.Focus;
 using SecretBase.Core.Todo;
 using SecretBase.Core.Widgets;
+using SecretBase.Core.Widgets.Pomodoro;
 
 namespace SecretBase.Core.Tests;
 
@@ -21,6 +22,61 @@ public class PomodoroFocusSessionTests
         Assert.Equal(FocusPhase.Focus, started.Session.Phase);
         Assert.Equal(TimeSpan.FromMinutes(25), started.Session.Remaining(T0));
         Assert.Equal("Pomodoro", started.Session.Label);
+    }
+
+    [Fact]
+    public void ConfigureDurations_CustomFocusAndBreak_UsedOnStartAndAdvance()
+    {
+        var store = new FocusSessionStore();
+        store.ConfigureDurations(
+            focus: TimeSpan.FromMinutes(40),
+            shortBreak: TimeSpan.FromMinutes(8),
+            longBreak: TimeSpan.FromMinutes(20));
+
+        var started = store.Start(T0, duration: TimeSpan.FromMinutes(1));
+        Assert.Equal(TimeSpan.FromMinutes(1), started.Session.Remaining(T0));
+        Assert.Equal(TimeSpan.FromMinutes(8), started.Session.ShortBreakDuration);
+
+        var afterFocus = store.AdvanceIfComplete(T0.AddMinutes(1));
+        Assert.Equal(FocusPhase.ShortBreak, afterFocus.Phase);
+        Assert.Equal(TimeSpan.FromMinutes(8), afterFocus.Remaining(T0.AddMinutes(1)));
+    }
+
+    [Fact]
+    public void FocusCompletionChime_WritesValidWav()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "sb-chime-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var path = FocusCompletionChime.EnsureWavFile(dir);
+            Assert.True(File.Exists(path));
+            var bytes = File.ReadAllBytes(path);
+            Assert.True(bytes.Length > 44);
+            Assert.Equal((byte)'R', bytes[0]);
+            Assert.Equal((byte)'I', bytes[1]);
+            Assert.Equal((byte)'F', bytes[2]);
+            Assert.Equal((byte)'F', bytes[3]);
+        }
+        finally
+        {
+            if (Directory.Exists(dir))
+            {
+                Directory.Delete(dir, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public void PomodoroConfiguration_RoundTripsCustomDurations()
+    {
+        var config = PomodoroWidgetConfiguration.CreateDefault();
+        config.FocusMinutes = 45;
+        config.ShortBreakMinutes = 10;
+        config.SoundOnComplete = false;
+        var restored = PomodoroWidgetConfiguration.FromDictionary(config.ToDictionary());
+        Assert.Equal(45, restored.FocusMinutes);
+        Assert.Equal(10, restored.ShortBreakMinutes);
+        Assert.False(restored.SoundOnComplete);
     }
 
     [Fact]

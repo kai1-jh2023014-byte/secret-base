@@ -121,6 +121,9 @@ public sealed partial class DesktopPage : Page
     /// </summary>
     private int _modalInputDepth;
 
+    /// <summary>Monotonic Canvas Z-index so newly opened widgets can rise above Blocks.</summary>
+    private int _frontZIndex;
+
     public DesktopPage()
     {
         InitializeComponent();
@@ -1112,7 +1115,18 @@ public sealed partial class DesktopPage : Page
             }
 
             var view = new PomodoroWidgetView();
-            view.Initialize(_baseExperience);
+            view.Initialize(
+                _baseExperience,
+                config,
+                persist: updated =>
+                {
+                    instance.Configuration = updated.ToDictionary();
+                    PersistLayoutNow();
+                },
+                chimeDirectory: Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                    "SecretBase",
+                    "sounds"));
             if (_theme is not null)
             {
                 view.ApplyTheme(_theme);
@@ -1628,6 +1642,7 @@ public sealed partial class DesktopPage : Page
         _layout.Widgets.Add(widget);
         PersistLayoutNow();
         RenderDesktopObjects();
+        BringWidgetTypeToFront(type);
         ShowHostStatus($"Added {type} widget.");
         SyncInteractiveInputRegions();
         RefreshDebugStatus();
@@ -1858,12 +1873,45 @@ public sealed partial class DesktopPage : Page
 
     private Task EnsureWidgetAsync(string type)
     {
-        if (_layout is null || _layout.Widgets.Any(w => string.Equals(w.Type, type, StringComparison.OrdinalIgnoreCase)))
+        if (_layout is null)
         {
             return Task.CompletedTask;
         }
 
+        if (_layout.Widgets.Any(w => string.Equals(w.Type, type, StringComparison.OrdinalIgnoreCase)))
+        {
+            BringWidgetTypeToFront(type);
+            SyncInteractiveInputRegions();
+            return Task.CompletedTask;
+        }
+
         return AddWidgetByTypeAsync(type);
+    }
+
+    private void BringWidgetTypeToFront(string type)
+    {
+        if (string.IsNullOrWhiteSpace(type))
+        {
+            return;
+        }
+
+        _frontZIndex++;
+        var raised = false;
+        foreach (var child in WidgetCanvas.Children.OfType<WidgetFrame>())
+        {
+            if (!string.Equals(child.WidgetType, type, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            Canvas.SetZIndex(child, _frontZIndex);
+            raised = true;
+        }
+
+        if (raised)
+        {
+            _logger?.Info("widget", $"Brought {type} widget to front (z={_frontZIndex}).");
+        }
     }
 
     private async Task ShowAddBlockDialogAsync()

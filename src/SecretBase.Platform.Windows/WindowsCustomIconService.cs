@@ -14,7 +14,7 @@ namespace SecretBase.Platform.Windows;
 /// </summary>
 public sealed class WindowsCustomIconService : ICustomIconService
 {
-    private const int OutputSize = 96;
+    private const int OutputSize = 128;
 
     private readonly string _customDirectory;
 
@@ -288,12 +288,27 @@ public sealed class WindowsCustomIconService : ICustomIconService
         {
             using var ms = new MemoryStream(bytes);
             using var icon = new Icon(ms, OutputSize, OutputSize);
-            return new Bitmap(icon.ToBitmap(), OutputSize, OutputSize);
+            using var source = icon.ToBitmap();
+            return ResizeHighQuality(source, OutputSize);
         }
 
         using var stream = new MemoryStream(bytes);
         using var original = Image.FromStream(stream, useEmbeddedColorManagement: false, validateImageData: true);
-        return new Bitmap(original, OutputSize, OutputSize);
+        return ResizeHighQuality(original, OutputSize);
+    }
+
+    private static Bitmap ResizeHighQuality(Image source, int size)
+    {
+        var dest = new Bitmap(size, size, PixelFormat.Format32bppArgb);
+        using var g = Graphics.FromImage(dest);
+        g.Clear(Color.Transparent);
+        g.CompositingMode = CompositingMode.SourceCopy;
+        g.CompositingQuality = CompositingQuality.HighQuality;
+        g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+        g.SmoothingMode = SmoothingMode.HighQuality;
+        g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+        g.DrawImage(source, new Rectangle(0, 0, size, size));
+        return dest;
     }
 
     private static Color ParseHex(string hex)

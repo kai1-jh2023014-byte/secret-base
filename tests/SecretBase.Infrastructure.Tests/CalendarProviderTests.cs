@@ -233,8 +233,35 @@ public class GoogleCalendarApiProviderAuthTests
                 _ => true);
 
             Assert.Equal(CalendarAuthStatus.Disconnected, provider.AuthStatus);
+            Assert.True(provider.Capabilities.HasFlag(CalendarProviderCapabilities.CreateEvents));
+            Assert.Equal(GoogleCalendarApiProvider.EventsScope, GoogleCalendarApiProvider.EventsScope);
             var events = await provider.GetEventsAsync(CalendarQuery.ForDay(new DateOnly(2026, 8, 13)));
             Assert.Empty(events);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public async Task CreateEventAsync_WithoutToken_ThrowsClearMessage()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "sb-oauth3-" + Guid.NewGuid().ToString("N") + ".json");
+        File.WriteAllText(path, """{"client_id":"test.apps.googleusercontent.com"}""");
+        try
+        {
+            Assert.True(GoogleOAuthClientConfig.TryLoad(path, out var oauth, out _));
+            var provider = new GoogleCalendarApiProvider(
+                oauth,
+                new MemorySecureSecretStore(),
+                _ => true);
+            var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                provider.CreateEventAsync(
+                    "Test",
+                    DateTimeOffset.UtcNow,
+                    DateTimeOffset.UtcNow.AddHours(1)));
+            Assert.Contains("not connected", ex.Message, StringComparison.OrdinalIgnoreCase);
         }
         finally
         {

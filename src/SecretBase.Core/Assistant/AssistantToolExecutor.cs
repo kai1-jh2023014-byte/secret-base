@@ -252,7 +252,7 @@ public sealed class AssistantToolExecutor : IAiToolExecutor
             ? title
             : $"{created.Start:HH:mm} {created.Title}";
         return AssistantToolResult.Ok(
-            $"Added local event: {when}. It appears in the Calendar widget (not pushed to Google).",
+            $"Added to Google Calendar: {when}.",
             activity: "Calendar ✓",
             activityDomain: AssistantActivityDomains.Calendar);
     }
@@ -1119,9 +1119,21 @@ public sealed class AssistantToolExecutor : IAiToolExecutor
                 activityDomain: AssistantActivityDomains.Focus);
         }
 
-        AssistantToolArgumentValidator.TryGetInt(root, "minutes", 25, 5, 90, out var minutes, out _);
+        AssistantToolArgumentValidator.TryGetInt(root, "minutes", 25, 5, 120, out var minutes, out _);
+        AssistantToolArgumentValidator.TryGetInt(
+            root,
+            "break_minutes",
+            FocusSession.DefaultShortBreakMinutes,
+            1,
+            60,
+            out var breakMinutes,
+            out _);
         AssistantToolArgumentValidator.TryGetString(root, "label", required: false, out var label, out _);
-        var started = _base.Focus.Start(_base.Now, TimeSpan.FromMinutes(minutes), label);
+        var started = _base.Focus.Start(
+            _base.Now,
+            TimeSpan.FromMinutes(minutes),
+            label,
+            shortBreak: TimeSpan.FromMinutes(breakMinutes));
         var session = started.Session;
         string message;
         if (started.AlreadyRunning)
@@ -1138,7 +1150,7 @@ public sealed class AssistantToolExecutor : IAiToolExecutor
         else
         {
             message =
-                $"Started {session.Label} focus for {minutes} minutes (then {FocusSession.DefaultShortBreakMinutes}m break). "
+                $"Started {session.Label} focus for {minutes} minutes (then {breakMinutes}m break). "
                 + "Pomodoro widget opened. No apps were launched.";
         }
 

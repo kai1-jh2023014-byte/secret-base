@@ -3,7 +3,11 @@ using Microsoft.UI.Xaml.Controls;
 using SecretBase.Core.Base;
 using SecretBase.Core.Focus;
 using SecretBase.Core.Themes;
+using SecretBase.Core.Widgets.Pomodoro;
 using SecretBase.Widgets.Theming;
+using Windows.Media.Core;
+using Windows.Media.Playback;
+using Windows.Storage;
 
 namespace SecretBase.Widgets.Pomodoro;
 
@@ -13,6 +17,11 @@ public sealed partial class PomodoroWidgetView : UserControl
     private IBaseExperienceServices? _base;
     private ThemeDefinition? _theme;
     private DispatcherTimer? _timer;
+    private PomodoroWidgetConfiguration _configuration = PomodoroWidgetConfiguration.CreateDefault();
+    private Action<PomodoroWidgetConfiguration>? _persist;
+    private string? _chimeDirectory;
+    private MediaPlayer? _mediaPlayer;
+    private bool _suppressDurationEvents;
 
     public PomodoroWidgetView()
     {
@@ -21,9 +30,18 @@ public sealed partial class PomodoroWidgetView : UserControl
         Unloaded += OnUnloaded;
     }
 
-    public void Initialize(IBaseExperienceServices services)
+    public void Initialize(
+        IBaseExperienceServices services,
+        PomodoroWidgetConfiguration? configuration = null,
+        Action<PomodoroWidgetConfiguration>? persist = null,
+        string? chimeDirectory = null)
     {
         _base = services;
+        _configuration = configuration ?? PomodoroWidgetConfiguration.CreateDefault();
+        _persist = persist;
+        _chimeDirectory = chimeDirectory;
+        ApplyConfigurationToUi();
+        ApplyDurationsToStore();
         Refresh();
     }
 
@@ -39,6 +57,7 @@ public sealed partial class PomodoroWidgetView : UserControl
         WidgetSurfaceStyle.ApplyActionButton(PrimaryButton, theme, accent: true);
         WidgetSurfaceStyle.ApplyGhostButton(ResetButton, theme);
         WidgetSurfaceStyle.ApplyGhostButton(StopButton, theme);
+        SoundCheckBox.Foreground = ThemePainter.Brush(theme.WidgetForeground);
         Refresh();
     }
 
@@ -50,9 +69,19 @@ public sealed partial class PomodoroWidgetView : UserControl
         }
 
         var now = _base.Now;
+        var before = _base.Focus.Current;
+        var completedPhase = before.IsRunning && !before.IsPaused && before.IsComplete(now);
         var session = _base.Focus.AdvanceIfComplete(now);
+        if (completedPhase && _configuration.SoundOnComplete)
+        {
+            _ = PlayChimeAsync();
+        }
+
         var remaining = session.Remaining(now);
         TimerText.Text = $"{(int)remaining.TotalMinutes:00}:{remaining.Seconds:00}";
+        HintText.Text =
+            $"{_configuration.FocusMinutes} min focus · {_configuration.ShortBreakMinutes} min break · "
+            + $"long break {_configuration.LongBreakMinutes}m after 4 rounds";
 
         if (!session.IsRunning)
         {
@@ -62,6 +91,8 @@ public sealed partial class PomodoroWidgetView : UserControl
             PrimaryButton.IsEnabled = true;
             ResetButton.IsEnabled = false;
             StopButton.IsEnabled = false;
+            FocusMinutesBox.IsEnabled = true;
+            BreakMinutesBox.IsEnabled = true;
             return;
         }
 
@@ -73,6 +104,29 @@ public sealed partial class PomodoroWidgetView : UserControl
         PrimaryButton.IsEnabled = true;
         ResetButton.IsEnabled = true;
         StopButton.IsEnabled = true;
+        FocusMinutesBox.IsEnabled = false;
+        BreakMinutesBox.IsEnabled = false;
+    }
+
+    private async Task PlayChimeAsync()
+    {
+        try
+        {
+            var directory = _chimeDirectory
+                ?? Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                    "SecretBase",
+                    "sounds");
+            var path = FocusCompletionChime.EnsureWavFile(directory);
+            var file = await StorageFile.GetFileFromPathAsync(path);
+            _mediaPlayer ??= new MediaPlayer { AudioCategory = MediaPlayerAudioCategory.SoundEffects };
+            _mediaPlayer.Source = MediaSource.CreateFromStorageFile(file);
+            _mediaPlayer.Play();
+        }
+        catch
+        {
+            // Sound is best-effort; never break the timer UI.
+        }
     }
 
     private void OnLoaded(object sender, RoutedEventArgs e)
@@ -86,13 +140,14 @@ public sealed partial class PomodoroWidgetView : UserControl
 
     private void OnUnloaded(object sender, RoutedEventArgs e)
     {
-        if (_timer is null)
+        if (_timer is not null)
         {
-            return;
+            _timer.Stop();
+            _timer.Tick -= Timer_Tick;
         }
 
-        _timer.Stop();
-        _timer.Tick -= Timer_Tick;
+        _mediaPlayer?.Dispose();
+        _mediaPlayer = null;
     }
 
     private void Timer_Tick(object? sender, object e) => Refresh();
@@ -104,10 +159,16 @@ public sealed partial class PomodoroWidgetView : UserControl
             return;
         }
 
+        ApplyDurationsToStore();
         var session = _base.Focus.Current;
         if (!session.IsRunning)
         {
-            _base.Focus.Start(_base.Now);
+            _base.Focus.Start(
+                _base.Now,
+                TimeSpan.FromMinutes(_configuration.FocusMinutes),
+                label: "Pomodoro",
+                shortBreak: TimeSpan.FromMinutes(_configuration.ShortBreakMinutes),
+                longBreak: TimeSpan.FromMinutes(_configuration.LongBreakMinutes));
         }
         else if (session.IsPaused)
         {
@@ -139,6 +200,54 @@ public sealed partial class PomodoroWidgetView : UserControl
     private void StopButton_Click(object sender, RoutedEventArgs e)
     {
         _base?.Focus.Stop();
+        ApplyDurationsToStore();
         Refresh();
+    }
+
+    private void DurationBox_ValueChanged(NumberBox sender, NumberBoxValueChangedEventArgs args)
+    {
+        if (_suppressDurationEvents || _base is null)
+        {
+            return;
+        }
+
+        if (double.IsNaN(FocusMinutesBox.Value) || double.IsNaN(BreakMinutesBox.Value))
+        {
+            return;
+        }
+
+        _configuration.FocusMinutes = (int)Math.Clamp(FocusMinutesBox.Value, 1, 120);
+        _configuration.ShortBreakMinutes = (int)Math.Clamp(BreakMinutesBox.Value, 1, 60);
+        ApplyDurationsToStore();
+        _persist?.Invoke(_configuration);
+        Refresh();
+    }
+
+    private void SoundCheckBox_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_suppressDurationEvents)
+        {
+            return;
+        }
+
+        _configuration.SoundOnComplete = SoundCheckBox.IsChecked == true;
+        _persist?.Invoke(_configuration);
+    }
+
+    private void ApplyConfigurationToUi()
+    {
+        _suppressDurationEvents = true;
+        FocusMinutesBox.Value = _configuration.FocusMinutes;
+        BreakMinutesBox.Value = _configuration.ShortBreakMinutes;
+        SoundCheckBox.IsChecked = _configuration.SoundOnComplete;
+        _suppressDurationEvents = false;
+    }
+
+    private void ApplyDurationsToStore()
+    {
+        _base?.Focus.ConfigureDurations(
+            TimeSpan.FromMinutes(_configuration.FocusMinutes),
+            TimeSpan.FromMinutes(_configuration.ShortBreakMinutes),
+            TimeSpan.FromMinutes(_configuration.LongBreakMinutes));
     }
 }

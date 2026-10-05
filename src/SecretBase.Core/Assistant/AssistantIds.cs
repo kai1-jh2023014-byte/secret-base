@@ -75,6 +75,8 @@ public static class AssistantUserMessages
     public const string RateLimitReached = "AI provider rate limit reached.";
     public const string ToolUnavailable = "This action is currently unavailable.";
     public const string CalendarFailed = "Could not load Calendar.";
+    public const string GoogleCalendarNotConnected =
+        "Google Calendar is not connected. Open the Calendar widget and connect Google, then try again.";
     public const string ProjectsFailed = "Could not load Projects.";
     public const string AppsFailed = "Could not load Apps.";
     public const string MusicFailed = "Could not load Music.";

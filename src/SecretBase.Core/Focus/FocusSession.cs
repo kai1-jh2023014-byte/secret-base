@@ -132,10 +132,69 @@ public sealed class FocusSessionStore
     }
 
     /// <summary>
+    /// Updates preferred focus / break lengths. When idle, also updates the displayed duration.
+    /// When running, future phases pick up the new break/focus lengths.
+    /// </summary>
+    public FocusSession ConfigureDurations(
+        TimeSpan? focus = null,
+        TimeSpan? shortBreak = null,
+        TimeSpan? longBreak = null)
+    {
+        lock (_gate)
+        {
+            var focusDuration = ClampMinutes(focus ?? _current.FocusDuration, 1, 120);
+            var shortBreakDuration = ClampMinutes(
+                shortBreak ?? _current.ShortBreakDuration,
+                1,
+                60);
+            var longBreakDuration = ClampMinutes(
+                longBreak ?? _current.LongBreakDuration,
+                1,
+                60);
+
+            if (_current.IsRunning)
+            {
+                _current = new FocusSession
+                {
+                    IsRunning = _current.IsRunning,
+                    IsPaused = _current.IsPaused,
+                    Label = _current.Label,
+                    Phase = _current.Phase,
+                    Round = _current.Round,
+                    CompletedFocusRounds = _current.CompletedFocusRounds,
+                    StartedAt = _current.StartedAt,
+                    Duration = _current.Duration,
+                    RemainingAtPause = _current.RemainingAtPause,
+                    FocusDuration = focusDuration,
+                    ShortBreakDuration = shortBreakDuration,
+                    LongBreakDuration = longBreakDuration,
+                    RoundsBeforeLongBreak = _current.RoundsBeforeLongBreak
+                };
+                return _current;
+            }
+
+            _current = new FocusSession
+            {
+                Duration = focusDuration,
+                FocusDuration = focusDuration,
+                ShortBreakDuration = shortBreakDuration,
+                LongBreakDuration = longBreakDuration,
+                RoundsBeforeLongBreak = FocusSession.DefaultRoundsBeforeLongBreak
+            };
+            return _current;
+        }
+    }
+
+    /// <summary>
     /// Starts a Pomodoro focus phase. If a session is already running, returns it
     /// without stacking. If paused, resumes instead of restarting.
     /// </summary>
-    public FocusStartResult Start(DateTimeOffset now, TimeSpan? duration = null, string? label = null)
+    public FocusStartResult Start(
+        DateTimeOffset now,
+        TimeSpan? duration = null,
+        string? label = null,
+        TimeSpan? shortBreak = null,
+        TimeSpan? longBreak = null)
     {
         lock (_gate)
         {
@@ -150,11 +209,18 @@ public sealed class FocusSessionStore
                 return new FocusStartResult { Session = _current, AlreadyRunning = true };
             }
 
-            var focusDuration = duration ?? TimeSpan.FromMinutes(FocusSession.DefaultFocusMinutes);
-            if (focusDuration < TimeSpan.FromMinutes(1))
-            {
-                focusDuration = TimeSpan.FromMinutes(1);
-            }
+            var focusDuration = ClampMinutes(
+                duration ?? _current.FocusDuration,
+                1,
+                120);
+            var shortBreakDuration = ClampMinutes(
+                shortBreak ?? _current.ShortBreakDuration,
+                1,
+                60);
+            var longBreakDuration = ClampMinutes(
+                longBreak ?? _current.LongBreakDuration,
+                1,
+                60);
 
             _current = new FocusSession
             {
@@ -165,12 +231,19 @@ public sealed class FocusSessionStore
                 StartedAt = now,
                 Duration = focusDuration,
                 FocusDuration = focusDuration,
-                ShortBreakDuration = TimeSpan.FromMinutes(FocusSession.DefaultShortBreakMinutes),
-                LongBreakDuration = TimeSpan.FromMinutes(FocusSession.DefaultLongBreakMinutes),
+                ShortBreakDuration = shortBreakDuration,
+                LongBreakDuration = longBreakDuration,
                 RoundsBeforeLongBreak = FocusSession.DefaultRoundsBeforeLongBreak
             };
             return new FocusStartResult { Session = _current };
         }
+    }
+
+    private static TimeSpan ClampMinutes(TimeSpan value, int minMinutes, int maxMinutes)
+    {
+        var minutes = (int)Math.Round(value.TotalMinutes);
+        minutes = Math.Clamp(minutes, minMinutes, maxMinutes);
+        return TimeSpan.FromMinutes(minutes);
     }
 
     public FocusSession Pause(DateTimeOffset now)
