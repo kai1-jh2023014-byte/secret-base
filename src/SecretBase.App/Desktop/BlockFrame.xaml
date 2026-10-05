@@ -72,24 +72,28 @@
                     <Button
                         x:Name="ArrangeButton"
                         Grid.Column="1"
-                        Content="Grid"
-                        Padding="6,1"
-                        MinWidth="34"
-                        MinHeight="22"
-                        FontSize="11"
-                        Margin="0,0,4,0"
+                        Width="28"
+                        Height="28"
+                        Padding="0"
+                        MinWidth="28"
+                        MinHeight="28"
+                        Margin="0,0,2,0"
                         Click="ArrangeButton_Click"
-                        ToolTipService.ToolTip="Arrange icons evenly" />
+                        ToolTipService.ToolTip="Arrange icons evenly">
+                        <SymbolIcon Symbol="ViewAll" />
+                    </Button>
                     <Button
                         x:Name="DeleteButton"
                         Grid.Column="2"
-                        Content="Del"
-                        Padding="6,1"
+                        Width="28"
+                        Height="28"
+                        Padding="0"
                         MinWidth="28"
-                        MinHeight="22"
-                        FontSize="11"
+                        MinHeight="28"
                         Click="DeleteButton_Click"
-                        ToolTipService.ToolTip="Delete Block" />
+                        ToolTipService.ToolTip="Delete Block">
+                        <SymbolIcon Symbol="Delete" />
+                    </Button>
                 </Grid>
 
                 <Canvas
@@ -103,7 +107,7 @@
                 <TextBlock
                     x:Name="EmptyHint"
                     Grid.Row="1"
-                    Text="Drop Desktop shortcuts here (moved in). Use Grid to arrange."
+                    Text="Drop Desktop shortcuts here (moved in). Use Arrange to tidy icons."
                     FontSize="12"
                     Opacity="0.65"
                     HorizontalAlignment="Center"

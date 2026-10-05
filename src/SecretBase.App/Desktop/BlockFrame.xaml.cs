@@ -99,22 +99,33 @@ public sealed partial class BlockFrame : UserControl
     {
         StyleButton = new Button
         {
-            Content = "Style",
-            Padding = new Thickness(6, 1, 6, 1),
-            MinWidth = 40,
-            MinHeight = 22,
-            FontSize = 11,
-            Margin = new Thickness(0, 0, 4, 0)
+            Content = new SymbolIcon { Symbol = Symbol.Pictures },
+            Width = 28,
+            Height = 28,
+            Padding = new Thickness(0),
+            MinWidth = 28,
+            MinHeight = 28,
+            Margin = new Thickness(0, 0, 2, 0)
         };
         StyleButton.Click += StyleButton_Click;
         ToolTipService.SetToolTip(StyleButton, "Icon style: white silhouette / fashion rail");
 
-        // Name | Style | Arrange | Del
+        // Name | Style | Arrange | Del — white silhouette icons (match control strip).
         HeaderRow.ColumnDefinitions.Insert(1, new ColumnDefinition { Width = GridLength.Auto });
         Grid.SetColumn(ArrangeButton, 2);
         Grid.SetColumn(DeleteButton, 3);
         Grid.SetColumn(StyleButton, 1);
         HeaderRow.Children.Insert(1, StyleButton);
+    }
+
+    private static void TintHeaderIcon(Button button, ThemeDefinition theme, double opacity = 0.92)
+    {
+        var brush = ThemePainter.Brush(theme.WidgetForeground, opacity);
+        button.Foreground = brush;
+        if (button.Content is SymbolIcon symbol)
+        {
+            symbol.Foreground = brush;
+        }
     }
 
     /// <summary>White silhouette / fashion rail — clear until hover glass.</summary>
@@ -136,14 +147,29 @@ public sealed partial class BlockFrame : UserControl
         NameText.Opacity = rail ? 0.45 : 0.9;
         EmptyHint.Foreground = ThemePainter.Brush(theme.ForegroundMuted);
         EmptyHint.FontFamily = new FontFamily(theme.FontFamily);
-        WidgetSurfaceStyle.ApplyGhostButton(DeleteButton, theme);
-        WidgetSurfaceStyle.ApplyGhostButton(ArrangeButton, theme);
-        WidgetSurfaceStyle.ApplyGhostButton(StyleButton, theme);
-        DeleteButton.Opacity = 0.75;
-        ArrangeButton.Opacity = 0.75;
-        StyleButton.Opacity = 0.75;
-        StyleButton.Content = BlockIconStyle.IsSilhouette(_block.IconStyle) ? "White" : "Style";
-        ArrangeButton.Content = rail ? "Rail" : "Grid";
+        WidgetSurfaceStyle.ApplyIconButton(DeleteButton, theme);
+        WidgetSurfaceStyle.ApplyIconButton(ArrangeButton, theme);
+        WidgetSurfaceStyle.ApplyIconButton(StyleButton, theme);
+        StyleButton.Content = new SymbolIcon
+        {
+            Symbol = BlockIconStyle.IsSilhouette(_block.IconStyle) ? Symbol.OutlineStar : Symbol.Pictures
+        };
+        ArrangeButton.Content = new SymbolIcon
+        {
+            Symbol = rail ? Symbol.List : Symbol.ViewAll
+        };
+        DeleteButton.Content = new SymbolIcon { Symbol = Symbol.Delete };
+        TintHeaderIcon(StyleButton, theme, 0.9);
+        TintHeaderIcon(ArrangeButton, theme, 0.9);
+        TintHeaderIcon(DeleteButton, theme, 0.9);
+        ToolTipService.SetToolTip(
+            StyleButton,
+            BlockIconStyle.IsSilhouette(_block.IconStyle)
+                ? "White silhouette icons — change style / layout"
+                : "Color icons — change style / layout");
+        ToolTipService.SetToolTip(
+            ArrangeButton,
+            rail ? "Fashion rail — arrange icons" : "Grid layout — arrange icons evenly");
         ResizeHandle.Background = ThemePainter.Brush(theme.Border, rail ? 0.2 : 0.35);
 
         var grip = ThemePainter.ParseColor(theme.WidgetForeground);
@@ -315,6 +341,10 @@ public sealed partial class BlockFrame : UserControl
         var openItem = new MenuFlyoutItem { Text = "Open" };
         openItem.Click += (_, _) => LaunchItem(item);
         menu.Items.Add(openItem);
+
+        var renameItem = new MenuFlyoutItem { Text = "Rename…" };
+        renameItem.Click += async (_, _) => await RenameItemAsync(item);
+        menu.Items.Add(renameItem);
 
         if (_customIcons is not null)
         {
@@ -521,6 +551,57 @@ public sealed partial class BlockFrame : UserControl
         {
             _onStatus?.Invoke(result.ErrorMessage ?? "Launch failed.");
         }
+    }
+
+    private async Task RenameItemAsync(BlockItem item)
+    {
+        var box = new TextBox
+        {
+            Header = "App name",
+            Text = item.Name,
+            PlaceholderText = "Display name",
+            MaxLength = 80,
+            MinWidth = 280
+        };
+
+        var dialog = new ContentDialog
+        {
+            Title = "Rename",
+            Content = box,
+            PrimaryButtonText = "Save",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = XamlRoot
+        };
+
+        ContentDialogResult result;
+        using (_dialogInput?.Enter())
+        {
+            result = await dialog.ShowAsync();
+        }
+
+        if (result != ContentDialogResult.Primary)
+        {
+            return;
+        }
+
+        var next = (box.Text ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(next))
+        {
+            _onStatus?.Invoke("Name cannot be empty.");
+            return;
+        }
+
+        if (string.Equals(item.Name, next, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        item.Name = next;
+        RefreshItems(arrangeIfNeeded: false);
+        _onLayoutCommitted();
+        _onBoundsChanged?.Invoke();
+        _onStatus?.Invoke($"Renamed to '{item.Name}'.");
     }
 
     private void RestoreItemToDesktop(BlockItem item)
