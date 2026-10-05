@@ -336,27 +336,21 @@ public sealed partial class TaskbarAiChatBar : UserControl
             parentWidth = XamlRoot.Size.Width;
         }
 
-        // Match prior full-width look: stretch from left margin (~280) to right margin (~20).
+        // Centered shelf: idle is ~half width; selection expands outward from the center.
         var fullWidth = parentWidth > 0
             ? Math.Max(320, parentWidth - Margin.Left - Margin.Right)
             : 720;
         var idleWidth = Math.Max(280, fullWidth * IdleWidthFraction);
+        var expanded = _shelfSelected
+            || _resultsVisible
+            || _busy
+            || ConfirmPanel.Visibility == Visibility.Visible;
+        var targetWidth = expanded ? fullWidth : idleWidth;
 
-        if (_shelfSelected || _resultsVisible || _busy || ConfirmPanel.Visibility == Visibility.Visible)
-        {
-            HorizontalAlignment = HorizontalAlignment.Stretch;
-            Width = double.NaN;
-            MaxWidth = double.PositiveInfinity;
-            MinWidth = Math.Min(480, fullWidth);
-        }
-        else
-        {
-            // Idle: about half the usual length, anchored to the right above the taskbar.
-            HorizontalAlignment = HorizontalAlignment.Right;
-            Width = idleWidth;
-            MaxWidth = idleWidth;
-            MinWidth = Math.Min(280, idleWidth);
-        }
+        HorizontalAlignment = HorizontalAlignment.Center;
+        Width = targetWidth;
+        MaxWidth = targetWidth;
+        MinWidth = Math.Min(280, targetWidth);
     }
 
     public event Action? LayoutChanged;

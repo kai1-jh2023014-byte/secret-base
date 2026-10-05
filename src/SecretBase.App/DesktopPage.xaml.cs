@@ -131,9 +131,10 @@ public sealed partial class DesktopPage : Page
         // WinRT.IInspectable to TextBlock while connecting the page and abort startup.
         TaskbarAiChat = new TaskbarAiChatBar
         {
-            HorizontalAlignment = HorizontalAlignment.Right,
+            HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Bottom,
-            Margin = new Thickness(280, 0, 20, 12)
+            // Leave room for the left control strip; keep side margins equal so the shelf stays centered.
+            Margin = new Thickness(200, 0, 200, 12)
         };
         var canvasIndex = RootGrid.Children.IndexOf(WidgetCanvas);
         RootGrid.Children.Insert(canvasIndex < 0 ? 0 : canvasIndex + 1, TaskbarAiChat);
