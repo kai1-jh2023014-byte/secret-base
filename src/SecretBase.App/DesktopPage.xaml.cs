@@ -131,7 +131,7 @@ public sealed partial class DesktopPage : Page
         // WinRT.IInspectable to TextBlock while connecting the page and abort startup.
         TaskbarAiChat = new TaskbarAiChatBar
         {
-            HorizontalAlignment = HorizontalAlignment.Stretch,
+            HorizontalAlignment = HorizontalAlignment.Right,
             VerticalAlignment = VerticalAlignment.Bottom,
             Margin = new Thickness(280, 0, 20, 12)
         };
@@ -140,6 +140,7 @@ public sealed partial class DesktopPage : Page
         Unloaded += OnUnloaded;
         SizeChanged += (_, _) =>
         {
+            TaskbarAiChat.RefreshShelfWidth();
             if (_modalInputDepth > 0)
             {
                 AllowFullWindowInput();
@@ -292,7 +293,8 @@ public sealed partial class DesktopPage : Page
 
         _theme = _themeStore.LoadOrCreateDefault();
         _layout = _layoutStore.LoadOrCreateDefault(RoomId.DefaultRoomId);
-        EnsureSeedTextWidget(_layout);
+        // Do not re-seed Text on every launch — CreateDefault already includes it once.
+        // Re-adding here made deleted Text widgets come back every startup.
 
         ApplyDesktopTheme(_theme);
         StyleFabButtons(_theme);
@@ -977,18 +979,14 @@ public sealed partial class DesktopPage : Page
                 integrations: _integrationMemory,
                 dialogInput: _dialogInput,
                 systemNowPlaying: _systemNowPlaying ??= new WindowsSystemNowPlayingSource(),
-                onPreferredSizeChanged: (w, h) => ApplyWidgetPreferredSize(instance.Id, w, h));
+                onCompactModeChanged: compact => ApplyMusicCompactSize(instance, config, compact));
             if (_theme is not null)
             {
                 view.ApplyTheme(_theme);
             }
 
-            // Restore compact geometry when layout already saved IsCompact.
-            if (config.IsCompact)
-            {
-                instance.Size.Width = MusicWidgetView.CompactWidth;
-                instance.Size.Height = MusicWidgetView.CompactHeight;
-            }
+            // Keep Music geometry stable across re-renders (add widget / theme apply).
+            ApplyMusicGeometryToInstance(instance, config);
 
             return view;
         }
@@ -1175,6 +1173,52 @@ public sealed partial class DesktopPage : Page
             SyncInteractiveInputRegions();
             return;
         }
+    }
+
+    private static void ApplyMusicGeometryToInstance(WidgetInstance instance, MusicWidgetConfiguration config)
+    {
+        if (config.IsCompact)
+        {
+            // Remember expanded size before clamping to compact, if we still look expanded.
+            if (instance.Size.Height > MusicWidgetView.CompactHeight + 8)
+            {
+                config.ExpandedWidth = instance.Size.Width;
+                config.ExpandedHeight = instance.Size.Height;
+                instance.Configuration = config.ToDictionary();
+            }
+
+            instance.Size.Width = MusicWidgetView.CompactWidth;
+            instance.Size.Height = MusicWidgetView.CompactHeight;
+            return;
+        }
+
+        // Expanded: restore last custom size when the frame still has compact leftovers.
+        var expandedW = config.ExpandedWidth ?? MusicWidgetView.ExpandedWidth;
+        var expandedH = config.ExpandedHeight ?? MusicWidgetView.ExpandedHeight;
+        if (Math.Abs(instance.Size.Height - MusicWidgetView.CompactHeight) < 1
+            || instance.Size.Height < MusicWidgetView.CompactHeight + 8)
+        {
+            instance.Size.Width = expandedW;
+            instance.Size.Height = expandedH;
+        }
+    }
+
+    private void ApplyMusicCompactSize(WidgetInstance instance, MusicWidgetConfiguration config, bool compact)
+    {
+        config.IsCompact = compact;
+        if (compact)
+        {
+            config.ExpandedWidth = instance.Size.Width;
+            config.ExpandedHeight = instance.Size.Height;
+            instance.Configuration = config.ToDictionary();
+            ApplyWidgetPreferredSize(instance.Id, MusicWidgetView.CompactWidth, MusicWidgetView.CompactHeight);
+            return;
+        }
+
+        var width = config.ExpandedWidth ?? MusicWidgetView.ExpandedWidth;
+        var height = config.ExpandedHeight ?? MusicWidgetView.ExpandedHeight;
+        instance.Configuration = config.ToDictionary();
+        ApplyWidgetPreferredSize(instance.Id, width, height);
     }
 
     private string? TryLaunchCreativeItem(CreativeItem item)
@@ -1374,25 +1418,6 @@ public sealed partial class DesktopPage : Page
         {
             _logger?.Warn("calendar", $"OAuth browser launch failed: {ex.Message}");
             return false;
-        }
-    }
-
-    private void EnsureSeedTextWidget(DesktopLayout layout)
-    {
-        if (layout.Widgets.Any(w => string.Equals(w.Type, WidgetTypes.Text, StringComparison.Ordinal)))
-        {
-            return;
-        }
-
-        layout.Widgets.Add(DefaultWidgetFactory.CreateDefaultText(layout.RoomId));
-        try
-        {
-            _layoutStore?.Save(layout);
-            _logger?.Info("widget", "Seeded default Text widget.");
-        }
-        catch (Exception ex)
-        {
-            _logger?.Error("persistence", "Failed to save layout after seeding Text widget.", ex);
         }
     }
 

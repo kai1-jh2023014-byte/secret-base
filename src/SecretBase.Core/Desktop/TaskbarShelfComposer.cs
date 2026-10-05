@@ -28,8 +28,9 @@ public static class TaskbarShelfComposer
         openTodos ??= [];
         events ??= [];
 
-        var clock = now.ToString("HH:mm", CultureInfo.InvariantCulture);
-        var date = now.ToString("ddd d MMM", CultureInfo.InvariantCulture);
+        var english = CultureInfo.GetCultureInfo("en-US");
+        var clock = now.ToString("HH:mm", english);
+        var date = now.ToString("ddd d MMM", english);
         var focusLine = focus is { IsRunning: true }
             ? focus.StatusLine(now)
             : "Focus idle";

@@ -30,7 +30,7 @@ public sealed partial class MusicWidgetView : UserControl
     private MusicService _musicService = new();
     private MusicCommandService _commands = null!;
     private Action<MusicWidgetConfiguration>? _onConfigurationChanged;
-    private Action<double, double>? _onPreferredSizeChanged;
+    private Action<bool>? _onCompactModeChanged;
     private Func<string, bool>? _openUrl;
     private ThemeDefinition? _theme;
     private readonly List<MusicTrack> _lastResults = [];
@@ -60,11 +60,11 @@ public sealed partial class MusicWidgetView : UserControl
         IIntegrationMemory? integrations = null,
         OverlayDialogInput? dialogInput = null,
         ISystemNowPlayingSource? systemNowPlaying = null,
-        Action<double, double>? onPreferredSizeChanged = null)
+        Action<bool>? onCompactModeChanged = null)
     {
         _configuration = configuration;
         _onConfigurationChanged = onConfigurationChanged;
-        _onPreferredSizeChanged = onPreferredSizeChanged;
+        _onCompactModeChanged = onCompactModeChanged;
         _openUrl = openUrl;
         _integrations = integrations;
         _dialogInput = dialogInput;
@@ -422,31 +422,24 @@ public sealed partial class MusicWidgetView : UserControl
     {
         _configuration.IsCompact = !_configuration.IsCompact;
         Persist();
-        ApplyCompactLayout(persistSize: true);
+        ApplyCompactLayout(notifySize: true);
         if (_theme is not null)
         {
             WidgetSurfaceStyle.PulseScale(RootBorder);
         }
     }
 
-    private void ApplyCompactLayout(bool persistSize)
+    private void ApplyCompactLayout(bool persistSize = false, bool notifySize = false)
     {
+        // persistSize kept for call-site compatibility (theme apply); size changes only on toggle.
+        _ = persistSize;
         var compact = _configuration.IsCompact;
         CompactPanel.Visibility = compact ? Visibility.Visible : Visibility.Collapsed;
         FullPanel.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
         RootBorder.Padding = compact ? new Thickness(10, 8, 10, 8) : new Thickness(14, 12, 14, 12);
-        if (!persistSize)
+        if (notifySize)
         {
-            return;
-        }
-
-        if (compact)
-        {
-            _onPreferredSizeChanged?.Invoke(CompactWidth, CompactHeight);
-        }
-        else
-        {
-            _onPreferredSizeChanged?.Invoke(ExpandedWidth, ExpandedHeight);
+            _onCompactModeChanged?.Invoke(compact);
         }
     }
 

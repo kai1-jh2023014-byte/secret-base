@@ -157,8 +157,8 @@ public sealed partial class ClockWidgetView : UserControl, IDisposable
             _ => 44 * scale
         };
         TimeText.FontWeight = isLarge || style == ClockWidgetConfiguration.StyleMinimal
-            ? Microsoft.UI.Text.FontWeights.Light
-            : Microsoft.UI.Text.FontWeights.SemiLight;
+            ? Microsoft.UI.Text.FontWeights.SemiBold
+            : Microsoft.UI.Text.FontWeights.Medium;
         TimeText.CharacterSpacing = isLarge ? 40 : style == ClockWidgetConfiguration.StyleMinimal ? 120 : 80;
         TimeText.HorizontalAlignment = style is ClockWidgetConfiguration.StyleMinimal
             ? HorizontalAlignment.Center

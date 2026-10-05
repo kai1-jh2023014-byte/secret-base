@@ -427,6 +427,8 @@ public class MusicWidgetConfigurationTests
         {
             ActiveSourceId = "spotify-default",
             IsCompact = true,
+            ExpandedWidth = 400,
+            ExpandedHeight = 480,
             Sources =
             [
                 new MusicSource
@@ -451,10 +453,30 @@ public class MusicWidgetConfigurationTests
         var restored = MusicWidgetConfiguration.FromDictionary(original.ToDictionary());
         Assert.Equal("spotify-default", restored.ActiveSourceId);
         Assert.True(restored.IsCompact);
+        Assert.Equal(400, restored.ExpandedWidth);
+        Assert.Equal(480, restored.ExpandedHeight);
         Assert.Equal(2, restored.Sources.Count);
         Assert.Equal("Spotify", restored.Sources[0].Name);
         Assert.Equal(MusicSourceType.Spotify, restored.Sources[0].Type);
         Assert.Equal("https://open.spotify.com/", restored.Sources[0].Url);
+    }
+
+    [Fact]
+    public void FromDictionary_EmptySources_KeepsCompactAndExpandedSize()
+    {
+        var bag = new Dictionary<string, System.Text.Json.JsonElement>
+        {
+            ["IsCompact"] = System.Text.Json.JsonSerializer.SerializeToElement(true),
+            ["ExpandedWidth"] = System.Text.Json.JsonSerializer.SerializeToElement(390.0),
+            ["ExpandedHeight"] = System.Text.Json.JsonSerializer.SerializeToElement(410.0),
+            ["Sources"] = System.Text.Json.JsonSerializer.SerializeToElement(Array.Empty<object>())
+        };
+
+        var restored = MusicWidgetConfiguration.FromDictionary(bag);
+        Assert.True(restored.IsCompact);
+        Assert.Equal(390, restored.ExpandedWidth);
+        Assert.Equal(410, restored.ExpandedHeight);
+        Assert.Equal(3, restored.Sources.Count);
     }
 
     [Fact]

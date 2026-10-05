@@ -1,7 +1,9 @@
+using System.Globalization;
 using SecretBase.Core.Desktop;
 using SecretBase.Core.Time;
 using SecretBase.Core.Widgets;
 using SecretBase.Core.Widgets.Clock;
+using SecretBase.Core.Widgets.Music;
 using SecretBase.Core.Widgets.Text;
 
 namespace SecretBase.Core.Tests;
@@ -45,6 +47,30 @@ public class ClockDisplayFormatterTests
         var (time, date) = ClockDisplayFormatter.Format(provider, config);
         Assert.Equal("22:32", time);
         Assert.Equal("Tuesday, September 01", date);
+    }
+
+    [Fact]
+    public void FormatDate_AlwaysUsesEnglishRegardlessOfThreadCulture()
+    {
+        var previous = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("ja-JP");
+            var provider = new FixedTimeProvider(new DateTimeOffset(2026, 9, 1, 22, 32, 0, TimeSpan.FromHours(9)));
+            var config = new ClockWidgetConfiguration
+            {
+                DisplayStyle = ClockWidgetConfiguration.StyleLarge,
+                ShowDate = true
+            };
+
+            var date = ClockDisplayFormatter.FormatDate(provider.GetLocalNow(), config);
+            Assert.Equal("Tuesday, September 01", date);
+            Assert.DoesNotContain("火曜日", date, StringComparison.Ordinal);
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = previous;
+        }
     }
 
     [Fact]

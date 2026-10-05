@@ -24,6 +24,12 @@ public sealed class MusicWidgetConfiguration
     /// <summary>Compact floating face (art + title + transport) vs full search surface.</summary>
     public bool IsCompact { get; set; }
 
+    /// <summary>Last expanded frame width so compact toggles do not wipe a custom size.</summary>
+    public double? ExpandedWidth { get; set; }
+
+    /// <summary>Last expanded frame height so compact toggles do not wipe a custom size.</summary>
+    public double? ExpandedHeight { get; set; }
+
     public static MusicWidgetConfiguration CreateDefault()
     {
         var config = new MusicWidgetConfiguration
@@ -83,6 +89,22 @@ public sealed class MusicWidgetConfiguration
             result.IsCompact = compact.GetBoolean();
         }
 
+        if (configuration.TryGetValue(nameof(ExpandedWidth), out var ew)
+            && ew.ValueKind == JsonValueKind.Number
+            && ew.TryGetDouble(out var expandedW)
+            && expandedW >= 120)
+        {
+            result.ExpandedWidth = expandedW;
+        }
+
+        if (configuration.TryGetValue(nameof(ExpandedHeight), out var eh)
+            && eh.ValueKind == JsonValueKind.Number
+            && eh.TryGetDouble(out var expandedH)
+            && expandedH >= 80)
+        {
+            result.ExpandedHeight = expandedH;
+        }
+
         if (configuration.TryGetValue(nameof(Sources), out var sources)
             && sources.ValueKind == JsonValueKind.Array)
         {
@@ -97,7 +119,14 @@ public sealed class MusicWidgetConfiguration
 
         if (result.Sources.Count == 0)
         {
-            return CreateDefault();
+            // Keep compact / size prefs when sources fall back to defaults.
+            var defaults = CreateDefault();
+            defaults.IsCompact = result.IsCompact;
+            defaults.CurrentTrack = result.CurrentTrack;
+            defaults.ActiveSourceId = result.ActiveSourceId;
+            defaults.ExpandedWidth = result.ExpandedWidth;
+            defaults.ExpandedHeight = result.ExpandedHeight;
+            return defaults;
         }
 
         return result;
@@ -119,6 +148,16 @@ public sealed class MusicWidgetConfiguration
             [nameof(Sources)] = JsonSerializer.SerializeToElement(
                 cleaned.Select(SerializeSource).ToList())
         };
+
+        if (ExpandedWidth is > 0)
+        {
+            bag[nameof(ExpandedWidth)] = JsonSerializer.SerializeToElement(ExpandedWidth.Value);
+        }
+
+        if (ExpandedHeight is > 0)
+        {
+            bag[nameof(ExpandedHeight)] = JsonSerializer.SerializeToElement(ExpandedHeight.Value);
+        }
 
         if (CurrentTrack is not null && !string.IsNullOrWhiteSpace(CurrentTrack.Title))
         {

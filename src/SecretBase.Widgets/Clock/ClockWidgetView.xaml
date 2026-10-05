@@ -58,7 +58,7 @@
                             x:Name="TimeText"
                             Text="00:00"
                             FontSize="44"
-                            FontWeight="SemiLight"
+                            FontWeight="SemiBold"
                             CharacterSpacing="80"
                             Foreground="#FFF3EFE6"
                             HorizontalAlignment="Left"

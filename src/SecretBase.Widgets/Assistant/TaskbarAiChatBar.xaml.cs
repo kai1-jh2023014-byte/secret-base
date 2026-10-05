@@ -41,11 +41,24 @@ public sealed partial class TaskbarAiChatBar : UserControl
     private TextBlock FocusText = null!;
     private TextBlock NextText = null!;
     private bool _resultsVisible;
+    private bool _shelfSelected;
+    private Grid _root = null!;
+
+    /// <summary>Full shelf width while focused/selected; ~half when idle.</summary>
+    public const double IdleWidthFraction = 0.5;
 
     public TaskbarAiChatBar()
     {
         InitializeComponent();
         Content = BuildInterface();
+        Loaded += (_, _) => ApplyShelfWidth();
+        SizeChanged += (_, _) =>
+        {
+            if (Parent is FrameworkElement)
+            {
+                ApplyShelfWidth();
+            }
+        };
     }
 
     private Grid BuildInterface()
@@ -54,7 +67,7 @@ public sealed partial class TaskbarAiChatBar : UserControl
         {
             Text = "--:--",
             FontSize = 22,
-            FontWeight = Microsoft.UI.Text.FontWeights.Light,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
             CharacterSpacing = 40
         };
         DateText = new TextBlock
@@ -265,19 +278,85 @@ public sealed partial class TaskbarAiChatBar : UserControl
         };
         ResultsShell.SizeChanged += (_, _) => NotifyLayoutChanged();
 
-        var root = new Grid
+        _root = new Grid
         {
             HorizontalAlignment = HorizontalAlignment.Stretch,
-            MinWidth = 480,
+            MinWidth = 240,
             RowSpacing = 6
         };
-        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        _root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        _root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         Grid.SetRow(ResultsShell, 0);
         Grid.SetRow(Pill, 1);
-        root.Children.Add(ResultsShell);
-        root.Children.Add(Pill);
-        return root;
+        _root.Children.Add(ResultsShell);
+        _root.Children.Add(Pill);
+
+        Pill.PointerPressed += (_, _) => SetShelfSelected(true);
+        InputBox.GotFocus += (_, _) => SetShelfSelected(true);
+        InputBox.LostFocus += (_, _) =>
+        {
+            // Keep full width while chat results / confirm are open.
+            if (!_resultsVisible && ConfirmPanel.Visibility != Visibility.Visible && !_busy)
+            {
+                SetShelfSelected(false);
+            }
+        };
+        return _root;
+    }
+
+    private void SetShelfSelected(bool selected)
+    {
+        if (_shelfSelected == selected)
+        {
+            if (selected)
+            {
+                ApplyShelfWidth();
+            }
+
+            return;
+        }
+
+        _shelfSelected = selected;
+        ApplyShelfWidth();
+        NotifyLayoutChanged();
+    }
+
+    /// <summary>Recompute idle/full shelf width after the host window size changes.</summary>
+    public void RefreshShelfWidth() => ApplyShelfWidth();
+
+    private void ApplyShelfWidth()
+    {
+        var parentWidth = 0.0;
+        if (Parent is FrameworkElement parent && parent.ActualWidth > 0)
+        {
+            parentWidth = parent.ActualWidth;
+        }
+        else if (XamlRoot is not null)
+        {
+            parentWidth = XamlRoot.Size.Width;
+        }
+
+        // Match prior full-width look: stretch from left margin (~280) to right margin (~20).
+        var fullWidth = parentWidth > 0
+            ? Math.Max(320, parentWidth - Margin.Left - Margin.Right)
+            : 720;
+        var idleWidth = Math.Max(280, fullWidth * IdleWidthFraction);
+
+        if (_shelfSelected || _resultsVisible || _busy || ConfirmPanel.Visibility == Visibility.Visible)
+        {
+            HorizontalAlignment = HorizontalAlignment.Stretch;
+            Width = double.NaN;
+            MaxWidth = double.PositiveInfinity;
+            MinWidth = Math.Min(480, fullWidth);
+        }
+        else
+        {
+            // Idle: about half the usual length, anchored to the right above the taskbar.
+            HorizontalAlignment = HorizontalAlignment.Right;
+            Width = idleWidth;
+            MaxWidth = idleWidth;
+            MinWidth = Math.Min(280, idleWidth);
+        }
     }
 
     public event Action? LayoutChanged;
@@ -306,7 +385,7 @@ public sealed partial class TaskbarAiChatBar : UserControl
         ProviderText.FontSize = 9;
         WidgetSurfaceStyle.ApplyHeader(ClockText, DateText, theme);
         ClockText.FontSize = 22;
-        ClockText.FontWeight = Microsoft.UI.Text.FontWeights.Light;
+        ClockText.FontWeight = Microsoft.UI.Text.FontWeights.SemiBold;
         ClockText.CharacterSpacing = 40;
         DateText.FontSize = 10;
         DateText.CharacterSpacing = 20;
@@ -340,6 +419,7 @@ public sealed partial class TaskbarAiChatBar : UserControl
 
     public void FocusInput()
     {
+        SetShelfSelected(true);
         InputBox.Focus(FocusState.Programmatic);
         LayoutChanged?.Invoke();
     }
@@ -544,10 +624,19 @@ public sealed partial class TaskbarAiChatBar : UserControl
         if (ResultsShell.Visibility != next)
         {
             ResultsShell.Visibility = next;
-            NotifyLayoutChanged();
-            return;
         }
 
+        // Collapse shelf width after dismiss; expand while results are visible.
+        if (next == Visibility.Visible)
+        {
+            _shelfSelected = true;
+        }
+        else if (!_busy && InputBox.FocusState == FocusState.Unfocused)
+        {
+            _shelfSelected = false;
+        }
+
+        ApplyShelfWidth();
         NotifyLayoutChanged();
     }
 
