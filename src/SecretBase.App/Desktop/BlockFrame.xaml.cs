@@ -95,36 +95,61 @@ public sealed partial class BlockFrame : UserControl
 
     public Block Block => _block;
 
+    private const double HeaderIconButtonSize = 20;
+    private const double HeaderIconScale = 0.62;
+
     private void InsertStyleButton()
     {
         StyleButton = new Button
         {
-            Content = new SymbolIcon { Symbol = Symbol.Pictures },
-            Width = 28,
-            Height = 28,
-            Padding = new Thickness(0),
-            MinWidth = 28,
-            MinHeight = 28,
+            Content = CreateCompactHeaderIcon(Symbol.Pictures),
             Margin = new Thickness(0, 0, 2, 0)
         };
+        SizeHeaderIconButton(StyleButton);
         StyleButton.Click += StyleButton_Click;
         ToolTipService.SetToolTip(StyleButton, "Icon style: white silhouette / fashion rail");
 
-        // Name | Style | Arrange | Del — white silhouette icons (match control strip).
+        // Name | Style | Arrange | Del — compact white silhouette icons.
         HeaderRow.ColumnDefinitions.Insert(1, new ColumnDefinition { Width = GridLength.Auto });
         Grid.SetColumn(ArrangeButton, 2);
         Grid.SetColumn(DeleteButton, 3);
         Grid.SetColumn(StyleButton, 1);
         HeaderRow.Children.Insert(1, StyleButton);
+        SizeHeaderIconButton(ArrangeButton);
+        SizeHeaderIconButton(DeleteButton);
+    }
+
+    private static void SizeHeaderIconButton(Button button)
+    {
+        button.Width = HeaderIconButtonSize;
+        button.Height = HeaderIconButtonSize;
+        button.MinWidth = HeaderIconButtonSize;
+        button.MinHeight = HeaderIconButtonSize;
+        button.Padding = new Thickness(0);
+        button.CornerRadius = new CornerRadius(6);
+    }
+
+    private static SymbolIcon CreateCompactHeaderIcon(Symbol symbol)
+    {
+        return new SymbolIcon
+        {
+            Symbol = symbol,
+            RenderTransformOrigin = new Windows.Foundation.Point(0.5, 0.5),
+            RenderTransform = new ScaleTransform
+            {
+                ScaleX = HeaderIconScale,
+                ScaleY = HeaderIconScale
+            }
+        };
     }
 
     private static void TintHeaderIcon(Button button, ThemeDefinition theme, double opacity = 0.92)
     {
         var brush = ThemePainter.Brush(theme.WidgetForeground, opacity);
         button.Foreground = brush;
-        if (button.Content is SymbolIcon symbol)
+        if (button.Content is SymbolIcon icon)
         {
-            symbol.Foreground = brush;
+            icon.Foreground = brush;
         }
     }
 
@@ -150,15 +175,14 @@ public sealed partial class BlockFrame : UserControl
         WidgetSurfaceStyle.ApplyIconButton(DeleteButton, theme);
         WidgetSurfaceStyle.ApplyIconButton(ArrangeButton, theme);
         WidgetSurfaceStyle.ApplyIconButton(StyleButton, theme);
-        StyleButton.Content = new SymbolIcon
-        {
-            Symbol = BlockIconStyle.IsSilhouette(_block.IconStyle) ? Symbol.OutlineStar : Symbol.Pictures
-        };
-        ArrangeButton.Content = new SymbolIcon
-        {
-            Symbol = rail ? Symbol.List : Symbol.ViewAll
-        };
-        DeleteButton.Content = new SymbolIcon { Symbol = Symbol.Delete };
+        // ApplyIconButton pads for shelf chips — keep Block header chrome compact.
+        SizeHeaderIconButton(DeleteButton);
+        SizeHeaderIconButton(ArrangeButton);
+        SizeHeaderIconButton(StyleButton);
+        StyleButton.Content = CreateCompactHeaderIcon(
+            BlockIconStyle.IsSilhouette(_block.IconStyle) ? Symbol.OutlineStar : Symbol.Pictures);
+        ArrangeButton.Content = CreateCompactHeaderIcon(rail ? Symbol.List : Symbol.ViewAll);
+        DeleteButton.Content = CreateCompactHeaderIcon(Symbol.Delete);
         TintHeaderIcon(StyleButton, theme, 0.9);
         TintHeaderIcon(ArrangeButton, theme, 0.9);
         TintHeaderIcon(DeleteButton, theme, 0.9);

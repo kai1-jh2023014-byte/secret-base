@@ -72,27 +72,39 @@
                     <Button
                         x:Name="ArrangeButton"
                         Grid.Column="1"
-                        Width="28"
-                        Height="28"
+                        Width="20"
+                        Height="20"
                         Padding="0"
-                        MinWidth="28"
-                        MinHeight="28"
+                        MinWidth="20"
+                        MinHeight="20"
                         Margin="0,0,2,0"
                         Click="ArrangeButton_Click"
                         ToolTipService.ToolTip="Arrange icons evenly">
-                        <SymbolIcon Symbol="ViewAll" />
+                        <SymbolIcon
+                            Symbol="ViewAll"
+                            RenderTransformOrigin="0.5,0.5">
+                            <SymbolIcon.RenderTransform>
+                                <ScaleTransform ScaleX="0.62" ScaleY="0.62" />
+                            </SymbolIcon.RenderTransform>
+                        </SymbolIcon>
                     </Button>
                     <Button
                         x:Name="DeleteButton"
                         Grid.Column="2"
-                        Width="28"
-                        Height="28"
+                        Width="20"
+                        Height="20"
                         Padding="0"
-                        MinWidth="28"
-                        MinHeight="28"
+                        MinWidth="20"
+                        MinHeight="20"
                         Click="DeleteButton_Click"
                         ToolTipService.ToolTip="Delete Block">
-                        <SymbolIcon Symbol="Delete" />
+                        <SymbolIcon
+                            Symbol="Delete"
+                            RenderTransformOrigin="0.5,0.5">
+                            <SymbolIcon.RenderTransform>
+                                <ScaleTransform ScaleX="0.62" ScaleY="0.62" />
+                            </SymbolIcon.RenderTransform>
+                        </SymbolIcon>
                     </Button>
                 </Grid>
 
