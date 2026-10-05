@@ -8,7 +8,7 @@
     mc:Ignorable="d"
     Opacity="0">
 
-    <!-- Atelier Clock — editorial time surface. -->
+    <!-- Atelier Clock — Base / Large digital / Minimal / Analog / Focus. -->
     <Border
         x:Name="OuterShell"
         Background="#20151A24"
@@ -19,7 +19,7 @@
         <Border
             x:Name="RootBorder"
             Padding="22,18"
-            Background="#D9181E28"
+            Background="#66181E28"
             CornerRadius="18"
             BorderThickness="1"
             BorderBrush="#3DFFFFFF">
@@ -41,7 +41,7 @@
                         Opacity="0.85" />
                     <Button
                         x:Name="SettingsButton"
-                        Content="···"
+                        Content="..."
                         HorizontalAlignment="Right"
                         VerticalAlignment="Top"
                         MinWidth="32"
@@ -53,19 +53,19 @@
                 </Grid>
 
                 <Grid x:Name="DigitalPanel" Grid.Row="1" VerticalAlignment="Center">
-                    <StackPanel VerticalAlignment="Center" Spacing="6">
+                    <StackPanel x:Name="DigitalStack" VerticalAlignment="Center" Spacing="6">
                         <TextBlock
                             x:Name="TimeText"
                             Text="00:00"
                             FontSize="44"
-                            FontWeight="SemiLight"
+                            FontWeight="SemiBold"
                             CharacterSpacing="80"
                             Foreground="#FFF3EFE6"
                             HorizontalAlignment="Left"
                             TextAlignment="Left" />
                         <TextBlock
                             x:Name="DateText"
-                            Text="Wednesday&#x0a;September 2"
+                            Text="Wednesday, September 01"
                             FontSize="13"
                             FontWeight="Normal"
                             CharacterSpacing="30"
@@ -95,67 +95,109 @@
                     </StackPanel>
                 </Grid>
 
-                <Canvas
+                <Grid
                     x:Name="AnalogPanel"
                     Grid.Row="1"
-                    Width="132"
-                    Height="132"
                     HorizontalAlignment="Center"
                     VerticalAlignment="Center"
                     Visibility="Collapsed">
-                    <Ellipse
-                        x:Name="AnalogRingOuter"
-                        Width="132"
-                        Height="132"
-                        Stroke="#28FFFFFF"
-                        StrokeThickness="1" />
-                    <Ellipse
-                        x:Name="AnalogFace"
-                        Width="118"
-                        Height="118"
-                        Canvas.Left="7"
-                        Canvas.Top="7"
-                        Stroke="#55FFFFFF"
-                        StrokeThickness="1.5" />
-                    <Line
-                        x:Name="HourHand"
-                        X1="66"
-                        Y1="66"
-                        X2="66"
-                        Y2="40"
-                        StrokeThickness="3.5"
-                        Stroke="#FFF3EFE6"
-                        StrokeStartLineCap="Round"
-                        StrokeEndLineCap="Round" />
-                    <Line
-                        x:Name="MinuteHand"
-                        X1="66"
-                        Y1="66"
-                        X2="66"
-                        Y2="28"
-                        StrokeThickness="2"
-                        Stroke="#FFF3EFE6"
-                        StrokeStartLineCap="Round"
-                        StrokeEndLineCap="Round" />
-                    <Line
-                        x:Name="SecondHand"
-                        X1="66"
-                        Y1="66"
-                        X2="66"
-                        Y2="24"
-                        StrokeThickness="1"
-                        Stroke="#FF7A9E86"
-                        StrokeStartLineCap="Round"
-                        StrokeEndLineCap="Round"
-                        Opacity="0.9" />
-                    <Ellipse
-                        x:Name="AnalogCenter"
-                        Width="8"
-                        Height="8"
-                        Fill="#FF7A9E86"
-                        Canvas.Left="62"
-                        Canvas.Top="62" />
-                </Canvas>
+                    <StackPanel Spacing="8" HorizontalAlignment="Center">
+                        <Canvas
+                            x:Name="AnalogCanvas"
+                            Width="132"
+                            Height="132"
+                            HorizontalAlignment="Center">
+                            <Ellipse
+                                x:Name="AnalogRingOuter"
+                                Width="132"
+                                Height="132"
+                                Fill="#14000000"
+                                Stroke="#28FFFFFF"
+                                StrokeThickness="1" />
+                            <Ellipse
+                                x:Name="AnalogFace"
+                                Width="118"
+                                Height="118"
+                                Canvas.Left="7"
+                                Canvas.Top="7"
+                                Fill="#22000000"
+                                Stroke="#55FFFFFF"
+                                StrokeThickness="1" />
+                            <Canvas x:Name="AnalogTicks" Width="132" Height="132" />
+                            <TextBlock
+                                x:Name="AnalogMark12"
+                                Text="12"
+                                FontSize="10"
+                                Opacity="0.75"
+                                Canvas.Left="60"
+                                Canvas.Top="14"
+                                Foreground="#CCFFFFFF" />
+                            <TextBlock
+                                x:Name="AnalogMark3"
+                                Text="3"
+                                FontSize="10"
+                                Opacity="0.75"
+                                Canvas.Left="104"
+                                Canvas.Top="58"
+                                Foreground="#CCFFFFFF" />
+                            <TextBlock
+                                x:Name="AnalogMark6"
+                                Text="6"
+                                FontSize="10"
+                                Opacity="0.75"
+                                Canvas.Left="63"
+                                Canvas.Top="102"
+                                Foreground="#CCFFFFFF" />
+                            <TextBlock
+                                x:Name="AnalogMark9"
+                                Text="9"
+                                FontSize="10"
+                                Opacity="0.75"
+                                Canvas.Left="18"
+                                Canvas.Top="58"
+                                Foreground="#CCFFFFFF" />
+                            <Line
+                                x:Name="HourHand"
+                                X1="66"
+                                Y1="66"
+                                X2="66"
+                                Y2="40"
+                                StrokeThickness="3"
+                                Stroke="#FFF3EFE6" />
+                            <Line
+                                x:Name="MinuteHand"
+                                X1="66"
+                                Y1="66"
+                                X2="66"
+                                Y2="28"
+                                StrokeThickness="2"
+                                Stroke="#FFF3EFE6" />
+                            <Line
+                                x:Name="SecondHand"
+                                X1="66"
+                                Y1="66"
+                                X2="66"
+                                Y2="24"
+                                StrokeThickness="1"
+                                Stroke="#FF7A9E86"
+                                Opacity="0.9" />
+                            <Ellipse
+                                x:Name="AnalogCenter"
+                                Width="6"
+                                Height="6"
+                                Fill="#FF7A9E86"
+                                Canvas.Left="63"
+                                Canvas.Top="63" />
+                        </Canvas>
+                        <TextBlock
+                            x:Name="AnalogCaption"
+                            Text="Clock"
+                            FontSize="11"
+                            Opacity="0.7"
+                            HorizontalAlignment="Center"
+                            CharacterSpacing="40" />
+                    </StackPanel>
+                </Grid>
             </Grid>
         </Border>
     </Border>

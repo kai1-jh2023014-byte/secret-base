@@ -1,3 +1,4 @@
+using System.Globalization;
 using SecretBase.Core.Time;
 using SecretBase.Core.Widgets.Clock;
 
@@ -5,22 +6,25 @@ namespace SecretBase.Core.Widgets.Clock;
 
 /// <summary>
 /// Pure formatting for Clock display — no UI dependencies; easy to unit test.
+/// Dates always use English (en-US), independent of the OS UI language.
 /// </summary>
 public static class ClockDisplayFormatter
 {
+    private static readonly CultureInfo English = CultureInfo.GetCultureInfo("en-US");
+
     public static string FormatTime(DateTimeOffset instant, ClockWidgetConfiguration configuration)
     {
         // ITimeProvider.GetLocalNow() already returns local wall-clock time.
         if (configuration.Use24HourFormat)
         {
             return configuration.ShowSeconds
-                ? instant.ToString("HH:mm:ss")
-                : instant.ToString("HH:mm");
+                ? instant.ToString("HH:mm:ss", English)
+                : instant.ToString("HH:mm", English);
         }
 
         return configuration.ShowSeconds
-            ? instant.ToString("hh:mm:ss tt")
-            : instant.ToString("hh:mm tt");
+            ? instant.ToString("hh:mm:ss tt", English)
+            : instant.ToString("hh:mm tt", English);
     }
 
     public static string FormatDate(DateTimeOffset instant, ClockWidgetConfiguration configuration)
@@ -32,9 +36,13 @@ public static class ClockDisplayFormatter
 
         return configuration.DisplayStyle switch
         {
-            ClockWidgetConfiguration.StyleFocus => instant.ToString("dddd, MMMM d"),
-            ClockWidgetConfiguration.StyleMinimal => instant.ToString("MMM d"),
-            _ => $"{instant:dddd}\n{instant:MMMM d}"
+            ClockWidgetConfiguration.StyleLarge => instant.ToString("dddd, MMMM dd", English),
+            ClockWidgetConfiguration.StyleDigital => instant.ToString("dddd, MMMM dd", English),
+            ClockWidgetConfiguration.StyleFocus => instant.ToString("dddd, MMMM d", English),
+            // Compact weekday + month day (e.g. "Mon, Oct 5") — English en-US.
+            ClockWidgetConfiguration.StyleMinimal => instant.ToString("ddd, MMM d", English),
+            ClockWidgetConfiguration.StyleBase => instant.ToString("ddd, MMM d", English),
+            _ => instant.ToString("ddd, MMM d", English)
         };
     }
 
@@ -59,7 +67,8 @@ public static class ClockDisplayFormatter
                 Use24HourFormat = configuration.Use24HourFormat,
                 ShowSeconds = false,
                 ShowDate = configuration.ShowDate,
-                SizeScale = configuration.SizeScale
+                SizeScale = configuration.SizeScale,
+                DateScale = configuration.DateScale
             };
             time = FormatTime(timeProvider.GetLocalNow(), noSeconds);
         }

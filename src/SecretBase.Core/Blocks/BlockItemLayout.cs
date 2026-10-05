@@ -1,7 +1,7 @@
 namespace SecretBase.Core.Blocks;
 
 /// <summary>
-/// Even grid placement for Block items inside an available content area.
+/// Placement helpers for Block items inside an available content area.
 /// </summary>
 public static class BlockItemLayout
 {
@@ -34,6 +34,50 @@ public static class BlockItemLayout
             items[i].X = x;
             items[i].Y = y;
             items[i].ClampPlacement(width, height);
+        }
+    }
+
+    /// <summary>
+    /// Fashionable compact rail: single column when taller than wide, otherwise a single row.
+    /// </summary>
+    public static void ArrangeRail(IReadOnlyList<BlockItem> items, double areaWidth, double areaHeight)
+    {
+        if (items.Count == 0)
+        {
+            return;
+        }
+
+        const double pad = 6;
+        const double gap = 10;
+        var tileW = BlockItem.RailTileWidth;
+        var tileH = BlockItem.RailTileHeight;
+        var width = Math.Max(tileW + pad * 2, areaWidth);
+        var height = Math.Max(tileH + pad * 2, areaHeight);
+        var vertical = height >= width;
+
+        if (vertical)
+        {
+            var totalH = items.Count * tileH + Math.Max(0, items.Count - 1) * gap;
+            var startY = pad + Math.Max(0, (height - pad * 2 - totalH) / 2);
+            var x = pad + Math.Max(0, (width - pad * 2 - tileW) / 2);
+            for (var i = 0; i < items.Count; i++)
+            {
+                items[i].X = x;
+                items[i].Y = startY + i * (tileH + gap);
+                items[i].ClampPlacement(width, height, tileW, tileH);
+            }
+
+            return;
+        }
+
+        var totalW = items.Count * tileW + Math.Max(0, items.Count - 1) * gap;
+        var startX = pad + Math.Max(0, (width - pad * 2 - totalW) / 2);
+        var y = pad + Math.Max(0, (height - pad * 2 - tileH) / 2);
+        for (var i = 0; i < items.Count; i++)
+        {
+            items[i].X = startX + i * (tileW + gap);
+            items[i].Y = y;
+            items[i].ClampPlacement(width, height, tileW, tileH);
         }
     }
 }

@@ -23,14 +23,14 @@ public sealed class ThemeDefinition
 
     public string Accent { get; set; } = "#FF7A9E86";
 
-    public string WidgetBackground { get; set; } = "#D9181E28";
+    public string WidgetBackground { get; set; } = "#66181E28";
 
     public string WidgetForeground { get; set; } = "#FFF3EFE6";
 
-    public string SurfaceSecondary { get; set; } = "#40151A24";
+    public string SurfaceSecondary { get; set; } = "#28151A24";
 
     /// <summary>Raised glass over <see cref="WidgetBackground"/>.</summary>
-    public string SurfaceElevated { get; set; } = "#E01E2530";
+    public string SurfaceElevated { get; set; } = "#4D1E2530";
 
     public string Border { get; set; } = "#3DFFFFFF";
 
@@ -47,8 +47,8 @@ public sealed class ThemeDefinition
 
     public double CornerRadius { get; set; } = 18;
 
-    /// <summary>0..1 overall widget surface opacity hint.</summary>
-    public double Transparency { get; set; } = 0.88;
+    /// <summary>0..1 overall widget surface opacity hint (lower = airier glass).</summary>
+    public double Transparency { get; set; } = 0.55;
 
     public double WidgetMinWidth { get; set; } = 200;
 

@@ -16,6 +16,9 @@ public sealed class PomodoroWidgetConfiguration
 
     public bool SoundOnComplete { get; set; } = true;
 
+    /// <summary>Compact face (large remaining time + start/pause) vs full controls.</summary>
+    public bool IsCompact { get; set; }
+
     public static PomodoroWidgetConfiguration CreateDefault() => new();
 
     public static PomodoroWidgetConfiguration FromDictionary(IReadOnlyDictionary<string, JsonElement> configuration)
@@ -55,6 +58,12 @@ public sealed class PomodoroWidgetConfiguration
             result.SoundOnComplete = sound.GetBoolean();
         }
 
+        if (configuration.TryGetValue(nameof(IsCompact), out var compact)
+            && (compact.ValueKind == JsonValueKind.True || compact.ValueKind == JsonValueKind.False))
+        {
+            result.IsCompact = compact.GetBoolean();
+        }
+
         return result;
     }
 
@@ -65,6 +74,7 @@ public sealed class PomodoroWidgetConfiguration
             [nameof(FocusMinutes)] = JsonSerializer.SerializeToElement(Math.Clamp(FocusMinutes, 1, 120)),
             [nameof(ShortBreakMinutes)] = JsonSerializer.SerializeToElement(Math.Clamp(ShortBreakMinutes, 1, 60)),
             [nameof(LongBreakMinutes)] = JsonSerializer.SerializeToElement(Math.Clamp(LongBreakMinutes, 1, 60)),
-            [nameof(SoundOnComplete)] = JsonSerializer.SerializeToElement(SoundOnComplete)
+            [nameof(SoundOnComplete)] = JsonSerializer.SerializeToElement(SoundOnComplete),
+            [nameof(IsCompact)] = JsonSerializer.SerializeToElement(IsCompact)
         };
 }

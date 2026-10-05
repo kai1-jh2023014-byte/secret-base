@@ -12,7 +12,7 @@ Desktop
   ├── Secret Base Overlay           ← HWND shaped to widgets + FABs (SetWindowRgn)
   │     ├── Widgets (Clock, Text, Web, Calendar, Music, Creative, AI, …)
   │     ├── Blocks
-  │     └── FABs (+ Add Widget, Blk, Aa, Grid) + taskbar shelf (clock, focus, next, AI)
+  │     └── FABs (+ Add Widget, Blk, Aa, Grid) + taskbar shelf (focus, next, AI)
   └── Other application windows / Taskbar / Windows Search (unchanged)
 ```
 
@@ -72,7 +72,7 @@ Investigation notes: [overlay-input-and-edges.md](overlay-input-and-edges.md).
 | **Aa** Theme | Always visible | Debug chrome **Theme**, **Ctrl+Shift+T** |
 | **Grid** Arrange | Always visible | Debug chrome **Arrange** |
 | Host status | Ephemeral message above FABs | Also mirrored in debug chrome |
-| **Taskbar shelf** | Stretches along the bottom of the work area (clock, focus, next item, AI field). Starts to the right of the FABs so it does not cover them | **Ctrl+Shift+K** focuses the AI field. Does **not** replace the Windows taskbar or Windows Search |
+| **Taskbar shelf** | Stretches along the bottom of the work area (focus, next item, AI field). Clock/time stays on the Clock widget. Starts to the right of the FABs so it does not cover them | **Ctrl+Shift+K** focuses the AI field. Does **not** replace the Windows taskbar or Windows Search |
 | Status / widget count | Hidden | **Ctrl+Shift+D** shows debug chrome |
 | Exit button | Hidden | Debug chrome **Exit**, or **Ctrl+Shift+Q** |
 | `WidgetFrame` | Grip + resize + **×** remove | Same |

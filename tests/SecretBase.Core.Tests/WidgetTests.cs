@@ -1,7 +1,9 @@
+using System.Globalization;
 using SecretBase.Core.Desktop;
 using SecretBase.Core.Time;
 using SecretBase.Core.Widgets;
 using SecretBase.Core.Widgets.Clock;
+using SecretBase.Core.Widgets.Music;
 using SecretBase.Core.Widgets.Text;
 
 namespace SecretBase.Core.Tests;
@@ -17,7 +19,7 @@ public class ClockDisplayFormatterTests
         var (time, date) = ClockDisplayFormatter.Format(provider, config);
 
         Assert.Equal("19:42:31", time);
-        Assert.Contains("August 11", date, StringComparison.Ordinal);
+        Assert.Equal("Tue, Aug 11", date);
     }
 
     [Fact]
@@ -28,6 +30,70 @@ public class ClockDisplayFormatterTests
 
         var (_, date) = ClockDisplayFormatter.Format(provider, config);
         Assert.Equal(string.Empty, date);
+    }
+
+    [Fact]
+    public void FormatDate_LargeStyle_UsesSingleLineTypography()
+    {
+        var provider = new FixedTimeProvider(new DateTimeOffset(2026, 9, 1, 22, 32, 0, TimeSpan.FromHours(9)));
+        var config = new ClockWidgetConfiguration
+        {
+            DisplayStyle = ClockWidgetConfiguration.StyleLarge,
+            ShowDate = true,
+            Use24HourFormat = true,
+            ShowSeconds = false
+        };
+
+        var (time, date) = ClockDisplayFormatter.Format(provider, config);
+        Assert.Equal("22:32", time);
+        Assert.Equal("Tuesday, September 01", date);
+    }
+
+    [Fact]
+    public void FormatDate_AlwaysUsesEnglishRegardlessOfThreadCulture()
+    {
+        var previous = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("ja-JP");
+            var provider = new FixedTimeProvider(new DateTimeOffset(2026, 9, 1, 22, 32, 0, TimeSpan.FromHours(9)));
+            var config = new ClockWidgetConfiguration
+            {
+                DisplayStyle = ClockWidgetConfiguration.StyleLarge,
+                ShowDate = true
+            };
+
+            var date = ClockDisplayFormatter.FormatDate(provider.GetLocalNow(), config);
+            Assert.Equal("Tuesday, September 01", date);
+            Assert.DoesNotContain("火曜日", date, StringComparison.Ordinal);
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = previous;
+        }
+    }
+
+    [Fact]
+    public void FormatDate_BaseAndMinimal_IncludeWeekday()
+    {
+        var instant = new DateTimeOffset(2026, 10, 5, 13, 0, 0, TimeSpan.Zero);
+        var baseDate = ClockDisplayFormatter.FormatDate(
+            instant,
+            new ClockWidgetConfiguration { DisplayStyle = ClockWidgetConfiguration.StyleBase, ShowDate = true });
+        var minimalDate = ClockDisplayFormatter.FormatDate(
+            instant,
+            new ClockWidgetConfiguration { DisplayStyle = ClockWidgetConfiguration.StyleMinimal, ShowDate = true });
+
+        Assert.Equal("Mon, Oct 5", baseDate);
+        Assert.Equal("Mon, Oct 5", minimalDate);
+    }
+
+    [Fact]
+    public void NormalizeStyle_MapsLegacyDigitalToLarge()
+    {
+        Assert.Equal(ClockWidgetConfiguration.StyleLarge, ClockWidgetConfiguration.NormalizeStyle("digital"));
+        Assert.Equal(ClockWidgetConfiguration.StyleBase, ClockWidgetConfiguration.NormalizeStyle("base"));
+        Assert.True(ClockWidgetConfiguration.IsLargeTypography(ClockWidgetConfiguration.StyleLarge));
     }
 }
 
@@ -61,15 +127,32 @@ public class WidgetInstanceTests
     {
         var original = new ClockWidgetConfiguration
         {
+            DisplayStyle = ClockWidgetConfiguration.StyleLarge,
             Use24HourFormat = true,
             ShowSeconds = false,
-            ShowDate = true
+            ShowDate = true,
+            SizeScale = 2.5,
+            DateScale = 1.6
         };
 
         var restored = ClockWidgetConfiguration.FromDictionary(original.ToDictionary());
+        Assert.Equal(ClockWidgetConfiguration.StyleLarge, restored.DisplayStyle);
         Assert.True(restored.Use24HourFormat);
         Assert.False(restored.ShowSeconds);
         Assert.True(restored.ShowDate);
+        Assert.Equal(2.5, restored.SizeScale);
+        Assert.Equal(1.6, restored.DateScale);
+    }
+
+    [Fact]
+    public void ClockConfiguration_FromDictionary_MigratesDigitalToLarge()
+    {
+        var legacy = new ClockWidgetConfiguration { DisplayStyle = "digital" }.ToDictionary();
+        // Force raw "digital" into the bag to simulate older layouts.
+        legacy[nameof(ClockWidgetConfiguration.DisplayStyle)] =
+            System.Text.Json.JsonSerializer.SerializeToElement("digital");
+        var restored = ClockWidgetConfiguration.FromDictionary(legacy);
+        Assert.Equal(ClockWidgetConfiguration.StyleLarge, restored.DisplayStyle);
     }
 
     [Fact]

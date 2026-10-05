@@ -3,6 +3,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
+using SecretBase.Core.Desktop;
 using SecretBase.Core.Themes;
 using SecretBase.Core.Widgets;
 using SecretBase.Widgets.Theming;
@@ -52,6 +53,21 @@ public sealed partial class WidgetFrame : UserControl
     public Guid WidgetId => _instance.Id;
 
     public string WidgetType => _instance.Type;
+
+    /// <summary>Apply a preferred size from a widget compact/expand toggle and persist via layout commit.</summary>
+    public void ApplyPreferredSize(double width, double height, bool commit = true)
+    {
+        _instance.Size.Width = width;
+        _instance.Size.Height = height;
+        _instance.Size.Clamp(_theme.WidgetMinWidth, _theme.WidgetMinHeight);
+        Width = _instance.Size.Width;
+        Height = _instance.Size.Height;
+        _onBoundsChanged?.Invoke();
+        if (commit)
+        {
+            _onLayoutCommitted();
+        }
+    }
 
     private void ApplyFloatingChrome(ThemeDefinition theme)
     {
@@ -127,8 +143,9 @@ public sealed partial class WidgetFrame : UserControl
         var dy = point.Y - _lastPoint.Y;
         _lastPoint = point;
 
-        var newX = Math.Max(0, Canvas.GetLeft(this) + dx);
-        var newY = Math.Max(0, Canvas.GetTop(this) + dy);
+        var newX = Canvas.GetLeft(this) + dx;
+        var newY = Canvas.GetTop(this) + dy;
+        ClampToParentCanvas(ref newX, ref newY, Width, Height);
         Canvas.SetLeft(this, newX);
         Canvas.SetTop(this, newY);
         _instance.Position.X = newX;
@@ -188,7 +205,15 @@ public sealed partial class WidgetFrame : UserControl
 
         _instance.Size.Width += dx;
         _instance.Size.Height += dy;
-        _instance.Size.Clamp(_theme.WidgetMinWidth, _theme.WidgetMinHeight);
+        var maxW = Parent is Canvas canvas && canvas.ActualWidth > 0
+            ? Math.Max(_theme.WidgetMinWidth, canvas.ActualWidth - Canvas.GetLeft(this))
+            : (double?)null;
+        var maxH = Parent is Canvas canvasH && canvasH.ActualHeight > 0
+            ? Math.Max(
+                _theme.WidgetMinHeight,
+                canvasH.ActualHeight - Canvas.GetTop(this) - DesktopViewportLayout.DefaultBottomReserve)
+            : (double?)null;
+        _instance.Size.Clamp(_theme.WidgetMinWidth, _theme.WidgetMinHeight, maxW, maxH);
         Width = _instance.Size.Width;
         Height = _instance.Size.Height;
         _onBoundsChanged?.Invoke();
@@ -216,5 +241,24 @@ public sealed partial class WidgetFrame : UserControl
         _onBoundsChanged?.Invoke();
         _onLayoutCommitted();
         e.Handled = true;
+    }
+
+    private void ClampToParentCanvas(ref double x, ref double y, double width, double height)
+    {
+        if (Parent is not Canvas canvas)
+        {
+            x = Math.Max(0, x);
+            y = Math.Max(0, y);
+            return;
+        }
+
+        var maxX = canvas.ActualWidth > 0
+            ? Math.Max(0, canvas.ActualWidth - Math.Max(40, width))
+            : double.MaxValue;
+        var maxY = canvas.ActualHeight > 0
+            ? Math.Max(0, canvas.ActualHeight - Math.Max(40, height) - DesktopViewportLayout.DefaultBottomReserve)
+            : double.MaxValue;
+        x = Math.Clamp(x, 0, maxX);
+        y = Math.Clamp(y, 0, maxY);
     }
 }

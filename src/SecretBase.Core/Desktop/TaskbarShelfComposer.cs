@@ -8,10 +8,9 @@ namespace SecretBase.Core.Desktop;
 /// <summary>
 /// Compact facts for the overlay shelf that sits just above the Windows taskbar.
 /// The shelf does not replace the taskbar; it only fills more of the work-area edge.
+/// Clock/time lives on the Clock widget — not duplicated here.
 /// </summary>
 public sealed record TaskbarShelfSnapshot(
-    string Clock,
-    string Date,
     string Focus,
     string Next);
 
@@ -28,13 +27,11 @@ public static class TaskbarShelfComposer
         openTodos ??= [];
         events ??= [];
 
-        var clock = now.ToString("HH:mm", CultureInfo.InvariantCulture);
-        var date = now.ToString("ddd d MMM", CultureInfo.InvariantCulture);
         var focusLine = focus is { IsRunning: true }
             ? focus.StatusLine(now)
             : "Focus idle";
 
-        return new TaskbarShelfSnapshot(clock, date, focusLine, FormatNext(now, openTodos, events));
+        return new TaskbarShelfSnapshot(focusLine, FormatNext(now, openTodos, events));
     }
 
     private static string FormatNext(

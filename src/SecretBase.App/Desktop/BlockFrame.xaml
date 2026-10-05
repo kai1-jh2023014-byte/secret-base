@@ -1,3 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
 <UserControl
     x:Class="SecretBase.App.Desktop.BlockFrame"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -51,7 +52,10 @@
                     <RowDefinition Height="*" />
                 </Grid.RowDefinitions>
 
-                <Grid Grid.Row="0" Margin="0,0,0,4">
+                <Grid
+                    x:Name="HeaderRow"
+                    Grid.Row="0"
+                    Margin="0,0,0,4">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
@@ -68,24 +72,40 @@
                     <Button
                         x:Name="ArrangeButton"
                         Grid.Column="1"
-                        Content="Grid"
-                        Padding="6,1"
-                        MinWidth="34"
-                        MinHeight="22"
-                        FontSize="11"
-                        Margin="0,0,4,0"
+                        Width="20"
+                        Height="20"
+                        Padding="0"
+                        MinWidth="20"
+                        MinHeight="20"
+                        Margin="0,0,2,0"
                         Click="ArrangeButton_Click"
-                        ToolTipService.ToolTip="Arrange icons evenly" />
+                        ToolTipService.ToolTip="Arrange icons evenly">
+                        <SymbolIcon
+                            Symbol="ViewAll"
+                            RenderTransformOrigin="0.5,0.5">
+                            <SymbolIcon.RenderTransform>
+                                <ScaleTransform ScaleX="0.62" ScaleY="0.62" />
+                            </SymbolIcon.RenderTransform>
+                        </SymbolIcon>
+                    </Button>
                     <Button
                         x:Name="DeleteButton"
                         Grid.Column="2"
-                        Content="Del"
-                        Padding="6,1"
-                        MinWidth="28"
-                        MinHeight="22"
-                        FontSize="11"
+                        Width="20"
+                        Height="20"
+                        Padding="0"
+                        MinWidth="20"
+                        MinHeight="20"
                         Click="DeleteButton_Click"
-                        ToolTipService.ToolTip="Delete Block" />
+                        ToolTipService.ToolTip="Delete Block">
+                        <SymbolIcon
+                            Symbol="Delete"
+                            RenderTransformOrigin="0.5,0.5">
+                            <SymbolIcon.RenderTransform>
+                                <ScaleTransform ScaleX="0.62" ScaleY="0.62" />
+                            </SymbolIcon.RenderTransform>
+                        </SymbolIcon>
+                    </Button>
                 </Grid>
 
                 <Canvas
@@ -99,7 +119,7 @@
                 <TextBlock
                     x:Name="EmptyHint"
                     Grid.Row="1"
-                    Text="Drop Desktop shortcuts here (moved in). Use Grid to arrange."
+                    Text="Drop Desktop shortcuts here (moved in). Use Arrange to tidy icons."
                     FontSize="12"
                     Opacity="0.65"
                     HorizontalAlignment="Center"

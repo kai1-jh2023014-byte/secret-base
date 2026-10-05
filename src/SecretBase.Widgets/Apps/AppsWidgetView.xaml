@@ -40,7 +40,7 @@
             <TextBlock
                 x:Name="SubtitleText"
                 Grid.Row="1"
-                Text="Register apps you built. Launch only — no admin or Shell."
+                Text="Register apps you built. Launch only - no admin or Shell."
                 FontSize="11"
                 Opacity="0.75"
                 TextWrapping="WrapWholeWords" />

@@ -14,11 +14,17 @@ namespace SecretBase.Widgets.Pomodoro;
 /// <summary>Pomodoro timer surface over shared <see cref="FocusSessionStore"/>.</summary>
 public sealed partial class PomodoroWidgetView : UserControl
 {
+    public const double CompactWidth = 200;
+    public const double CompactHeight = 160;
+    public const double ExpandedWidth = 300;
+    public const double ExpandedHeight = 320;
+
     private IBaseExperienceServices? _base;
     private ThemeDefinition? _theme;
     private DispatcherTimer? _timer;
     private PomodoroWidgetConfiguration _configuration = PomodoroWidgetConfiguration.CreateDefault();
     private Action<PomodoroWidgetConfiguration>? _persist;
+    private Action<double, double>? _onPreferredSizeChanged;
     private string? _chimeDirectory;
     private MediaPlayer? _mediaPlayer;
     private bool _suppressDurationEvents;
@@ -34,14 +40,17 @@ public sealed partial class PomodoroWidgetView : UserControl
         IBaseExperienceServices services,
         PomodoroWidgetConfiguration? configuration = null,
         Action<PomodoroWidgetConfiguration>? persist = null,
-        string? chimeDirectory = null)
+        string? chimeDirectory = null,
+        Action<double, double>? onPreferredSizeChanged = null)
     {
         _base = services;
         _configuration = configuration ?? PomodoroWidgetConfiguration.CreateDefault();
         _persist = persist;
+        _onPreferredSizeChanged = onPreferredSizeChanged;
         _chimeDirectory = chimeDirectory;
         ApplyConfigurationToUi();
         ApplyDurationsToStore();
+        ApplyCompactLayout(persistSize: false);
         Refresh();
     }
 
@@ -54,10 +63,16 @@ public sealed partial class PomodoroWidgetView : UserControl
         WidgetSurfaceStyle.ApplyBody(TimerText, theme);
         WidgetSurfaceStyle.ApplyMuted(RoundText, theme);
         WidgetSurfaceStyle.ApplyMuted(HintText, theme);
+        WidgetSurfaceStyle.ApplyMuted(CompactPhaseText, theme);
+        WidgetSurfaceStyle.ApplyBody(CompactTimerText, theme);
         WidgetSurfaceStyle.ApplyActionButton(PrimaryButton, theme, accent: true);
+        WidgetSurfaceStyle.ApplyActionButton(CompactPrimaryButton, theme, accent: true);
         WidgetSurfaceStyle.ApplyGhostButton(ResetButton, theme);
         WidgetSurfaceStyle.ApplyGhostButton(StopButton, theme);
+        WidgetSurfaceStyle.ApplyGhostButton(CompactModeButton, theme);
+        WidgetSurfaceStyle.ApplyGhostButton(CompactExpandButton, theme);
         SoundCheckBox.Foreground = ThemePainter.Brush(theme.WidgetForeground);
+        ApplyCompactLayout(persistSize: false);
         Refresh();
     }
 
@@ -78,7 +93,9 @@ public sealed partial class PomodoroWidgetView : UserControl
         }
 
         var remaining = session.Remaining(now);
-        TimerText.Text = $"{(int)remaining.TotalMinutes:00}:{remaining.Seconds:00}";
+        var timeText = $"{(int)remaining.TotalMinutes:00}:{remaining.Seconds:00}";
+        TimerText.Text = timeText;
+        CompactTimerText.Text = timeText;
         HintText.Text =
             $"{_configuration.FocusMinutes} min focus · {_configuration.ShortBreakMinutes} min break · "
             + $"long break {_configuration.LongBreakMinutes}m after 4 rounds";
@@ -86,9 +103,12 @@ public sealed partial class PomodoroWidgetView : UserControl
         if (!session.IsRunning)
         {
             PhaseText.Text = "Ready";
+            CompactPhaseText.Text = "Ready";
             RoundText.Text = "Round 1/4";
             PrimaryButton.Content = "Start";
+            CompactPrimaryButton.Content = "Start";
             PrimaryButton.IsEnabled = true;
+            CompactPrimaryButton.IsEnabled = true;
             ResetButton.IsEnabled = false;
             StopButton.IsEnabled = false;
             FocusMinutesBox.IsEnabled = true;
@@ -96,12 +116,17 @@ public sealed partial class PomodoroWidgetView : UserControl
             return;
         }
 
-        PhaseText.Text = session.IsPaused
+        var phase = session.IsPaused
             ? $"{session.PhaseLabel} · paused"
             : session.PhaseLabel;
+        PhaseText.Text = phase;
+        CompactPhaseText.Text = phase;
         RoundText.Text = session.RoundProgressLine;
-        PrimaryButton.Content = session.IsPaused ? "Resume" : "Pause";
+        var primary = session.IsPaused ? "Resume" : "Pause";
+        PrimaryButton.Content = primary;
+        CompactPrimaryButton.Content = primary;
         PrimaryButton.IsEnabled = true;
+        CompactPrimaryButton.IsEnabled = true;
         ResetButton.IsEnabled = true;
         StopButton.IsEnabled = true;
         FocusMinutesBox.IsEnabled = false;
@@ -151,6 +176,38 @@ public sealed partial class PomodoroWidgetView : UserControl
     }
 
     private void Timer_Tick(object? sender, object e) => Refresh();
+
+    private void CompactModeButton_Click(object sender, RoutedEventArgs e)
+    {
+        _configuration.IsCompact = !_configuration.IsCompact;
+        _persist?.Invoke(_configuration);
+        ApplyCompactLayout(persistSize: true);
+        if (_theme is not null)
+        {
+            WidgetSurfaceStyle.PulseScale(RootBorder);
+        }
+    }
+
+    private void ApplyCompactLayout(bool persistSize)
+    {
+        var compact = _configuration.IsCompact;
+        CompactPanel.Visibility = compact ? Visibility.Visible : Visibility.Collapsed;
+        FullPanel.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
+        RootBorder.Padding = compact ? new Thickness(12, 10, 12, 10) : new Thickness(16, 14, 16, 14);
+        if (!persistSize)
+        {
+            return;
+        }
+
+        if (compact)
+        {
+            _onPreferredSizeChanged?.Invoke(CompactWidth, CompactHeight);
+        }
+        else
+        {
+            _onPreferredSizeChanged?.Invoke(ExpandedWidth, ExpandedHeight);
+        }
+    }
 
     private void PrimaryButton_Click(object sender, RoutedEventArgs e)
     {

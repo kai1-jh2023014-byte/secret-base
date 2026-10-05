@@ -10,12 +10,10 @@ public class TaskbarShelfComposerTests
     private static readonly DateTimeOffset Now = new(2026, 10, 3, 14, 5, 0, TimeSpan.Zero);
 
     [Fact]
-    public void Compose_ShowsClockDateAndIdleFocus()
+    public void Compose_ShowsIdleFocusWithoutClock()
     {
         var snap = TaskbarShelfComposer.Compose(Now, focus: null, openTodos: [], events: []);
 
-        Assert.Equal("14:05", snap.Clock);
-        Assert.Contains("3", snap.Date);
         Assert.Equal("Focus idle", snap.Focus);
         Assert.Equal("Nothing queued", snap.Next);
     }

@@ -124,6 +124,11 @@ public sealed partial class DesktopPage : Page
     /// <summary>Monotonic Canvas Z-index so newly opened widgets can rise above Blocks.</summary>
     private int _frontZIndex;
 
+    /// <summary>Last viewport we fitted widgets into (detect RDP / aspect-ratio changes).</summary>
+    private double _fittedViewportWidth;
+    private double _fittedViewportHeight;
+    private DispatcherQueueTimer? _viewportFitTimer;
+
     public DesktopPage()
     {
         InitializeComponent();
@@ -131,24 +136,15 @@ public sealed partial class DesktopPage : Page
         // WinRT.IInspectable to TextBlock while connecting the page and abort startup.
         TaskbarAiChat = new TaskbarAiChatBar
         {
-            HorizontalAlignment = HorizontalAlignment.Stretch,
+            HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Bottom,
-            Margin = new Thickness(312, 0, 16, 6)
+            // Horizontal placement is owned by TaskbarAiChatBar (center + chrome reserves).
+            Margin = new Thickness(0, 0, 0, 12)
         };
         var canvasIndex = RootGrid.Children.IndexOf(WidgetCanvas);
         RootGrid.Children.Insert(canvasIndex < 0 ? 0 : canvasIndex + 1, TaskbarAiChat);
         Unloaded += OnUnloaded;
-        SizeChanged += (_, _) =>
-        {
-            if (_modalInputDepth > 0)
-            {
-                AllowFullWindowInput();
-            }
-            else
-            {
-                SyncInteractiveInputRegions();
-            }
-        };
+        SizeChanged += (_, _) => OnHostSizeChanged();
     }
 
     protected override void OnNavigatedTo(NavigationEventArgs e)
@@ -292,7 +288,8 @@ public sealed partial class DesktopPage : Page
 
         _theme = _themeStore.LoadOrCreateDefault();
         _layout = _layoutStore.LoadOrCreateDefault(RoomId.DefaultRoomId);
-        EnsureSeedTextWidget(_layout);
+        // Do not re-seed Text on every launch — CreateDefault already includes it once.
+        // Re-adding here made deleted Text widgets come back every startup.
 
         ApplyDesktopTheme(_theme);
         StyleFabButtons(_theme);
@@ -301,12 +298,13 @@ public sealed partial class DesktopPage : Page
         ShowDebugChrome(forceVisible: false);
 
         RenderDesktopObjects();
+        FitDesktopObjectsToViewport(force: true);
         InitializeTaskbarAiChat();
         _ = RefreshUpcomingEventsQuietAsync();
         DispatcherQueue.TryEnqueue(async () => await MaybeShowOnboardingAsync());
         _logger.Info("desktop", $"Overlay desktop shown for room '{_layout.RoomId}' with {_layout.Widgets.Count} widget(s), {_layout.Blocks.Count} block(s).");
         _logger.Info("widget", "Widget hosts ready (Clock, Text, Calendar, Music, Creative, Workspace, Pomodoro, Apps, Base AI).");
-        _logger.Info("assistant", "Taskbar shelf ready (clock, focus, next, AI). Ctrl+Shift+K focuses the field. Does not replace the Windows taskbar.");
+        _logger.Info("assistant", "Taskbar shelf ready (focus, next, AI). Ctrl+Shift+K focuses the field. Does not replace the Windows taskbar.");
         _logger.Info("block", "Block host ready (use Blk button to add; drop + drag icons inside a Block).");
         _logger.Info("theme", "Theme editor ready (Aa button) — colors apply to all widgets and Blocks.");
         _logger.Info("layout", "Arrange ready (Grid button) — even placement for widgets and blocks.");
@@ -315,31 +313,47 @@ public sealed partial class DesktopPage : Page
 
     private void StyleFabButtons(ThemeDefinition theme)
     {
-        void StylePrimary(Button button)
+        void StyleStripIcon(Button button, bool accent = false)
         {
-            button.Background = ThemePainter.Brush(theme.Accent, 0.9);
-            button.Foreground = ThemePainter.Brush(theme.Foreground);
-            button.BorderBrush = ThemePainter.Brush(theme.Border, 0.35);
-            button.BorderThickness = new Thickness(1);
-            button.CornerRadius = new CornerRadius(Math.Max(12, theme.CornerRadius * 0.7));
+            button.Background = accent
+                ? ThemePainter.Brush(theme.Accent, 0.42)
+                : new SolidColorBrush(Microsoft.UI.Colors.Transparent);
+            button.Foreground = ThemePainter.Brush(theme.WidgetForeground, accent ? 1 : 0.92);
+            button.BorderBrush = ThemePainter.Brush(theme.Border, accent ? 0.18 : 0.0);
+            button.BorderThickness = new Thickness(accent ? 1 : 0);
+            button.CornerRadius = new CornerRadius(17);
             button.FontFamily = new FontFamily(theme.FontFamily);
         }
 
-        void StyleSecondary(Button button)
+        static void TintStripIcon(Button button, ThemeDefinition theme, bool accent = false)
         {
-            button.Background = ThemePainter.Brush(theme.WidgetBackground, ThemePainter.EffectiveWidgetOpacity(theme));
-            button.Foreground = ThemePainter.Brush(theme.WidgetForeground);
-            button.BorderBrush = ThemePainter.Brush(theme.Border, 0.5);
-            button.BorderThickness = new Thickness(1);
-            button.CornerRadius = new CornerRadius(Math.Max(12, theme.CornerRadius * 0.7));
-            button.FontFamily = new FontFamily(theme.FontFamily);
+            var brush = ThemePainter.Brush(theme.WidgetForeground, accent ? 1 : 0.92);
+            button.Foreground = brush;
+            if (button.Content is SymbolIcon symbol)
+            {
+                symbol.Foreground = brush;
+            }
         }
 
-        StylePrimary(AddWidgetFab);
-        StyleSecondary(AddBlockFab);
-        StyleSecondary(ThemeFab);
-        StyleSecondary(ArrangeFab);
-        StyleSecondary(SetupFab);
+        if (ControlStripShell is not null)
+        {
+            ControlStripShell.Background = ThemePainter.Brush(
+                theme.WidgetBackground,
+                Math.Clamp(ThemePainter.SoftSurfaceOpacity(theme), 0.16, 0.42));
+            ControlStripShell.BorderBrush = ThemePainter.Brush(theme.Border, 0.22);
+            ControlStripShell.CornerRadius = new CornerRadius(22);
+        }
+
+        StyleStripIcon(AddWidgetFab, accent: true);
+        StyleStripIcon(AddBlockFab);
+        StyleStripIcon(ThemeFab);
+        StyleStripIcon(ArrangeFab);
+        StyleStripIcon(SetupFab);
+        TintStripIcon(AddWidgetFab, theme, accent: true);
+        TintStripIcon(AddBlockFab, theme);
+        TintStripIcon(ThemeFab, theme);
+        TintStripIcon(ArrangeFab, theme);
+        TintStripIcon(SetupFab, theme);
         TaskbarAiChat.ApplyTheme(theme);
 
         if (HostStatusLabel is not null)
@@ -769,29 +783,37 @@ public sealed partial class DesktopPage : Page
             rects.Add(chromeRect);
         }
 
-        if (TryCreateClientRect(AddWidgetFab, scale, out var addWidgetFabRect))
+        if (ControlStripShell is not null
+            && TryCreateClientRect(ControlStripShell, scale, out var controlStripRect))
         {
-            rects.Add(addWidgetFabRect);
+            rects.Add(controlStripRect);
         }
-
-        if (TryCreateClientRect(AddBlockFab, scale, out var fabRect))
+        else
         {
-            rects.Add(fabRect);
-        }
+            if (TryCreateClientRect(AddWidgetFab, scale, out var addWidgetFabRect))
+            {
+                rects.Add(addWidgetFabRect);
+            }
 
-        if (TryCreateClientRect(ThemeFab, scale, out var themeFabRect))
-        {
-            rects.Add(themeFabRect);
-        }
+            if (TryCreateClientRect(AddBlockFab, scale, out var fabRect))
+            {
+                rects.Add(fabRect);
+            }
 
-        if (TryCreateClientRect(ArrangeFab, scale, out var arrangeFabRect))
-        {
-            rects.Add(arrangeFabRect);
-        }
+            if (TryCreateClientRect(ThemeFab, scale, out var themeFabRect))
+            {
+                rects.Add(themeFabRect);
+            }
 
-        if (TryCreateClientRect(SetupFab, scale, out var setupFabRect))
-        {
-            rects.Add(setupFabRect);
+            if (TryCreateClientRect(ArrangeFab, scale, out var arrangeFabRect))
+            {
+                rects.Add(arrangeFabRect);
+            }
+
+            if (TryCreateClientRect(SetupFab, scale, out var setupFabRect))
+            {
+                rects.Add(setupFabRect);
+            }
         }
 
         if (TaskbarAiChat.Visibility == Visibility.Visible
@@ -816,6 +838,140 @@ public sealed partial class DesktopPage : Page
     {
         SyncInteractiveInputRegions();
         _logger?.Info("overlay", "Interactive SetWindowRgn sync requested (post-island).");
+    }
+
+    /// <summary>
+    /// Re-sync work-area overlay + pull widgets/Blocks into view after display changes
+    /// (Remote Desktop aspect ratio, monitor switch, DPI). Safe to call often.
+    /// </summary>
+    public void HandleDisplayMetricsChanged()
+    {
+        if (_overlay is not null && _overlayTarget is not null)
+        {
+            try
+            {
+                _overlay.ApplyChromelessWorkAreaOverlay(_overlayTarget);
+            }
+            catch (Exception ex)
+            {
+                _logger?.Warn("overlay", $"Work-area re-sync failed: {ex.Message}");
+            }
+        }
+
+        FitDesktopObjectsToViewport(force: true);
+        TaskbarAiChat.RefreshShelfWidth();
+        SyncInteractiveInputRegions();
+    }
+
+    private void OnHostSizeChanged()
+    {
+        TaskbarAiChat.RefreshShelfWidth();
+        ScheduleViewportFit();
+        if (_modalInputDepth > 0)
+        {
+            AllowFullWindowInput();
+        }
+        else
+        {
+            SyncInteractiveInputRegions();
+        }
+    }
+
+    private void ScheduleViewportFit()
+    {
+        _viewportFitTimer?.Stop();
+        _viewportFitTimer = DispatcherQueue.CreateTimer();
+        _viewportFitTimer.Interval = TimeSpan.FromMilliseconds(120);
+        _viewportFitTimer.IsRepeating = false;
+        _viewportFitTimer.Tick += (_, _) => FitDesktopObjectsToViewport(force: false);
+        _viewportFitTimer.Start();
+    }
+
+    private void FitDesktopObjectsToViewport(bool force)
+    {
+        if (_layout is null)
+        {
+            return;
+        }
+
+        var areaWidth = Math.Max(WidgetCanvas.ActualWidth, ActualWidth);
+        var areaHeight = Math.Max(WidgetCanvas.ActualHeight, ActualHeight);
+        if (areaWidth < 160 || areaHeight < 120)
+        {
+            return;
+        }
+
+        if (!force
+            && Math.Abs(areaWidth - _fittedViewportWidth) < 8
+            && Math.Abs(areaHeight - _fittedViewportHeight) < 8)
+        {
+            return;
+        }
+
+        var changed = DesktopViewportLayout.FitToViewport(
+            _layout.Widgets,
+            _layout.Blocks,
+            areaWidth,
+            areaHeight,
+            margin: DesktopViewportLayout.DefaultMargin,
+            bottomReserve: DesktopViewportLayout.DefaultBottomReserve);
+
+        _fittedViewportWidth = areaWidth;
+        _fittedViewportHeight = areaHeight;
+
+        if (!changed && !force)
+        {
+            ApplyCanvasGeometryFromLayout();
+            return;
+        }
+
+        if (changed)
+        {
+            PersistLayoutNow();
+            _logger?.Info(
+                "layout",
+                $"Fitted desktop objects to viewport {areaWidth:0}×{areaHeight:0}.");
+        }
+
+        ApplyCanvasGeometryFromLayout();
+        TaskbarAiChat.RefreshShelfWidth();
+        SyncInteractiveInputRegions();
+    }
+
+    private void ApplyCanvasGeometryFromLayout()
+    {
+        if (_layout is null)
+        {
+            return;
+        }
+
+        foreach (var frame in WidgetCanvas.Children.OfType<WidgetFrame>())
+        {
+            var instance = _layout.Widgets.FirstOrDefault(w => w.Id == frame.WidgetId);
+            if (instance is null)
+            {
+                continue;
+            }
+
+            Canvas.SetLeft(frame, instance.Position.X);
+            Canvas.SetTop(frame, instance.Position.Y);
+            frame.Width = instance.Size.Width;
+            frame.Height = instance.Size.Height;
+        }
+
+        foreach (var frame in WidgetCanvas.Children.OfType<BlockFrame>())
+        {
+            var block = _layout.Blocks.FirstOrDefault(b => b.Id == frame.BlockId);
+            if (block is null)
+            {
+                continue;
+            }
+
+            Canvas.SetLeft(frame, block.Position.X);
+            Canvas.SetTop(frame, block.Position.Y);
+            frame.Width = block.Size.Width;
+            frame.Height = block.Size.Height;
+        }
     }
 
     private bool TryCreateClientRect(FrameworkElement element, double scale, out OverlayInputRect rect)
@@ -967,11 +1123,15 @@ public sealed partial class DesktopPage : Page
                 musicService: _musicCommands.MusicService,
                 integrations: _integrationMemory,
                 dialogInput: _dialogInput,
-                systemNowPlaying: _systemNowPlaying ??= new WindowsSystemNowPlayingSource());
+                systemNowPlaying: _systemNowPlaying ??= new WindowsSystemNowPlayingSource(),
+                onCompactModeChanged: compact => ApplyMusicCompactSize(instance, config, compact));
             if (_theme is not null)
             {
                 view.ApplyTheme(_theme);
             }
+
+            // Keep Music geometry stable across re-renders (add widget / theme apply).
+            ApplyMusicGeometryToInstance(instance, config);
 
             return view;
         }
@@ -1126,16 +1286,84 @@ public sealed partial class DesktopPage : Page
                 chimeDirectory: Path.Combine(
                     Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                     "SecretBase",
-                    "sounds"));
+                    "sounds"),
+                onPreferredSizeChanged: (w, h) => ApplyWidgetPreferredSize(instance.Id, w, h));
             if (_theme is not null)
             {
                 view.ApplyTheme(_theme);
+            }
+
+            if (config.IsCompact)
+            {
+                instance.Size.Width = PomodoroWidgetView.CompactWidth;
+                instance.Size.Height = PomodoroWidgetView.CompactHeight;
             }
 
             return view;
         }
 
         return null;
+    }
+
+    private void ApplyWidgetPreferredSize(Guid widgetId, double width, double height)
+    {
+        foreach (var frame in WidgetCanvas.Children.OfType<WidgetFrame>())
+        {
+            if (frame.WidgetId != widgetId)
+            {
+                continue;
+            }
+
+            frame.ApplyPreferredSize(width, height);
+            SyncInteractiveInputRegions();
+            return;
+        }
+    }
+
+    private static void ApplyMusicGeometryToInstance(WidgetInstance instance, MusicWidgetConfiguration config)
+    {
+        if (config.IsCompact)
+        {
+            // Remember expanded size before clamping to compact, if we still look expanded.
+            if (instance.Size.Height > MusicWidgetView.CompactHeight + 8)
+            {
+                config.ExpandedWidth = instance.Size.Width;
+                config.ExpandedHeight = instance.Size.Height;
+                instance.Configuration = config.ToDictionary();
+            }
+
+            instance.Size.Width = MusicWidgetView.CompactWidth;
+            instance.Size.Height = MusicWidgetView.CompactHeight;
+            return;
+        }
+
+        // Expanded: restore last custom size when the frame still has compact leftovers.
+        var expandedW = config.ExpandedWidth ?? MusicWidgetView.ExpandedWidth;
+        var expandedH = config.ExpandedHeight ?? MusicWidgetView.ExpandedHeight;
+        if (Math.Abs(instance.Size.Height - MusicWidgetView.CompactHeight) < 1
+            || instance.Size.Height < MusicWidgetView.CompactHeight + 8)
+        {
+            instance.Size.Width = expandedW;
+            instance.Size.Height = expandedH;
+        }
+    }
+
+    private void ApplyMusicCompactSize(WidgetInstance instance, MusicWidgetConfiguration config, bool compact)
+    {
+        config.IsCompact = compact;
+        if (compact)
+        {
+            config.ExpandedWidth = instance.Size.Width;
+            config.ExpandedHeight = instance.Size.Height;
+            instance.Configuration = config.ToDictionary();
+            ApplyWidgetPreferredSize(instance.Id, MusicWidgetView.CompactWidth, MusicWidgetView.CompactHeight);
+            return;
+        }
+
+        var width = config.ExpandedWidth ?? MusicWidgetView.ExpandedWidth;
+        var height = config.ExpandedHeight ?? MusicWidgetView.ExpandedHeight;
+        instance.Configuration = config.ToDictionary();
+        ApplyWidgetPreferredSize(instance.Id, width, height);
     }
 
     private string? TryLaunchCreativeItem(CreativeItem item)
@@ -1335,25 +1563,6 @@ public sealed partial class DesktopPage : Page
         {
             _logger?.Warn("calendar", $"OAuth browser launch failed: {ex.Message}");
             return false;
-        }
-    }
-
-    private void EnsureSeedTextWidget(DesktopLayout layout)
-    {
-        if (layout.Widgets.Any(w => string.Equals(w.Type, WidgetTypes.Text, StringComparison.Ordinal)))
-        {
-            return;
-        }
-
-        layout.Widgets.Add(DefaultWidgetFactory.CreateDefaultText(layout.RoomId));
-        try
-        {
-            _layoutStore?.Save(layout);
-            _logger?.Info("widget", "Seeded default Text widget.");
-        }
-        catch (Exception ex)
-        {
-            _logger?.Error("persistence", "Failed to save layout after seeding Text widget.", ex);
         }
     }
 
@@ -1880,7 +2089,8 @@ public sealed partial class DesktopPage : Page
 
         if (_layout.Widgets.Any(w => string.Equals(w.Type, type, StringComparison.OrdinalIgnoreCase)))
         {
-            BringWidgetTypeToFront(type);
+            // Already on the desktop — do not raise Canvas z-order. Bringing Clock (or any
+            // existing widget) to front on ensure made shelf / AI interactions feel jumpy.
             SyncInteractiveInputRegions();
             return Task.CompletedTask;
         }
@@ -2040,7 +2250,9 @@ public sealed partial class DesktopPage : Page
         var widgetBg = CreateColorBox("Widget / Block background (#AARRGGBB)", draft.WidgetBackground);
         var widgetFg = CreateColorBox("Clock / Text / title color", draft.WidgetForeground);
         var mutedFg = CreateColorBox("Date / muted text", draft.ForegroundMuted);
-        var accent = CreateColorBox("Accent (buttons)", draft.Accent);
+        var accent = CreateColorBox("Accent color (#AARRGGBB) — buttons & highlights", draft.Accent);
+        Action? refreshPreview = null;
+        var accentSwatches = BuildAccentSwatchRow(accent, () => refreshPreview?.Invoke());
         var fontBox = new ComboBox
         {
             Header = "Font",
@@ -2071,9 +2283,9 @@ public sealed partial class DesktopPage : Page
         };
         var opacityBox = new NumberBox
         {
-            Header = "Surface opacity (0.35–1.0)",
+            Header = "Surface opacity (0.18–1.0)",
             Value = draft.Transparency,
-            Minimum = 0.35,
+            Minimum = 0.18,
             Maximum = 1.0,
             SmallChange = 0.05,
             LargeChange = 0.1,
@@ -2096,10 +2308,10 @@ public sealed partial class DesktopPage : Page
         };
         var previewAccent = new Border
         {
-            Width = 24,
-            Height = 2,
+            Width = 48,
+            Height = 4,
             HorizontalAlignment = HorizontalAlignment.Left,
-            CornerRadius = new CornerRadius(1),
+            CornerRadius = new CornerRadius(2),
             Margin = new Thickness(0, 0, 0, 6)
         };
         var previewTime = new TextBlock
@@ -2125,7 +2337,7 @@ public sealed partial class DesktopPage : Page
 
         void RefreshPreview()
         {
-            var opacity = Math.Clamp(opacityBox.Value, 0.35, 1.0);
+            var opacity = Math.Clamp(opacityBox.Value, 0.18, 1.0);
             var radius = Math.Clamp(radiusBox.Value, 0, 40);
             previewOuter.Background = ThemePainter.Brush(draft.SurfaceSecondary, opacity * 0.55);
             previewOuter.BorderBrush = ThemePainter.Brush(draft.Border, 0.28);
@@ -2133,13 +2345,15 @@ public sealed partial class DesktopPage : Page
             preview.Background = ThemePainter.Brush(widgetBg.Text, opacity);
             preview.CornerRadius = new CornerRadius(Math.Max(8, radius - 2));
             preview.BorderBrush = ThemePainter.Brush(draft.Border, 0.55);
-            previewAccent.Background = ThemePainter.Brush(accent.Text, 0.9);
+            previewAccent.Background = ThemePainter.Brush(accent.Text, 0.95);
             previewTime.Foreground = ThemePainter.Brush(widgetFg.Text);
             previewDate.Foreground = ThemePainter.Brush(mutedFg.Text);
             var font = fontBox.SelectedItem as string ?? draft.FontFamily;
             previewTime.FontFamily = new FontFamily(font);
             previewDate.FontFamily = new FontFamily(font);
         }
+
+        refreshPreview = RefreshPreview;
 
         presetBox.SelectionChanged += (_, _) =>
         {
@@ -2166,6 +2380,7 @@ public sealed partial class DesktopPage : Page
         widgetBg.TextChanged += (_, _) => RefreshPreview();
         widgetFg.TextChanged += (_, _) => RefreshPreview();
         mutedFg.TextChanged += (_, _) => RefreshPreview();
+        accent.TextChanged += (_, _) => RefreshPreview();
         radiusBox.ValueChanged += (_, _) => RefreshPreview();
         opacityBox.ValueChanged += (_, _) => RefreshPreview();
         fontBox.SelectionChanged += (_, _) => RefreshPreview();
@@ -2185,6 +2400,7 @@ public sealed partial class DesktopPage : Page
         panel.Children.Add(widgetFg);
         panel.Children.Add(mutedFg);
         panel.Children.Add(accent);
+        panel.Children.Add(accentSwatches);
         panel.Children.Add(fontBox);
         panel.Children.Add(radiusBox);
         panel.Children.Add(opacityBox);
@@ -2238,7 +2454,7 @@ public sealed partial class DesktopPage : Page
         draft.ForegroundMuted = muted;
         draft.Accent = ac;
         draft.CornerRadius = Math.Clamp(radiusBox.Value, 0, 40);
-        draft.Transparency = Math.Clamp(opacityBox.Value, 0.35, 1.0);
+        draft.Transparency = Math.Clamp(opacityBox.Value, 0.18, 1.0);
         draft.FontFamily = fontBox.SelectedItem as string ?? draft.FontFamily;
         if (presetBox.SelectedItem is string selectedPreset)
         {
@@ -2272,6 +2488,58 @@ public sealed partial class DesktopPage : Page
             Text = value,
             PlaceholderText = "#AARRGGBB"
         };
+
+    private static StackPanel BuildAccentSwatchRow(TextBox accentBox, Action onPicked)
+    {
+        var row = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            Margin = new Thickness(0, -2, 0, 4)
+        };
+        row.Children.Add(new TextBlock
+        {
+            Text = "Quick:",
+            FontSize = 11,
+            Opacity = 0.75,
+            VerticalAlignment = VerticalAlignment.Center
+        });
+
+        // Jade (default) + cyan / blue / rose / amber / white / red / gold.
+        foreach (var hex in new[]
+                 {
+                     "#FF7A9E86",
+                     "#FF6FD4C8",
+                     "#FF6C8CFF",
+                     "#FFD4849A",
+                     "#FFFFB347",
+                     "#FFF3EFE6",
+                     "#FFE85D5D",
+                     "#FFC9A227"
+                 })
+        {
+            var chip = new Button
+            {
+                Width = 28,
+                Height = 28,
+                Padding = new Thickness(0),
+                CornerRadius = new CornerRadius(14),
+                Background = ThemePainter.Brush(hex, 1),
+                BorderBrush = ThemePainter.Brush("#66FFFFFF", 1),
+                BorderThickness = new Thickness(1),
+                Tag = hex
+            };
+            ToolTipService.SetToolTip(chip, hex);
+            chip.Click += (_, _) =>
+            {
+                accentBox.Text = hex;
+                onPicked();
+            };
+            row.Children.Add(chip);
+        }
+
+        return row;
+    }
 
     private static bool TryNormalizeHex(string? input, out string normalized)
     {

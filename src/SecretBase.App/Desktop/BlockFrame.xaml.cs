@@ -6,6 +6,7 @@ using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
 using Microsoft.UI.Xaml.Shapes;
 using SecretBase.Core.Blocks;
+using SecretBase.Core.Desktop;
 using SecretBase.Core.Themes;
 using SecretBase.Platform.Abstractions;
 using SecretBase.Widgets.Hosting;
@@ -41,6 +42,7 @@ public sealed partial class BlockFrame : UserControl
 
     private BlockItem? _activeItem;
     private FrameworkElement? _activeTile;
+    private Button StyleButton = null!;
     private bool _itemDragging;
     private Point _itemLastPoint;
     private Point _itemPressPoint;
@@ -73,6 +75,9 @@ public sealed partial class BlockFrame : UserControl
         _onBoundsChanged = onBoundsChanged;
         _onStatus = onStatus;
 
+        // Built in code (not XAML) so the WinUI markup compiler cannot NRE on new chrome.
+        InsertStyleButton();
+
         Width = block.Size.Width;
         Height = block.Size.Height;
         ApplyTheme(theme);
@@ -90,41 +95,154 @@ public sealed partial class BlockFrame : UserControl
 
     public Block Block => _block;
 
+    private const double HeaderIconButtonSize = 20;
+    private const double HeaderIconScale = 0.62;
+
+    private void InsertStyleButton()
+    {
+        StyleButton = new Button
+        {
+            Content = CreateCompactHeaderIcon(Symbol.Pictures),
+            Margin = new Thickness(0, 0, 2, 0)
+        };
+        SizeHeaderIconButton(StyleButton);
+        StyleButton.Click += StyleButton_Click;
+        ToolTipService.SetToolTip(StyleButton, "Icon style: white silhouette / fashion rail");
+
+        // Name | Style | Arrange | Del — compact white silhouette icons.
+        HeaderRow.ColumnDefinitions.Insert(1, new ColumnDefinition { Width = GridLength.Auto });
+        Grid.SetColumn(ArrangeButton, 2);
+        Grid.SetColumn(DeleteButton, 3);
+        Grid.SetColumn(StyleButton, 1);
+        HeaderRow.Children.Insert(1, StyleButton);
+        SizeHeaderIconButton(ArrangeButton);
+        SizeHeaderIconButton(DeleteButton);
+    }
+
+    private static void SizeHeaderIconButton(Button button)
+    {
+        button.Width = HeaderIconButtonSize;
+        button.Height = HeaderIconButtonSize;
+        button.MinWidth = HeaderIconButtonSize;
+        button.MinHeight = HeaderIconButtonSize;
+        button.Padding = new Thickness(0);
+        button.CornerRadius = new CornerRadius(6);
+    }
+
+    private static SymbolIcon CreateCompactHeaderIcon(Symbol symbol)
+    {
+        return new SymbolIcon
+        {
+            Symbol = symbol,
+            RenderTransformOrigin = new Windows.Foundation.Point(0.5, 0.5),
+            RenderTransform = new ScaleTransform
+            {
+                ScaleX = HeaderIconScale,
+                ScaleY = HeaderIconScale
+            }
+        };
+    }
+
+    private static void TintHeaderIcon(Button button, ThemeDefinition theme, double opacity = 0.92)
+    {
+        var brush = ThemePainter.Brush(theme.WidgetForeground, opacity);
+        button.Foreground = brush;
+        if (button.Content is SymbolIcon icon)
+        {
+            icon.Foreground = brush;
+        }
+    }
+
+    /// <summary>White silhouette / fashion rail — clear until hover glass.</summary>
+    private bool UsesClearSurface =>
+        BlockIconStyle.IsSilhouette(_block.IconStyle) || BlockLayoutMode.IsRail(_block.LayoutMode);
+
     private void ApplyTheme(ThemeDefinition theme)
     {
-        var radius = Math.Max(14, theme.CornerRadius);
+        var rail = BlockLayoutMode.IsRail(_block.LayoutMode);
+        var radius = Math.Max(rail ? 10 : 14, theme.CornerRadius - (rail ? 6 : 0));
         DragBar.CornerRadius = new CornerRadius(radius, radius, 0, 0);
         Surface.CornerRadius = new CornerRadius(0, 0, radius, radius);
-        // Launchpad-like glass: lighter fill so wallpaper reads through Blocks.
-        var blockOpacity = Math.Clamp(ThemePainter.EffectiveWidgetOpacity(theme) * 0.42, 0.18, 0.48);
-        Surface.Background = ThemePainter.Brush(theme.WidgetBackground, blockOpacity);
-        Surface.BorderBrush = ThemePainter.Brush(theme.Border, 0.18);
-        Surface.BorderThickness = new Thickness(1, 0, 1, 1);
+        Surface.Padding = rail ? new Thickness(4, 2, 4, 4) : new Thickness(8, 4, 8, 8);
+        ApplySurfaceFill(emphasized: _pointerInside || _dragging || _resizing);
         NameText.Text = _block.Name;
         NameText.Foreground = ThemePainter.Brush(theme.WidgetForeground);
         NameText.FontFamily = new FontFamily(theme.FontFamily);
         NameText.CharacterSpacing = 20;
+        NameText.Opacity = rail ? 0.45 : 0.9;
         EmptyHint.Foreground = ThemePainter.Brush(theme.ForegroundMuted);
         EmptyHint.FontFamily = new FontFamily(theme.FontFamily);
-        WidgetSurfaceStyle.ApplyGhostButton(DeleteButton, theme);
-        WidgetSurfaceStyle.ApplyGhostButton(ArrangeButton, theme);
-        DeleteButton.Opacity = 0.75;
-        ArrangeButton.Opacity = 0.75;
-        ResizeHandle.Background = ThemePainter.Brush(theme.Border, 0.35);
+        WidgetSurfaceStyle.ApplyIconButton(DeleteButton, theme);
+        WidgetSurfaceStyle.ApplyIconButton(ArrangeButton, theme);
+        WidgetSurfaceStyle.ApplyIconButton(StyleButton, theme);
+        // ApplyIconButton pads for shelf chips — keep Block header chrome compact.
+        SizeHeaderIconButton(DeleteButton);
+        SizeHeaderIconButton(ArrangeButton);
+        SizeHeaderIconButton(StyleButton);
+        StyleButton.Content = CreateCompactHeaderIcon(
+            BlockIconStyle.IsSilhouette(_block.IconStyle) ? Symbol.OutlineStar : Symbol.Pictures);
+        ArrangeButton.Content = CreateCompactHeaderIcon(rail ? Symbol.List : Symbol.ViewAll);
+        DeleteButton.Content = CreateCompactHeaderIcon(Symbol.Delete);
+        TintHeaderIcon(StyleButton, theme, 0.9);
+        TintHeaderIcon(ArrangeButton, theme, 0.9);
+        TintHeaderIcon(DeleteButton, theme, 0.9);
+        ToolTipService.SetToolTip(
+            StyleButton,
+            BlockIconStyle.IsSilhouette(_block.IconStyle)
+                ? "White silhouette icons — change style / layout"
+                : "Color icons — change style / layout");
+        ToolTipService.SetToolTip(
+            ArrangeButton,
+            rail ? "Fashion rail — arrange icons" : "Grid layout — arrange icons evenly");
+        ResizeHandle.Background = ThemePainter.Brush(theme.Border, rail ? 0.2 : 0.35);
 
         var grip = ThemePainter.ParseColor(theme.WidgetForeground);
-        grip.A = 0x10;
+        grip.A = (byte)(rail ? 0x08 : 0x10);
         DragBar.Background = new SolidColorBrush(grip);
+        SetChromeEmphasis(_pointerInside || _dragging || _resizing);
     }
 
+    private void ApplySurfaceFill(bool emphasized)
+    {
+        var rail = IsRail;
+        var clear = UsesClearSurface;
+        if (clear && !emphasized)
+        {
+            Surface.Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
+            Surface.BorderBrush = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
+            Surface.BorderThickness = new Thickness(0);
+            return;
+        }
+
+        // Hover (or always-on for color grid): airy launchpad glass.
+        var blockOpacity = rail
+            ? Math.Clamp(ThemePainter.EffectiveWidgetOpacity(_theme) * 0.10, 0.03, 0.14)
+            : Math.Clamp(ThemePainter.SoftSurfaceOpacity(_theme), 0.12, 0.36);
+        Surface.Background = ThemePainter.Brush(_theme.WidgetBackground, blockOpacity);
+        Surface.BorderBrush = ThemePainter.Brush(_theme.Border, rail ? 0.08 : 0.18);
+        Surface.BorderThickness = rail ? new Thickness(0) : new Thickness(1, 0, 1, 1);
+    }
+
+    private bool IsRail => BlockLayoutMode.IsRail(_block.LayoutMode);
+
+    private double TileW => IsRail ? BlockItem.RailTileWidth : BlockItem.TileWidth;
+
+    private double TileH => IsRail ? BlockItem.RailTileHeight : BlockItem.TileHeight;
+
     private double ContentWidth =>
-        ItemCanvas.ActualWidth > 0 ? ItemCanvas.ActualWidth : Math.Max(BlockItem.TileWidth, _block.Size.Width - 24);
+        ItemCanvas.ActualWidth > 0 ? ItemCanvas.ActualWidth : Math.Max(TileW, _block.Size.Width - 24);
 
     private double ContentHeight =>
-        ItemCanvas.ActualHeight > 0 ? ItemCanvas.ActualHeight : Math.Max(BlockItem.TileHeight, _block.Size.Height - 60);
+        ItemCanvas.ActualHeight > 0 ? ItemCanvas.ActualHeight : Math.Max(TileH, _block.Size.Height - 60);
 
     private void ArrangeItemsEvenly()
     {
+        if (IsRail)
+        {
+            BlockItemLayout.ArrangeRail(_block.Items, ContentWidth, ContentHeight);
+            return;
+        }
+
         BlockItemLayout.ArrangeEvenly(_block.Items, ContentWidth, ContentHeight);
     }
 
@@ -138,7 +256,7 @@ public sealed partial class BlockFrame : UserControl
         ItemCanvas.Children.Clear();
         foreach (var item in _block.Items)
         {
-            item.ClampPlacement(ContentWidth, ContentHeight);
+            item.ClampPlacement(ContentWidth, ContentHeight, TileW, TileH);
             ItemCanvas.Children.Add(CreateItemTile(item));
         }
 
@@ -147,6 +265,10 @@ public sealed partial class BlockFrame : UserControl
 
     private FrameworkElement CreateItemTile(BlockItem item)
     {
+        var rail = IsRail;
+        var silhouette = BlockIconStyle.IsSilhouette(_block.IconStyle);
+        var iconSize = rail ? 32.0 : 36.0;
+
         var label = new TextBlock
         {
             Text = string.IsNullOrWhiteSpace(item.Name) ? "Item" : item.Name,
@@ -156,14 +278,15 @@ public sealed partial class BlockFrame : UserControl
             TextTrimming = TextTrimming.CharacterEllipsis,
             MaxLines = 2,
             Foreground = ThemePainter.Brush(_theme.WidgetForeground),
-            FontFamily = new FontFamily(_theme.FontFamily)
+            FontFamily = new FontFamily(_theme.FontFamily),
+            Visibility = rail ? Visibility.Collapsed : Visibility.Visible
         };
 
         var iconHost = new Border
         {
-            Width = 40,
-            Height = 40,
-            CornerRadius = new CornerRadius(8),
+            Width = rail ? 40 : 40,
+            Height = rail ? 40 : 40,
+            CornerRadius = new CornerRadius(rail ? 0 : 8),
             HorizontalAlignment = HorizontalAlignment.Center,
             Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent)
         };
@@ -173,10 +296,18 @@ public sealed partial class BlockFrame : UserControl
         var customPath = ResolveCustomIconPath(item);
         // Prefer 128px shell cache so DPI / 36px display stays sharp.
         var displayPath = customPath ?? _icons.TryGetCachedIconPath(item.Target, sizePx: 128);
-        var image = TryCreateIconImage(displayPath);
-        if (image is not null)
+        UIElement? iconVisual = silhouette
+            ? IconSilhouettePainter.TryCreate(displayPath ?? string.Empty, iconSize)
+            : TryCreateIconImage(displayPath, iconSize);
+        if (iconVisual is null && silhouette && !string.IsNullOrWhiteSpace(displayPath))
         {
-            iconHost.Child = image;
+            // Fall back to color decode if silhouette conversion fails.
+            iconVisual = TryCreateIconImage(displayPath, iconSize);
+        }
+
+        if (iconVisual is not null)
+        {
+            iconHost.Child = iconVisual;
         }
         else
         {
@@ -189,28 +320,34 @@ public sealed partial class BlockFrame : UserControl
                     BlockItemType.Folder => "DIR",
                     _ => "FILE"
                 },
-                FontSize = 10,
+                FontSize = rail ? 9 : 10,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
-                Foreground = ThemePainter.Brush(_theme.ForegroundMuted)
+                Foreground = silhouette
+                    ? ThemePainter.Brush("#FFFFFFFF", 0.9)
+                    : ThemePainter.Brush(_theme.ForegroundMuted)
             };
         }
 
         var stack = new StackPanel
         {
-            Width = BlockItem.TileWidth,
-            Spacing = 4,
-            Padding = new Thickness(2)
+            Width = TileW,
+            Spacing = rail ? 0 : 4,
+            Padding = new Thickness(rail ? 0 : 2),
+            VerticalAlignment = VerticalAlignment.Center
         };
         stack.Children.Add(iconHost);
-        stack.Children.Add(label);
+        if (!rail)
+        {
+            stack.Children.Add(label);
+        }
 
         var tile = new Border
         {
-            Width = BlockItem.TileWidth,
-            Height = BlockItem.TileHeight,
+            Width = TileW,
+            Height = TileH,
             Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
-            CornerRadius = new CornerRadius(8),
+            CornerRadius = new CornerRadius(rail ? 0 : 8),
             Child = stack,
             Tag = item,
             CanDrag = false
@@ -228,6 +365,10 @@ public sealed partial class BlockFrame : UserControl
         var openItem = new MenuFlyoutItem { Text = "Open" };
         openItem.Click += (_, _) => LaunchItem(item);
         menu.Items.Add(openItem);
+
+        var renameItem = new MenuFlyoutItem { Text = "Rename…" };
+        renameItem.Click += async (_, _) => await RenameItemAsync(item);
+        menu.Items.Add(renameItem);
 
         if (_customIcons is not null)
         {
@@ -272,7 +413,7 @@ public sealed partial class BlockFrame : UserControl
                 continue;
             }
 
-            item.ClampPlacement(ContentWidth, ContentHeight);
+            item.ClampPlacement(ContentWidth, ContentHeight, TileW, TileH);
             Canvas.SetLeft(child, item.X);
             Canvas.SetTop(child, item.Y);
         }
@@ -375,7 +516,7 @@ public sealed partial class BlockFrame : UserControl
 
         _activeItem.X = Canvas.GetLeft(tile) + moveX;
         _activeItem.Y = Canvas.GetTop(tile) + moveY;
-        _activeItem.ClampPlacement(ItemCanvas.ActualWidth, ItemCanvas.ActualHeight);
+        _activeItem.ClampPlacement(ItemCanvas.ActualWidth, ItemCanvas.ActualHeight, TileW, TileH);
         Canvas.SetLeft(tile, _activeItem.X);
         Canvas.SetTop(tile, _activeItem.Y);
         e.Handled = true;
@@ -434,6 +575,57 @@ public sealed partial class BlockFrame : UserControl
         {
             _onStatus?.Invoke(result.ErrorMessage ?? "Launch failed.");
         }
+    }
+
+    private async Task RenameItemAsync(BlockItem item)
+    {
+        var box = new TextBox
+        {
+            Header = "App name",
+            Text = item.Name,
+            PlaceholderText = "Display name",
+            MaxLength = 80,
+            MinWidth = 280
+        };
+
+        var dialog = new ContentDialog
+        {
+            Title = "Rename",
+            Content = box,
+            PrimaryButtonText = "Save",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = XamlRoot
+        };
+
+        ContentDialogResult result;
+        using (_dialogInput?.Enter())
+        {
+            result = await dialog.ShowAsync();
+        }
+
+        if (result != ContentDialogResult.Primary)
+        {
+            return;
+        }
+
+        var next = (box.Text ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(next))
+        {
+            _onStatus?.Invoke("Name cannot be empty.");
+            return;
+        }
+
+        if (string.Equals(item.Name, next, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        item.Name = next;
+        RefreshItems(arrangeIfNeeded: false);
+        _onLayoutCommitted();
+        _onBoundsChanged?.Invoke();
+        _onStatus?.Invoke($"Renamed to '{item.Name}'.");
     }
 
     private void RestoreItemToDesktop(BlockItem item)
@@ -662,7 +854,7 @@ public sealed partial class BlockFrame : UserControl
         return File.Exists(item.Icon) ? item.Icon : null;
     }
 
-    private static Image? TryCreateIconImage(string? path)
+    private static Image? TryCreateIconImage(string? path, double displaySize = 36)
     {
         if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
         {
@@ -678,20 +870,115 @@ public sealed partial class BlockFrame : UserControl
             bitmap.CreateOptions = BitmapCreateOptions.IgnoreImageCache;
             // Decode near display size at high quality; source PNGs are typically 96–128px.
             bitmap.DecodePixelType = DecodePixelType.Logical;
-            bitmap.DecodePixelWidth = 72;
+            bitmap.DecodePixelWidth = (int)Math.Clamp(displaySize * 2, 48, 128);
             bitmap.UriSource = new Uri($"{uri.AbsoluteUri}?v={cacheBust}", UriKind.Absolute);
             return new Image
             {
                 Source = bitmap,
                 Stretch = Stretch.Uniform,
-                Width = 36,
-                Height = 36
+                Width = displaySize,
+                Height = displaySize
             };
         }
         catch
         {
             return null;
         }
+    }
+
+    private void StyleButton_Click(object sender, RoutedEventArgs e)
+    {
+        var flyout = new MenuFlyout();
+
+        var colorItem = new ToggleMenuFlyoutItem
+        {
+            Text = "Color icons",
+            IsChecked = !BlockIconStyle.IsSilhouette(_block.IconStyle)
+        };
+        colorItem.Click += (_, _) => ApplyIconStyle(BlockIconStyle.Color);
+
+        var whiteItem = new ToggleMenuFlyoutItem
+        {
+            Text = "White silhouette",
+            IsChecked = BlockIconStyle.IsSilhouette(_block.IconStyle)
+        };
+        whiteItem.Click += (_, _) => ApplyIconStyle(BlockIconStyle.Silhouette);
+
+        var gridItem = new ToggleMenuFlyoutItem
+        {
+            Text = "Grid layout",
+            IsChecked = !IsRail
+        };
+        gridItem.Click += (_, _) => ApplyLayoutMode(BlockLayoutMode.Grid);
+
+        var railItem = new ToggleMenuFlyoutItem
+        {
+            Text = "Fashion rail",
+            IsChecked = IsRail
+        };
+        railItem.Click += (_, _) => ApplyLayoutMode(BlockLayoutMode.Rail);
+
+        flyout.Items.Add(colorItem);
+        flyout.Items.Add(whiteItem);
+        flyout.Items.Add(new MenuFlyoutSeparator());
+        flyout.Items.Add(gridItem);
+        flyout.Items.Add(railItem);
+        flyout.ShowAt(StyleButton);
+    }
+
+    private void ApplyIconStyle(string style)
+    {
+        _block.IconStyle = BlockIconStyle.Normalize(style);
+        ApplyTheme(_theme);
+        RefreshItems(arrangeIfNeeded: false);
+        _onLayoutCommitted();
+        _onBoundsChanged?.Invoke();
+        _onStatus?.Invoke(
+            BlockIconStyle.IsSilhouette(_block.IconStyle)
+                ? $"White silhouette icons on '{_block.Name}'."
+                : $"Color icons on '{_block.Name}'.");
+    }
+
+    private void ApplyLayoutMode(string mode)
+    {
+        _block.LayoutMode = BlockLayoutMode.Normalize(mode);
+        if (IsRail)
+        {
+            // Slim fashion strip — vertical when many icons, horizontal when wide.
+            var count = Math.Max(1, _block.Items.Count);
+            var vertical = _block.Size.Height >= _block.Size.Width || count > 4;
+            if (vertical)
+            {
+                _block.Size.Width = Math.Max(Block.RailMinWidth, 88);
+                _block.Size.Height = Math.Max(
+                    Block.RailMinHeight,
+                    48 + count * (BlockItem.RailTileHeight + 10));
+            }
+            else
+            {
+                _block.Size.Width = Math.Max(
+                    Block.RailMinWidth,
+                    24 + count * (BlockItem.RailTileWidth + 10));
+                _block.Size.Height = Math.Max(Block.RailMinHeight, 96);
+            }
+        }
+        else if (_block.Size.Width < Block.MinWidth || _block.Size.Height < Block.MinHeight)
+        {
+            _block.Size.Width = Math.Max(_block.Size.Width, Block.DefaultWidth);
+            _block.Size.Height = Math.Max(_block.Size.Height, Block.DefaultHeight);
+        }
+
+        _block.ClampSize();
+        Width = _block.Size.Width;
+        Height = _block.Size.Height;
+        ApplyTheme(_theme);
+        RefreshItems(arrangeIfNeeded: true);
+        _onLayoutCommitted();
+        _onBoundsChanged?.Invoke();
+        _onStatus?.Invoke(
+            IsRail
+                ? $"Fashion rail layout on '{_block.Name}'."
+                : $"Grid layout on '{_block.Name}'.");
     }
 
     private static Windows.UI.Color ParsePresetColor(string hex)
@@ -732,9 +1019,22 @@ public sealed partial class BlockFrame : UserControl
 
     private void SetChromeEmphasis(bool emphasized)
     {
-        var opacity = emphasized || _dragging || _resizing ? 0.96 : 0.28;
+        var active = emphasized || _dragging || _resizing;
+        var opacity = active ? 0.96 : 0.28;
         WidgetSurfaceStyle.FadeOpacity(DragBar, opacity, emphasized ? 140 : 220);
         WidgetSurfaceStyle.FadeOpacity(ResizeHandle, opacity, emphasized ? 140 : 220);
+
+        if (UsesClearSurface)
+        {
+            ApplySurfaceFill(active);
+            // White / rail: header chrome stays out of the way until hover.
+            var headerOpacity = active ? 1.0 : 0.0;
+            WidgetSurfaceStyle.FadeOpacity(HeaderRow, headerOpacity, emphasized ? 140 : 220);
+        }
+        else
+        {
+            HeaderRow.Opacity = 1.0;
+        }
     }
 
     private void RootGrid_PointerEntered(object sender, PointerRoutedEventArgs e)
@@ -778,8 +1078,9 @@ public sealed partial class BlockFrame : UserControl
         var dy = point.Y - _lastPoint.Y;
         _lastPoint = point;
 
-        var newX = Math.Max(0, Canvas.GetLeft(this) + dx);
-        var newY = Math.Max(0, Canvas.GetTop(this) + dy);
+        var newX = Canvas.GetLeft(this) + dx;
+        var newY = Canvas.GetTop(this) + dy;
+        ClampToParentCanvas(ref newX, ref newY, Width, Height);
         Canvas.SetLeft(this, newX);
         Canvas.SetTop(this, newY);
         _block.Position.X = newX;
@@ -840,6 +1141,15 @@ public sealed partial class BlockFrame : UserControl
         _block.Size.Width += dx;
         _block.Size.Height += dy;
         _block.ClampSize();
+        if (Parent is Canvas canvas && canvas.ActualWidth > 0 && canvas.ActualHeight > 0)
+        {
+            var maxW = Math.Max(Block.MinWidth, canvas.ActualWidth - Canvas.GetLeft(this));
+            var maxH = Math.Max(
+                Block.MinHeight,
+                canvas.ActualHeight - Canvas.GetTop(this) - DesktopViewportLayout.DefaultBottomReserve);
+            _block.Size.Clamp(Block.MinWidth, Block.MinHeight, maxW, maxH);
+        }
+
         Width = _block.Size.Width;
         Height = _block.Size.Height;
         ArrangeItemsEvenly();
@@ -998,5 +1308,24 @@ public sealed partial class BlockFrame : UserControl
                 : $"Linked {added} item(s) into '{_block.Name}'.";
             _onStatus?.Invoke(msg);
         }
+    }
+
+    private void ClampToParentCanvas(ref double x, ref double y, double width, double height)
+    {
+        if (Parent is not Canvas canvas)
+        {
+            x = Math.Max(0, x);
+            y = Math.Max(0, y);
+            return;
+        }
+
+        var maxX = canvas.ActualWidth > 0
+            ? Math.Max(0, canvas.ActualWidth - Math.Max(40, width))
+            : double.MaxValue;
+        var maxY = canvas.ActualHeight > 0
+            ? Math.Max(0, canvas.ActualHeight - Math.Max(40, height) - DesktopViewportLayout.DefaultBottomReserve)
+            : double.MaxValue;
+        x = Math.Clamp(x, 0, maxX);
+        y = Math.Clamp(y, 0, maxY);
     }
 }

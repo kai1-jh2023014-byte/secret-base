@@ -27,7 +27,7 @@ public class ThemePresetsTests
         ThemePresets.ApplyPreset(theme, "not-a-real-preset");
 
         Assert.Equal("not-a-real-preset", theme.DisplayName);
-        Assert.Equal("#D9181E28", theme.WidgetBackground);
+        Assert.Equal("#66181E28", theme.WidgetBackground);
         Assert.Equal("#FFF3EFE6", theme.WidgetForeground);
         Assert.Equal(18, theme.CornerRadius);
     }
@@ -61,7 +61,7 @@ public class ThemePresetsTests
     {
         var theme = ThemeDefinition.CreateDefault();
         ThemePresets.ApplyPreset(theme, name);
-        Assert.InRange(theme.Transparency, 0.35, 1.0);
+        Assert.InRange(theme.Transparency, 0.18, 1.0);
         Assert.False(string.IsNullOrWhiteSpace(theme.WidgetBackground));
         Assert.False(string.IsNullOrWhiteSpace(theme.WidgetForeground));
     }

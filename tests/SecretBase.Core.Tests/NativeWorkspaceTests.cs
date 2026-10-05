@@ -35,13 +35,26 @@ public class ClockCustomizationTests
             Use24HourFormat = false,
             ShowSeconds = false,
             ShowDate = true,
-            SizeScale = 1.2
+            SizeScale = 2.4,
+            DateScale = 1.8
         };
         var restored = ClockWidgetConfiguration.FromDictionary(config.ToDictionary());
         Assert.Equal(ClockWidgetConfiguration.StyleFocus, restored.DisplayStyle);
         Assert.False(restored.Use24HourFormat);
         Assert.False(restored.ShowSeconds);
-        Assert.Equal(1.2, restored.SizeScale);
+        Assert.Equal(2.4, restored.SizeScale);
+        Assert.Equal(1.8, restored.DateScale);
+    }
+
+    [Fact]
+    public void ClockConfiguration_ClampsSizeAndDateScale()
+    {
+        Assert.Equal(
+            ClockWidgetConfiguration.SizeScaleMax,
+            ClockWidgetConfiguration.ClampSizeScale(9));
+        Assert.Equal(
+            ClockWidgetConfiguration.DateScaleMin,
+            ClockWidgetConfiguration.ClampDateScale(0.1));
     }
 
     [Fact]
@@ -50,5 +63,14 @@ public class ClockCustomizationTests
         var config = new ClockWidgetConfiguration { DisplayStyle = ClockWidgetConfiguration.StyleFocus, ShowDate = true };
         var date = ClockDisplayFormatter.FormatDate(new DateTimeOffset(2026, 9, 2, 9, 0, 0, TimeSpan.Zero), config);
         Assert.Contains("September", date, StringComparison.Ordinal);
+        Assert.Contains("Wednesday", date, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ClockFormatter_BaseStyle_IncludesAbbreviatedWeekday()
+    {
+        var config = new ClockWidgetConfiguration { DisplayStyle = ClockWidgetConfiguration.StyleBase, ShowDate = true };
+        var date = ClockDisplayFormatter.FormatDate(new DateTimeOffset(2026, 10, 5, 9, 0, 0, TimeSpan.Zero), config);
+        Assert.Equal("Mon, Oct 5", date);
     }
 }
