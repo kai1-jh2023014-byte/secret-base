@@ -115,7 +115,9 @@ public class WidgetInstanceTests
             DisplayStyle = ClockWidgetConfiguration.StyleLarge,
             Use24HourFormat = true,
             ShowSeconds = false,
-            ShowDate = true
+            ShowDate = true,
+            SizeScale = 2.5,
+            DateScale = 1.6
         };
 
         var restored = ClockWidgetConfiguration.FromDictionary(original.ToDictionary());
@@ -123,6 +125,8 @@ public class WidgetInstanceTests
         Assert.True(restored.Use24HourFormat);
         Assert.False(restored.ShowSeconds);
         Assert.True(restored.ShowDate);
+        Assert.Equal(2.5, restored.SizeScale);
+        Assert.Equal(1.6, restored.DateScale);
     }
 
     [Fact]

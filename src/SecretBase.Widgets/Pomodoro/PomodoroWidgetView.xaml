@@ -17,7 +17,7 @@
         <Border
             x:Name="RootBorder"
             Padding="16,14"
-            Background="#D9181E28"
+            Background="#66181E28"
             CornerRadius="18"
             BorderThickness="1"
             BorderBrush="#3DFFFFFF"

@@ -51,7 +51,11 @@ public static class ThemePainter
     }
 
     public static double EffectiveWidgetOpacity(ThemeDefinition theme) =>
-        Math.Clamp(theme.Transparency, 0.35, 1.0);
+        Math.Clamp(theme.Transparency, 0.18, 1.0);
+
+    /// <summary>Soft glass fill opacity for widget cards (more air than raw Transparency).</summary>
+    public static double SoftSurfaceOpacity(ThemeDefinition theme) =>
+        Math.Clamp(EffectiveWidgetOpacity(theme) * 0.58, 0.14, 0.52);
 
     /// <summary>Blend two hex colors by <paramref name="amount"/> toward <paramref name="toHex"/>.</summary>
     public static Color Blend(string fromHex, string toHex, double amount)

@@ -113,7 +113,8 @@ public sealed partial class ClockWidgetView : UserControl, IDisposable
     private void RefreshDisplay()
     {
         var now = _timeProvider.GetLocalNow();
-        var scale = Math.Clamp(_configuration.SizeScale, 0.75, 1.5);
+        var scale = ClockWidgetConfiguration.ClampSizeScale(_configuration.SizeScale);
+        var dateScale = ClockWidgetConfiguration.ClampDateScale(_configuration.DateScale);
         var style = ClockWidgetConfiguration.NormalizeStyle(_configuration.DisplayStyle);
         _configuration.DisplayStyle = style;
         var isAnalog = string.Equals(style, ClockWidgetConfiguration.StyleAnalog, StringComparison.Ordinal);
@@ -180,11 +181,11 @@ public sealed partial class ClockWidgetView : UserControl, IDisposable
         NextText.HorizontalAlignment = TimeText.HorizontalAlignment;
         DateText.FontSize = style switch
         {
-            ClockWidgetConfiguration.StyleLarge => 15 * scale,
-            ClockWidgetConfiguration.StyleDigital => 15 * scale,
-            ClockWidgetConfiguration.StyleMinimal => 12 * scale,
-            ClockWidgetConfiguration.StyleFocus => 14 * scale,
-            _ => 13 * scale
+            ClockWidgetConfiguration.StyleLarge => 15 * dateScale,
+            ClockWidgetConfiguration.StyleDigital => 15 * dateScale,
+            ClockWidgetConfiguration.StyleMinimal => 12 * dateScale,
+            ClockWidgetConfiguration.StyleFocus => 14 * dateScale,
+            _ => 13 * dateScale
         };
         DateText.Opacity = style == ClockWidgetConfiguration.StyleMinimal ? 0.7 : 0.92;
         DateText.CharacterSpacing = isLarge ? 20 : 30;
@@ -325,11 +326,19 @@ public sealed partial class ClockWidgetView : UserControl, IDisposable
         var showDate = new CheckBox { Content = "Show date", IsChecked = _configuration.ShowDate };
         var sizeBox = new Slider
         {
-            Header = "Size",
-            Minimum = 0.75,
-            Maximum = 1.5,
+            Header = "Time size",
+            Minimum = ClockWidgetConfiguration.SizeScaleMin,
+            Maximum = ClockWidgetConfiguration.SizeScaleMax,
             StepFrequency = 0.05,
-            Value = _configuration.SizeScale
+            Value = ClockWidgetConfiguration.ClampSizeScale(_configuration.SizeScale)
+        };
+        var dateSizeBox = new Slider
+        {
+            Header = "Date size",
+            Minimum = ClockWidgetConfiguration.DateScaleMin,
+            Maximum = ClockWidgetConfiguration.DateScaleMax,
+            StepFrequency = 0.05,
+            Value = ClockWidgetConfiguration.ClampDateScale(_configuration.DateScale)
         };
 
         var panel = new StackPanel { Spacing = 10 };
@@ -338,6 +347,7 @@ public sealed partial class ClockWidgetView : UserControl, IDisposable
         panel.Children.Add(showSeconds);
         panel.Children.Add(showDate);
         panel.Children.Add(sizeBox);
+        panel.Children.Add(dateSizeBox);
 
         var dialog = new ContentDialog
         {
@@ -366,7 +376,8 @@ public sealed partial class ClockWidgetView : UserControl, IDisposable
         _configuration.Use24HourFormat = format24.IsChecked == true;
         _configuration.ShowSeconds = showSeconds.IsChecked == true;
         _configuration.ShowDate = showDate.IsChecked == true;
-        _configuration.SizeScale = sizeBox.Value;
+        _configuration.SizeScale = ClockWidgetConfiguration.ClampSizeScale(sizeBox.Value);
+        _configuration.DateScale = ClockWidgetConfiguration.ClampDateScale(dateSizeBox.Value);
         _onConfigurationChanged?.Invoke(_configuration);
         WidgetSurfaceStyle.PulseScale(RootBorder);
         RefreshDisplay();

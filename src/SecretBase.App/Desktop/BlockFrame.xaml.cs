@@ -164,10 +164,10 @@ public sealed partial class BlockFrame : UserControl
             return;
         }
 
-        // Hover (or always-on for color grid): thin launchpad glass.
+        // Hover (or always-on for color grid): airy launchpad glass.
         var blockOpacity = rail
-            ? Math.Clamp(ThemePainter.EffectiveWidgetOpacity(_theme) * 0.12, 0.04, 0.18)
-            : Math.Clamp(ThemePainter.EffectiveWidgetOpacity(_theme) * 0.42, 0.18, 0.48);
+            ? Math.Clamp(ThemePainter.EffectiveWidgetOpacity(_theme) * 0.10, 0.03, 0.14)
+            : Math.Clamp(ThemePainter.SoftSurfaceOpacity(_theme), 0.12, 0.36);
         Surface.Background = ThemePainter.Brush(_theme.WidgetBackground, blockOpacity);
         Surface.BorderBrush = ThemePainter.Brush(_theme.Border, rail ? 0.08 : 0.18);
         Surface.BorderThickness = rail ? new Thickness(0) : new Thickness(1, 0, 1, 1);

@@ -244,13 +244,13 @@ public static class ThemePresets
                     foreground: "#FFF3EFE6",
                     foregroundMuted: "#FF8B93A0",
                     accent: "#FF7A9E86",
-                    widgetBackground: "#D9181E28",
+                    widgetBackground: "#66181E28",
                     widgetForeground: "#FFF3EFE6",
-                    surfaceSecondary: "#40151A24",
+                    surfaceSecondary: "#28151A24",
                     border: "#3DFFFFFF",
                     fontFamily: "Segoe UI Variable Display",
                     cornerRadius: 18,
-                    transparency: 0.88,
+                    transparency: 0.55,
                     spacing: 10);
                 break;
         }
@@ -316,7 +316,7 @@ public static class ThemePresets
         theme.Border = border;
         theme.FontFamily = fontFamily;
         theme.CornerRadius = cornerRadius;
-        theme.Transparency = Math.Clamp(transparency, 0.35, 1.0);
+        theme.Transparency = Math.Clamp(transparency, 0.18, 1.0);
         theme.Spacing = spacing;
         theme.BlurAmount = blur;
         theme.SurfaceElevated = widgetBackground;

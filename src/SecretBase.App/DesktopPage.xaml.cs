@@ -316,21 +316,31 @@ public sealed partial class DesktopPage : Page
         void StyleStripIcon(Button button, bool accent = false)
         {
             button.Background = accent
-                ? ThemePainter.Brush(theme.Accent, 0.55)
+                ? ThemePainter.Brush(theme.Accent, 0.42)
                 : new SolidColorBrush(Microsoft.UI.Colors.Transparent);
-            button.Foreground = ThemePainter.Brush(theme.WidgetForeground, accent ? 1 : 0.88);
-            button.BorderBrush = ThemePainter.Brush(theme.Border, accent ? 0.2 : 0.0);
+            button.Foreground = ThemePainter.Brush(theme.WidgetForeground, accent ? 1 : 0.92);
+            button.BorderBrush = ThemePainter.Brush(theme.Border, accent ? 0.18 : 0.0);
             button.BorderThickness = new Thickness(accent ? 1 : 0);
             button.CornerRadius = new CornerRadius(17);
             button.FontFamily = new FontFamily(theme.FontFamily);
+        }
+
+        static void TintStripIcon(Button button, ThemeDefinition theme, bool accent = false)
+        {
+            var brush = ThemePainter.Brush(theme.WidgetForeground, accent ? 1 : 0.92);
+            button.Foreground = brush;
+            if (button.Content is SymbolIcon symbol)
+            {
+                symbol.Foreground = brush;
+            }
         }
 
         if (ControlStripShell is not null)
         {
             ControlStripShell.Background = ThemePainter.Brush(
                 theme.WidgetBackground,
-                Math.Clamp(ThemePainter.EffectiveWidgetOpacity(theme) * 0.72, 0.35, 0.78));
-            ControlStripShell.BorderBrush = ThemePainter.Brush(theme.Border, 0.28);
+                Math.Clamp(ThemePainter.SoftSurfaceOpacity(theme), 0.16, 0.42));
+            ControlStripShell.BorderBrush = ThemePainter.Brush(theme.Border, 0.22);
             ControlStripShell.CornerRadius = new CornerRadius(22);
         }
 
@@ -339,6 +349,11 @@ public sealed partial class DesktopPage : Page
         StyleStripIcon(ThemeFab);
         StyleStripIcon(ArrangeFab);
         StyleStripIcon(SetupFab);
+        TintStripIcon(AddWidgetFab, theme, accent: true);
+        TintStripIcon(AddBlockFab, theme);
+        TintStripIcon(ThemeFab, theme);
+        TintStripIcon(ArrangeFab, theme);
+        TintStripIcon(SetupFab, theme);
         TaskbarAiChat.ApplyTheme(theme);
 
         if (HostStatusLabel is not null)
@@ -2267,9 +2282,9 @@ public sealed partial class DesktopPage : Page
         };
         var opacityBox = new NumberBox
         {
-            Header = "Surface opacity (0.35–1.0)",
+            Header = "Surface opacity (0.18–1.0)",
             Value = draft.Transparency,
-            Minimum = 0.35,
+            Minimum = 0.18,
             Maximum = 1.0,
             SmallChange = 0.05,
             LargeChange = 0.1,
@@ -2321,7 +2336,7 @@ public sealed partial class DesktopPage : Page
 
         void RefreshPreview()
         {
-            var opacity = Math.Clamp(opacityBox.Value, 0.35, 1.0);
+            var opacity = Math.Clamp(opacityBox.Value, 0.18, 1.0);
             var radius = Math.Clamp(radiusBox.Value, 0, 40);
             previewOuter.Background = ThemePainter.Brush(draft.SurfaceSecondary, opacity * 0.55);
             previewOuter.BorderBrush = ThemePainter.Brush(draft.Border, 0.28);
@@ -2438,7 +2453,7 @@ public sealed partial class DesktopPage : Page
         draft.ForegroundMuted = muted;
         draft.Accent = ac;
         draft.CornerRadius = Math.Clamp(radiusBox.Value, 0, 40);
-        draft.Transparency = Math.Clamp(opacityBox.Value, 0.35, 1.0);
+        draft.Transparency = Math.Clamp(opacityBox.Value, 0.18, 1.0);
         draft.FontFamily = fontBox.SelectedItem as string ?? draft.FontFamily;
         if (presetBox.SelectedItem is string selectedPreset)
         {

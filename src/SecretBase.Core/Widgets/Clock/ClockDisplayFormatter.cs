@@ -65,7 +65,8 @@ public static class ClockDisplayFormatter
                 Use24HourFormat = configuration.Use24HourFormat,
                 ShowSeconds = false,
                 ShowDate = configuration.ShowDate,
-                SizeScale = configuration.SizeScale
+                SizeScale = configuration.SizeScale,
+                DateScale = configuration.DateScale
             };
             time = FormatTime(timeProvider.GetLocalNow(), noSeconds);
         }

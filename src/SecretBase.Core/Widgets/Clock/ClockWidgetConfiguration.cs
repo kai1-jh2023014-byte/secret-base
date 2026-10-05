@@ -31,10 +31,24 @@ public sealed class ClockWidgetConfiguration
     public bool ShowSeconds { get; set; } = true;
     public bool ShowDate { get; set; } = true;
 
-    /// <summary>Relative scale hint for typography (0.75–1.5).</summary>
+    public const double SizeScaleMin = 0.75;
+    public const double SizeScaleMax = 3.0;
+    public const double DateScaleMin = 0.5;
+    public const double DateScaleMax = 3.0;
+
+    /// <summary>Relative scale for time typography (<see cref="SizeScaleMin"/>–<see cref="SizeScaleMax"/>).</summary>
     public double SizeScale { get; set; } = 1.0;
 
+    /// <summary>Independent scale for date line (<see cref="DateScaleMin"/>–<see cref="DateScaleMax"/>).</summary>
+    public double DateScale { get; set; } = 1.0;
+
     public static ClockWidgetConfiguration CreateDefault() => new();
+
+    public static double ClampSizeScale(double value) =>
+        Math.Clamp(value, SizeScaleMin, SizeScaleMax);
+
+    public static double ClampDateScale(double value) =>
+        Math.Clamp(value, DateScaleMin, DateScaleMax);
 
     public static bool IsKnownStyle(string? style) =>
         !string.IsNullOrWhiteSpace(style)
@@ -90,7 +104,12 @@ public sealed class ClockWidgetConfiguration
 
         if (configuration.TryGetValue(nameof(SizeScale), out var scale) && scale.TryGetDouble(out var scaleValue))
         {
-            result.SizeScale = Math.Clamp(scaleValue, 0.75, 1.5);
+            result.SizeScale = ClampSizeScale(scaleValue);
+        }
+
+        if (configuration.TryGetValue(nameof(DateScale), out var dateScale) && dateScale.TryGetDouble(out var dateScaleValue))
+        {
+            result.DateScale = ClampDateScale(dateScaleValue);
         }
 
         return result;
@@ -104,7 +123,8 @@ public sealed class ClockWidgetConfiguration
             [nameof(Use24HourFormat)] = JsonSerializer.SerializeToElement(Use24HourFormat),
             [nameof(ShowSeconds)] = JsonSerializer.SerializeToElement(ShowSeconds),
             [nameof(ShowDate)] = JsonSerializer.SerializeToElement(ShowDate),
-            [nameof(SizeScale)] = JsonSerializer.SerializeToElement(SizeScale)
+            [nameof(SizeScale)] = JsonSerializer.SerializeToElement(ClampSizeScale(SizeScale)),
+            [nameof(DateScale)] = JsonSerializer.SerializeToElement(ClampDateScale(DateScale))
         };
     }
 }

@@ -10,7 +10,7 @@
 
     <!--
       Widgets + Blocks desktop layer.
-      + Add Widget · Blk · Aa Theme · Grid Arrange (always visible).
+      + Add Widget · Block · Theme · Arrange · Setup (white silhouette icons).
       Debug chrome: Ctrl+Shift+D. Safe Exit: Ctrl+Shift+Q.
     -->
     <Grid x:Name="RootGrid" Background="Transparent">
@@ -78,72 +78,65 @@
                 TextWrapping="WrapWholeWords"
                 MaxWidth="360"
                 Visibility="Collapsed" />
-            <!-- Floating glass control strip — premium/minimal, not bulky FABs. -->
+            <!-- Floating glass control strip — white silhouette icons, no text labels. -->
             <Border
                 x:Name="ControlStripShell"
                 Padding="10,6"
                 CornerRadius="22"
                 BorderThickness="1"
                 BorderBrush="#33FFFFFF"
-                Background="#99151A24">
+                Background="#66151A24">
                 <StackPanel Orientation="Horizontal" Spacing="4">
                     <Button
                         x:Name="AddWidgetFab"
                         Width="34"
                         Height="34"
-                        Content="+"
-                        FontSize="18"
-                        FontWeight="SemiLight"
                         Padding="0"
                         CornerRadius="17"
                         Click="AddWidgetButton_Click"
-                        ToolTipService.ToolTip="Add Widget (Ctrl+Shift+N)" />
+                        ToolTipService.ToolTip="Add Widget (Ctrl+Shift+N)">
+                        <SymbolIcon Symbol="Add" />
+                    </Button>
                     <Button
                         x:Name="AddBlockFab"
                         Width="34"
                         Height="34"
-                        Content="Blk"
-                        FontSize="10"
-                        FontWeight="SemiBold"
-                        CharacterSpacing="20"
                         Padding="0"
                         CornerRadius="17"
                         Click="AddBlockButton_Click"
-                        ToolTipService.ToolTip="Add Block (Ctrl+Shift+B)" />
+                        ToolTipService.ToolTip="Add Block (Ctrl+Shift+B)">
+                        <SymbolIcon Symbol="Library" />
+                    </Button>
                     <Button
                         x:Name="ThemeFab"
                         Width="34"
                         Height="34"
-                        Content="Aa"
-                        FontSize="12"
-                        FontWeight="SemiBold"
                         Padding="0"
                         CornerRadius="17"
                         Click="ThemeButton_Click"
-                        ToolTipService.ToolTip="Theme (Ctrl+Shift+T)" />
+                        ToolTipService.ToolTip="Theme (Ctrl+Shift+T)">
+                        <SymbolIcon Symbol="Font" />
+                    </Button>
                     <Button
                         x:Name="ArrangeFab"
                         Width="34"
                         Height="34"
-                        Content="Grid"
-                        FontSize="9"
-                        FontWeight="SemiBold"
-                        CharacterSpacing="20"
                         Padding="0"
                         CornerRadius="17"
                         Click="ArrangeButton_Click"
-                        ToolTipService.ToolTip="Arrange widgets &amp; blocks evenly" />
+                        ToolTipService.ToolTip="Arrange widgets &amp; blocks evenly">
+                        <SymbolIcon Symbol="ViewAll" />
+                    </Button>
                     <Button
                         x:Name="SetupFab"
                         Width="34"
                         Height="34"
-                        Content="Set"
-                        FontSize="11"
-                        FontWeight="SemiBold"
                         Padding="0"
                         CornerRadius="17"
                         Click="SetupButton_Click"
-                        ToolTipService.ToolTip="Setup: Start Menu, Desktop shortcut, Start at login" />
+                        ToolTipService.ToolTip="Setup: Start Menu, Desktop shortcut, Start at login">
+                        <SymbolIcon Symbol="Setting" />
+                    </Button>
                 </StackPanel>
             </Border>
         </StackPanel>

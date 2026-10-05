@@ -9,7 +9,7 @@ public class WidgetVisualSystemTests
     {
         var theme = ThemeDefinition.CreateDefault();
         Assert.Equal("Atelier", theme.DisplayName);
-        Assert.Equal("#D9181E28", theme.WidgetBackground);
+        Assert.Equal("#66181E28", theme.WidgetBackground);
         Assert.Equal("#FFF3EFE6", theme.WidgetForeground);
         Assert.Equal("#FF7A9E86", theme.Accent);
         Assert.Equal(18, theme.CornerRadius);
