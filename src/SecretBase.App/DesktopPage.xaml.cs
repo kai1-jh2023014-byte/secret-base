@@ -124,6 +124,11 @@ public sealed partial class DesktopPage : Page
     /// <summary>Monotonic Canvas Z-index so newly opened widgets can rise above Blocks.</summary>
     private int _frontZIndex;
 
+    /// <summary>Last viewport we fitted widgets into (detect RDP / aspect-ratio changes).</summary>
+    private double _fittedViewportWidth;
+    private double _fittedViewportHeight;
+    private DispatcherQueueTimer? _viewportFitTimer;
+
     public DesktopPage()
     {
         InitializeComponent();
@@ -133,24 +138,13 @@ public sealed partial class DesktopPage : Page
         {
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Bottom,
-            // Leave room for the left control strip; keep side margins equal so the shelf stays centered.
-            Margin = new Thickness(200, 0, 200, 12)
+            // Horizontal placement is owned by TaskbarAiChatBar (center + chrome reserves).
+            Margin = new Thickness(0, 0, 0, 12)
         };
         var canvasIndex = RootGrid.Children.IndexOf(WidgetCanvas);
         RootGrid.Children.Insert(canvasIndex < 0 ? 0 : canvasIndex + 1, TaskbarAiChat);
         Unloaded += OnUnloaded;
-        SizeChanged += (_, _) =>
-        {
-            TaskbarAiChat.RefreshShelfWidth();
-            if (_modalInputDepth > 0)
-            {
-                AllowFullWindowInput();
-            }
-            else
-            {
-                SyncInteractiveInputRegions();
-            }
-        };
+        SizeChanged += (_, _) => OnHostSizeChanged();
     }
 
     protected override void OnNavigatedTo(NavigationEventArgs e)
@@ -304,6 +298,7 @@ public sealed partial class DesktopPage : Page
         ShowDebugChrome(forceVisible: false);
 
         RenderDesktopObjects();
+        FitDesktopObjectsToViewport(force: true);
         InitializeTaskbarAiChat();
         _ = RefreshUpcomingEventsQuietAsync();
         DispatcherQueue.TryEnqueue(async () => await MaybeShowOnboardingAsync());
@@ -828,6 +823,140 @@ public sealed partial class DesktopPage : Page
     {
         SyncInteractiveInputRegions();
         _logger?.Info("overlay", "Interactive SetWindowRgn sync requested (post-island).");
+    }
+
+    /// <summary>
+    /// Re-sync work-area overlay + pull widgets/Blocks into view after display changes
+    /// (Remote Desktop aspect ratio, monitor switch, DPI). Safe to call often.
+    /// </summary>
+    public void HandleDisplayMetricsChanged()
+    {
+        if (_overlay is not null && _overlayTarget is not null)
+        {
+            try
+            {
+                _overlay.ApplyChromelessWorkAreaOverlay(_overlayTarget);
+            }
+            catch (Exception ex)
+            {
+                _logger?.Warn("overlay", $"Work-area re-sync failed: {ex.Message}");
+            }
+        }
+
+        FitDesktopObjectsToViewport(force: true);
+        TaskbarAiChat.RefreshShelfWidth();
+        SyncInteractiveInputRegions();
+    }
+
+    private void OnHostSizeChanged()
+    {
+        TaskbarAiChat.RefreshShelfWidth();
+        ScheduleViewportFit();
+        if (_modalInputDepth > 0)
+        {
+            AllowFullWindowInput();
+        }
+        else
+        {
+            SyncInteractiveInputRegions();
+        }
+    }
+
+    private void ScheduleViewportFit()
+    {
+        _viewportFitTimer?.Stop();
+        _viewportFitTimer = DispatcherQueue.CreateTimer();
+        _viewportFitTimer.Interval = TimeSpan.FromMilliseconds(120);
+        _viewportFitTimer.IsRepeating = false;
+        _viewportFitTimer.Tick += (_, _) => FitDesktopObjectsToViewport(force: false);
+        _viewportFitTimer.Start();
+    }
+
+    private void FitDesktopObjectsToViewport(bool force)
+    {
+        if (_layout is null)
+        {
+            return;
+        }
+
+        var areaWidth = Math.Max(WidgetCanvas.ActualWidth, ActualWidth);
+        var areaHeight = Math.Max(WidgetCanvas.ActualHeight, ActualHeight);
+        if (areaWidth < 160 || areaHeight < 120)
+        {
+            return;
+        }
+
+        if (!force
+            && Math.Abs(areaWidth - _fittedViewportWidth) < 8
+            && Math.Abs(areaHeight - _fittedViewportHeight) < 8)
+        {
+            return;
+        }
+
+        var changed = DesktopViewportLayout.FitToViewport(
+            _layout.Widgets,
+            _layout.Blocks,
+            areaWidth,
+            areaHeight,
+            margin: DesktopViewportLayout.DefaultMargin,
+            bottomReserve: DesktopViewportLayout.DefaultBottomReserve);
+
+        _fittedViewportWidth = areaWidth;
+        _fittedViewportHeight = areaHeight;
+
+        if (!changed && !force)
+        {
+            ApplyCanvasGeometryFromLayout();
+            return;
+        }
+
+        if (changed)
+        {
+            PersistLayoutNow();
+            _logger?.Info(
+                "layout",
+                $"Fitted desktop objects to viewport {areaWidth:0}×{areaHeight:0}.");
+        }
+
+        ApplyCanvasGeometryFromLayout();
+        TaskbarAiChat.RefreshShelfWidth();
+        SyncInteractiveInputRegions();
+    }
+
+    private void ApplyCanvasGeometryFromLayout()
+    {
+        if (_layout is null)
+        {
+            return;
+        }
+
+        foreach (var frame in WidgetCanvas.Children.OfType<WidgetFrame>())
+        {
+            var instance = _layout.Widgets.FirstOrDefault(w => w.Id == frame.WidgetId);
+            if (instance is null)
+            {
+                continue;
+            }
+
+            Canvas.SetLeft(frame, instance.Position.X);
+            Canvas.SetTop(frame, instance.Position.Y);
+            frame.Width = instance.Size.Width;
+            frame.Height = instance.Size.Height;
+        }
+
+        foreach (var frame in WidgetCanvas.Children.OfType<BlockFrame>())
+        {
+            var block = _layout.Blocks.FirstOrDefault(b => b.Id == frame.BlockId);
+            if (block is null)
+            {
+                continue;
+            }
+
+            Canvas.SetLeft(frame, block.Position.X);
+            Canvas.SetTop(frame, block.Position.Y);
+            frame.Width = block.Size.Width;
+            frame.Height = block.Size.Height;
+        }
     }
 
     private bool TryCreateClientRect(FrameworkElement element, double scale, out OverlayInputRect rect)

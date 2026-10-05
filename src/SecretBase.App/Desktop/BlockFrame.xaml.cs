@@ -6,6 +6,7 @@ using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
 using Microsoft.UI.Xaml.Shapes;
 using SecretBase.Core.Blocks;
+using SecretBase.Core.Desktop;
 using SecretBase.Core.Themes;
 using SecretBase.Platform.Abstractions;
 using SecretBase.Widgets.Hosting;
@@ -778,8 +779,9 @@ public sealed partial class BlockFrame : UserControl
         var dy = point.Y - _lastPoint.Y;
         _lastPoint = point;
 
-        var newX = Math.Max(0, Canvas.GetLeft(this) + dx);
-        var newY = Math.Max(0, Canvas.GetTop(this) + dy);
+        var newX = Canvas.GetLeft(this) + dx;
+        var newY = Canvas.GetTop(this) + dy;
+        ClampToParentCanvas(ref newX, ref newY, Width, Height);
         Canvas.SetLeft(this, newX);
         Canvas.SetTop(this, newY);
         _block.Position.X = newX;
@@ -840,6 +842,15 @@ public sealed partial class BlockFrame : UserControl
         _block.Size.Width += dx;
         _block.Size.Height += dy;
         _block.ClampSize();
+        if (Parent is Canvas canvas && canvas.ActualWidth > 0 && canvas.ActualHeight > 0)
+        {
+            var maxW = Math.Max(Block.MinWidth, canvas.ActualWidth - Canvas.GetLeft(this));
+            var maxH = Math.Max(
+                Block.MinHeight,
+                canvas.ActualHeight - Canvas.GetTop(this) - DesktopViewportLayout.DefaultBottomReserve);
+            _block.Size.Clamp(Block.MinWidth, Block.MinHeight, maxW, maxH);
+        }
+
         Width = _block.Size.Width;
         Height = _block.Size.Height;
         ArrangeItemsEvenly();
@@ -998,5 +1009,24 @@ public sealed partial class BlockFrame : UserControl
                 : $"Linked {added} item(s) into '{_block.Name}'.";
             _onStatus?.Invoke(msg);
         }
+    }
+
+    private void ClampToParentCanvas(ref double x, ref double y, double width, double height)
+    {
+        if (Parent is not Canvas canvas)
+        {
+            x = Math.Max(0, x);
+            y = Math.Max(0, y);
+            return;
+        }
+
+        var maxX = canvas.ActualWidth > 0
+            ? Math.Max(0, canvas.ActualWidth - Math.Max(40, width))
+            : double.MaxValue;
+        var maxY = canvas.ActualHeight > 0
+            ? Math.Max(0, canvas.ActualHeight - Math.Max(40, height) - DesktopViewportLayout.DefaultBottomReserve)
+            : double.MaxValue;
+        x = Math.Clamp(x, 0, maxX);
+        y = Math.Clamp(y, 0, maxY);
     }
 }

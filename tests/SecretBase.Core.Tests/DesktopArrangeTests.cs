@@ -96,4 +96,61 @@ public class DesktopArrangeTests
         Assert.Equal(blocks[0].Position.Y, blocks[1].Position.Y, 0.01);
         Assert.True(blocks[0].Position.X < blocks[1].Position.X);
     }
+
+    [Fact]
+    public void DesktopViewportLayout_FitToViewport_PullsOffscreenObjectsIn()
+    {
+        var widgets = new List<WidgetInstance>
+        {
+            new()
+            {
+                Type = WidgetTypes.Clock,
+                Position = new WidgetPosition(1800, 1200),
+                Size = new WidgetSize(280, 200)
+            }
+        };
+        var blocks = new List<Block>
+        {
+            DefaultBlockFactory.Create("Wide", x: 1600, y: 40, width: 900, height: 400)
+        };
+
+        var changed = DesktopViewportLayout.FitToViewport(
+            widgets,
+            blocks,
+            areaWidth: 1280,
+            areaHeight: 720,
+            margin: 16,
+            bottomReserve: 72);
+
+        Assert.True(changed);
+        Assert.True(widgets[0].Position.X + widgets[0].Size.Width <= 1280 - 16 + 0.5);
+        Assert.True(widgets[0].Position.Y + widgets[0].Size.Height <= 720 - 72 - 16 + 0.5);
+        Assert.True(blocks[0].Size.Width <= 1280 - 32 + 0.5);
+        Assert.True(blocks[0].Position.X >= 16 - 0.5);
+        Assert.True(blocks[0].Position.Y >= 16 - 0.5);
+    }
+
+    [Fact]
+    public void DesktopViewportLayout_FitToViewport_NoChangeWhenAlreadyInside()
+    {
+        var widgets = new List<WidgetInstance>
+        {
+            new()
+            {
+                Type = WidgetTypes.Text,
+                Position = new WidgetPosition(40, 40),
+                Size = new WidgetSize(200, 120)
+            }
+        };
+
+        var changed = DesktopViewportLayout.FitToViewport(
+            widgets,
+            [],
+            areaWidth: 1280,
+            areaHeight: 800);
+
+        Assert.False(changed);
+        Assert.Equal(40, widgets[0].Position.X);
+        Assert.Equal(40, widgets[0].Position.Y);
+    }
 }

@@ -70,9 +70,11 @@ public sealed partial class MainWindow : Window
         var hwnd = WindowNative.GetWindowHandle(this);
         _ = ShowWindow(hwnd, SwRestore);
         Activate();
+        // RDP / monitor changes often leave the host on a stale work area — resync.
+        _overlayService.ApplyChromelessWorkAreaOverlay(_overlayTarget);
         if (RootFrame.Content is DesktopPage page)
         {
-            page.RequestInteractiveRegionSync();
+            page.HandleDisplayMetricsChanged();
         }
 
         _overlayService.KeepBehindApplicationWindows(_overlayTarget);
@@ -83,6 +85,13 @@ public sealed partial class MainWindow : Window
         if (args.WindowActivationState == WindowActivationState.Deactivated)
         {
             return;
+        }
+
+        // Re-fit to current DisplayArea.WorkArea when returning from Remote Desktop, etc.
+        _overlayService.ApplyChromelessWorkAreaOverlay(_overlayTarget);
+        if (RootFrame.Content is DesktopPage page)
+        {
+            page.HandleDisplayMetricsChanged();
         }
 
         _overlayService.KeepBehindApplicationWindows(_overlayTarget);

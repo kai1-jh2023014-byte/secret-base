@@ -47,6 +47,12 @@ public sealed partial class TaskbarAiChatBar : UserControl
     /// <summary>Full shelf width while focused/selected; ~half when idle.</summary>
     public const double IdleWidthFraction = 0.5;
 
+    /// <summary>Keep clear of the bottom-left control strip (+ / Blk / Aa / Grid / ⚙).</summary>
+    public const double LeftChromeReserve = 248;
+
+    /// <summary>Quiet right padding so the expanded pill is not edge-flush.</summary>
+    public const double RightChromeReserve = 24;
+
     public TaskbarAiChatBar()
     {
         InitializeComponent();
@@ -336,16 +342,23 @@ public sealed partial class TaskbarAiChatBar : UserControl
             parentWidth = XamlRoot.Size.Width;
         }
 
-        // Centered shelf: idle is ~half width; selection expands outward from the center.
-        var fullWidth = parentWidth > 0
-            ? Math.Max(320, parentWidth - Margin.Left - Margin.Right)
-            : 720;
-        var idleWidth = Math.Max(280, fullWidth * IdleWidthFraction);
+        if (parentWidth <= 0)
+        {
+            parentWidth = 1280;
+        }
+
+        // Centered on screen, but never wider than what keeps LeftChromeReserve clear
+        // of the control strip: (parent - width) / 2 >= LeftChromeReserve.
+        var maxCenteredWidth = Math.Max(280, parentWidth - (2 * LeftChromeReserve));
+        var expandedWidth = Math.Min(
+            Math.Max(320, parentWidth - LeftChromeReserve - RightChromeReserve),
+            maxCenteredWidth);
+        var idleWidth = Math.Max(280, expandedWidth * IdleWidthFraction);
         var expanded = _shelfSelected
             || _resultsVisible
             || _busy
             || ConfirmPanel.Visibility == Visibility.Visible;
-        var targetWidth = expanded ? fullWidth : idleWidth;
+        var targetWidth = expanded ? expandedWidth : idleWidth;
 
         HorizontalAlignment = HorizontalAlignment.Center;
         Width = targetWidth;
