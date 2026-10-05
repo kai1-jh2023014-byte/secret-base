@@ -95,6 +95,34 @@ public static class WidgetSurfaceStyle
         button.CornerRadius = new CornerRadius(Math.Max(8, theme.CornerRadius * 0.45));
     }
 
+    /// <summary>Thin glass pill for floating shelf / icon strips.</summary>
+    public static void ApplyFloatingPill(Border border, ThemeDefinition theme)
+    {
+        ArgumentNullException.ThrowIfNull(border);
+        ArgumentNullException.ThrowIfNull(theme);
+
+        var opacity = Math.Clamp(ThemePainter.EffectiveWidgetOpacity(theme) * 0.7, 0.32, 0.72);
+        border.Background = ThemePainter.Brush(theme.WidgetBackground, opacity);
+        border.BorderBrush = ThemePainter.Brush(theme.Border, 0.28);
+        border.BorderThickness = new Thickness(1);
+        border.CornerRadius = new CornerRadius(Math.Max(18, theme.CornerRadius + 4));
+        border.Padding = new Thickness(14, 6, 14, 6);
+    }
+
+    /// <summary>Quiet icon/control button without heavy chrome.</summary>
+    public static void ApplyIconButton(Button button, ThemeDefinition theme, bool accent = false)
+    {
+        button.FontFamily = new FontFamily(theme.FontFamily);
+        button.Background = accent
+            ? ThemePainter.Brush(theme.Accent, 0.55)
+            : new SolidColorBrush(Microsoft.UI.Colors.Transparent);
+        button.Foreground = ThemePainter.Brush(theme.WidgetForeground, accent ? 1 : 0.9);
+        button.BorderBrush = ThemePainter.Brush(theme.Border, accent ? 0.18 : 0);
+        button.BorderThickness = new Thickness(accent ? 1 : 0);
+        button.CornerRadius = new CornerRadius(Math.Max(14, theme.CornerRadius * 0.7));
+        button.Padding = new Thickness(8, 4, 8, 4);
+    }
+
     public static void ApplyProgress(ProgressBar bar, ThemeDefinition theme)
     {
         bar.Foreground = ThemePainter.Brush(theme.Accent, 0.95);

@@ -53,18 +53,20 @@ public sealed partial class TaskbarAiChatBar : UserControl
         ClockText = new TextBlock
         {
             Text = "--:--",
-            FontSize = 20,
-            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
+            FontSize = 22,
+            FontWeight = Microsoft.UI.Text.FontWeights.Light,
+            CharacterSpacing = 40
         };
         DateText = new TextBlock
         {
-            FontSize = 11,
-            Opacity = 0.75
+            FontSize = 10,
+            Opacity = 0.7,
+            CharacterSpacing = 20
         };
         var clockColumn = new StackPanel
         {
             VerticalAlignment = VerticalAlignment.Center,
-            MinWidth = 88,
+            MinWidth = 78,
             Spacing = 0
         };
         clockColumn.Children.Add(ClockText);
@@ -74,19 +76,22 @@ public sealed partial class TaskbarAiChatBar : UserControl
         {
             Text = "Base",
             FontSize = 10,
-            CharacterSpacing = 40,
-            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
+            CharacterSpacing = 60,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            Opacity = 0.85
         };
         ProviderText = new TextBlock
         {
             Text = "AI",
-            FontSize = 10,
-            Opacity = 0.8
+            FontSize = 9,
+            Opacity = 0.65,
+            CharacterSpacing = 20
         };
         var brandColumn = new StackPanel
         {
             VerticalAlignment = VerticalAlignment.Center,
-            Spacing = 0
+            Spacing = 0,
+            Margin = new Thickness(0, 0, 4, 0)
         };
         brandColumn.Children.Add(BrandText);
         brandColumn.Children.Add(ProviderText);
@@ -96,21 +101,25 @@ public sealed partial class TaskbarAiChatBar : UserControl
             PlaceholderText = "Ask Secret Base…",
             BorderThickness = new Thickness(0),
             Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
-            VerticalAlignment = VerticalAlignment.Center
+            VerticalAlignment = VerticalAlignment.Center,
+            FontSize = 13,
+            MinHeight = 28,
+            Padding = new Thickness(4, 2, 4, 2)
         };
         InputBox.KeyDown += InputBox_KeyDown;
 
         SendButton = new Button
         {
-            Content = "➤",
-            MinWidth = 40,
-            MinHeight = 32,
-            Padding = new Thickness(8, 4, 8, 4)
+            Content = "→",
+            MinWidth = 32,
+            MinHeight = 28,
+            Padding = new Thickness(6, 2, 6, 2),
+            FontSize = 14
         };
         SendButton.Click += SendButton_Click;
         ToolTipService.SetToolTip(SendButton, "Send (Enter)");
 
-        var inputRow = new Grid { ColumnSpacing = 8 };
+        var inputRow = new Grid { ColumnSpacing = 6 };
         inputRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         inputRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         inputRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -124,27 +133,28 @@ public sealed partial class TaskbarAiChatBar : UserControl
         FocusText = new TextBlock
         {
             Text = "Focus idle",
-            FontSize = 12,
+            FontSize = 11,
+            Opacity = 0.9,
             TextTrimming = TextTrimming.CharacterEllipsis
         };
         NextText = new TextBlock
         {
             Text = "Nothing queued",
-            FontSize = 11,
-            Opacity = 0.8,
+            FontSize = 10,
+            Opacity = 0.7,
             TextTrimming = TextTrimming.CharacterEllipsis
         };
         var statusColumn = new StackPanel
         {
             VerticalAlignment = VerticalAlignment.Center,
-            MinWidth = 140,
-            MaxWidth = 240,
-            Spacing = 2
+            MinWidth = 120,
+            MaxWidth = 220,
+            Spacing = 1
         };
         statusColumn.Children.Add(FocusText);
         statusColumn.Children.Add(NextText);
 
-        var pillRow = new Grid { ColumnSpacing = 16 };
+        var pillRow = new Grid { ColumnSpacing = 14 };
         pillRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         pillRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         pillRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -157,10 +167,11 @@ public sealed partial class TaskbarAiChatBar : UserControl
 
         Pill = new Border
         {
-            Padding = new Thickness(16, 8, 16, 8),
-            CornerRadius = new CornerRadius(18),
+            Padding = new Thickness(14, 6, 14, 6),
+            CornerRadius = new CornerRadius(22),
             BorderThickness = new Thickness(1),
-            MinHeight = 56,
+            MinHeight = 44,
+            MaxHeight = 52,
             Child = pillRow
         };
 
@@ -247,8 +258,8 @@ public sealed partial class TaskbarAiChatBar : UserControl
         ResultsShell = new Border
         {
             Visibility = Visibility.Collapsed,
-            Padding = new Thickness(14, 12, 14, 12),
-            CornerRadius = new CornerRadius(16),
+            Padding = new Thickness(12, 10, 12, 10),
+            CornerRadius = new CornerRadius(18),
             BorderThickness = new Thickness(1),
             Child = resultsGrid
         };
@@ -257,8 +268,8 @@ public sealed partial class TaskbarAiChatBar : UserControl
         var root = new Grid
         {
             HorizontalAlignment = HorizontalAlignment.Stretch,
-            MinWidth = 520,
-            RowSpacing = 8
+            MinWidth = 480,
+            RowSpacing = 6
         };
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -282,24 +293,37 @@ public sealed partial class TaskbarAiChatBar : UserControl
     public void ApplyTheme(ThemeDefinition theme)
     {
         _theme = theme;
-        WidgetSurfaceStyle.ApplyChrome(ResultsShell, theme);
-        WidgetSurfaceStyle.ApplyChrome(Pill, theme);
+        WidgetSurfaceStyle.ApplyFloatingPill(ResultsShell, theme);
+        ResultsShell.Padding = new Thickness(12, 10, 12, 10);
+        ResultsShell.CornerRadius = new CornerRadius(18);
+        WidgetSurfaceStyle.ApplyFloatingPill(Pill, theme);
         Pill.CornerRadius = new CornerRadius(22);
+        Pill.MinHeight = 44;
+        Pill.MaxHeight = 52;
         WidgetSurfaceStyle.ApplyHeader(BrandText, ProviderText, theme);
+        BrandText.FontSize = 10;
+        BrandText.CharacterSpacing = 60;
+        ProviderText.FontSize = 9;
         WidgetSurfaceStyle.ApplyHeader(ClockText, DateText, theme);
-        ClockText.FontSize = 20;
-        ClockText.CharacterSpacing = 0;
-        DateText.CharacterSpacing = 0;
+        ClockText.FontSize = 22;
+        ClockText.FontWeight = Microsoft.UI.Text.FontWeights.Light;
+        ClockText.CharacterSpacing = 40;
+        DateText.FontSize = 10;
+        DateText.CharacterSpacing = 20;
+        DateText.Opacity = 0.7;
         WidgetSurfaceStyle.ApplyBody(FocusText, theme);
+        FocusText.FontSize = 11;
         WidgetSurfaceStyle.ApplyMuted(NextText, theme);
+        NextText.FontSize = 10;
         WidgetSurfaceStyle.ApplyMuted(StatusLabel, theme);
         WidgetSurfaceStyle.ApplyBody(ConfirmText, theme);
         InputBox.FontFamily = new FontFamily(theme.FontFamily);
         InputBox.Foreground = ThemePainter.Brush(theme.WidgetForeground);
-        WidgetSurfaceStyle.ApplyActionButton(SendButton, theme, accent: true);
+        InputBox.FontSize = 13;
+        WidgetSurfaceStyle.ApplyIconButton(SendButton, theme, accent: true);
         WidgetSurfaceStyle.ApplyActionButton(ConfirmRunButton, theme, accent: true);
         WidgetSurfaceStyle.ApplyGhostButton(ConfirmCancelButton, theme);
-        WidgetSurfaceStyle.ApplyGhostButton(DismissResultsButton, theme);
+        WidgetSurfaceStyle.ApplyIconButton(DismissResultsButton, theme);
         RefreshProvider();
         RenderTranscript();
         SyncResultsVisibility();

@@ -73,10 +73,12 @@ public class PomodoroFocusSessionTests
         config.FocusMinutes = 45;
         config.ShortBreakMinutes = 10;
         config.SoundOnComplete = false;
+        config.IsCompact = true;
         var restored = PomodoroWidgetConfiguration.FromDictionary(config.ToDictionary());
         Assert.Equal(45, restored.FocusMinutes);
         Assert.Equal(10, restored.ShortBreakMinutes);
         Assert.False(restored.SoundOnComplete);
+        Assert.True(restored.IsCompact);
     }
 
     [Fact]

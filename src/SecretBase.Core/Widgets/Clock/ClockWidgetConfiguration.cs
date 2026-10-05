@@ -4,16 +4,28 @@ namespace SecretBase.Core.Widgets.Clock;
 
 /// <summary>
 /// Clock-specific settings. Supports multiple display styles and format toggles.
+/// Styles: Base (status), Large digital, Minimal, Analog, Focus.
 /// </summary>
 public sealed class ClockWidgetConfiguration
 {
     public const string StyleDigital = "digital";
+    public const string StyleLarge = "large";
     public const string StyleMinimal = "minimal";
     public const string StyleAnalog = "analog";
     public const string StyleFocus = "focus";
     public const string StyleBase = "base";
 
-    public string DisplayStyle { get; set; } = StyleDigital;
+    public static readonly IReadOnlyList<string> KnownStyles =
+    [
+        StyleBase,
+        StyleLarge,
+        StyleDigital,
+        StyleMinimal,
+        StyleAnalog,
+        StyleFocus
+    ];
+
+    public string DisplayStyle { get; set; } = StyleBase;
 
     public bool Use24HourFormat { get; set; } = true;
     public bool ShowSeconds { get; set; } = true;
@@ -24,16 +36,38 @@ public sealed class ClockWidgetConfiguration
 
     public static ClockWidgetConfiguration CreateDefault() => new();
 
+    public static bool IsKnownStyle(string? style) =>
+        !string.IsNullOrWhiteSpace(style)
+        && KnownStyles.Contains(style.Trim().ToLowerInvariant(), StringComparer.Ordinal);
+
+    /// <summary>True for large typography faces (digital / large).</summary>
+    public static bool IsLargeTypography(string? style) =>
+        string.Equals(style, StyleLarge, StringComparison.Ordinal)
+        || string.Equals(style, StyleDigital, StringComparison.Ordinal);
+
+    public static string NormalizeStyle(string? style)
+    {
+        if (string.IsNullOrWhiteSpace(style))
+        {
+            return StyleBase;
+        }
+
+        var normalized = style.Trim().ToLowerInvariant();
+        // Older layouts used "digital" for the large typography face.
+        if (normalized == StyleDigital)
+        {
+            return StyleLarge;
+        }
+
+        return IsKnownStyle(normalized) ? normalized : StyleBase;
+    }
+
     public static ClockWidgetConfiguration FromDictionary(IReadOnlyDictionary<string, JsonElement> configuration)
     {
         var result = CreateDefault();
         if (configuration.TryGetValue(nameof(DisplayStyle), out var style) && style.ValueKind == JsonValueKind.String)
         {
-            var value = style.GetString();
-            if (!string.IsNullOrWhiteSpace(value))
-            {
-                result.DisplayStyle = value.Trim().ToLowerInvariant();
-            }
+            result.DisplayStyle = NormalizeStyle(style.GetString());
         }
 
         if (configuration.TryGetValue(nameof(Use24HourFormat), out var use24) &&
@@ -66,7 +100,7 @@ public sealed class ClockWidgetConfiguration
     {
         return new Dictionary<string, JsonElement>(StringComparer.Ordinal)
         {
-            [nameof(DisplayStyle)] = JsonSerializer.SerializeToElement(DisplayStyle),
+            [nameof(DisplayStyle)] = JsonSerializer.SerializeToElement(NormalizeStyle(DisplayStyle)),
             [nameof(Use24HourFormat)] = JsonSerializer.SerializeToElement(Use24HourFormat),
             [nameof(ShowSeconds)] = JsonSerializer.SerializeToElement(ShowSeconds),
             [nameof(ShowDate)] = JsonSerializer.SerializeToElement(ShowDate),

@@ -21,10 +21,16 @@ namespace SecretBase.Widgets.Music;
 /// </summary>
 public sealed partial class MusicWidgetView : UserControl
 {
+    public const double CompactWidth = 360;
+    public const double CompactHeight = 110;
+    public const double ExpandedWidth = 360;
+    public const double ExpandedHeight = 420;
+
     private MusicWidgetConfiguration _configuration = MusicWidgetConfiguration.CreateDefault();
     private MusicService _musicService = new();
     private MusicCommandService _commands = null!;
     private Action<MusicWidgetConfiguration>? _onConfigurationChanged;
+    private Action<double, double>? _onPreferredSizeChanged;
     private Func<string, bool>? _openUrl;
     private ThemeDefinition? _theme;
     private readonly List<MusicTrack> _lastResults = [];
@@ -53,10 +59,12 @@ public sealed partial class MusicWidgetView : UserControl
         MusicService? musicService = null,
         IIntegrationMemory? integrations = null,
         OverlayDialogInput? dialogInput = null,
-        ISystemNowPlayingSource? systemNowPlaying = null)
+        ISystemNowPlayingSource? systemNowPlaying = null,
+        Action<double, double>? onPreferredSizeChanged = null)
     {
         _configuration = configuration;
         _onConfigurationChanged = onConfigurationChanged;
+        _onPreferredSizeChanged = onPreferredSizeChanged;
         _openUrl = openUrl;
         _integrations = integrations;
         _dialogInput = dialogInput;
@@ -79,6 +87,7 @@ public sealed partial class MusicWidgetView : UserControl
         ResultsList.Children.Add(CreateMuted("Search tracks from your connected provider."));
         StatusLabel.Text = string.Empty;
         SourceLabel.Text = DescribeSource();
+        ApplyCompactLayout(persistSize: false);
         StartNowPlayingTimer();
         _ = RefreshPlaybackStateAsync(includeProvider: true);
     }
@@ -189,8 +198,10 @@ public sealed partial class MusicWidgetView : UserControl
         _showingSystemNowPlaying = true;
         TrackTitleText.Text = current.Title;
         TrackArtistText.Text = string.IsNullOrWhiteSpace(current.Artist) ? current.SourceName : current.Artist;
+        CompactTrackTitleText.Text = TrackTitleText.Text;
+        CompactTrackArtistText.Text = TrackArtistText.Text;
         SourceLabel.Text = "Now playing · " + current.SourceName;
-        PlayPauseButton.Content = current.IsPlaying ? "⏸" : "▶";
+        SetPlayPauseIcon(current.IsPlaying);
         if (current.DurationMilliseconds > 0)
         {
             PlaybackProgress.Maximum = current.DurationMilliseconds;
@@ -238,6 +249,9 @@ public sealed partial class MusicWidgetView : UserControl
             ArtImage.Source = image;
             ArtImage.Visibility = Visibility.Visible;
             ArtGlyph.Visibility = Visibility.Collapsed;
+            CompactArtImage.Source = image;
+            CompactArtImage.Visibility = Visibility.Visible;
+            CompactArtGlyph.Visibility = Visibility.Collapsed;
             _shownArtKey = artKey;
         }
         catch (Exception)
@@ -252,6 +266,9 @@ public sealed partial class MusicWidgetView : UserControl
         ArtImage.Source = null;
         ArtImage.Visibility = Visibility.Collapsed;
         ArtGlyph.Visibility = Visibility.Visible;
+        CompactArtImage.Source = null;
+        CompactArtImage.Visibility = Visibility.Collapsed;
+        CompactArtGlyph.Visibility = Visibility.Visible;
     }
 
     private async Task RefreshProviderPlaybackAsync()
@@ -375,19 +392,62 @@ public sealed partial class MusicWidgetView : UserControl
         WidgetSurfaceStyle.ApplyMuted(ConnectPromptText, theme);
         WidgetSurfaceStyle.ApplyBody(TrackTitleText, theme);
         WidgetSurfaceStyle.ApplyMuted(TrackArtistText, theme);
+        WidgetSurfaceStyle.ApplyBody(CompactTrackTitleText, theme);
+        WidgetSurfaceStyle.ApplyMuted(CompactTrackArtistText, theme);
         SearchBox.FontFamily = new FontFamily(theme.FontFamily);
         ArtGlyph.Foreground = ThemePainter.Brush(theme.Accent);
+        CompactArtGlyph.Foreground = ThemePainter.Brush(theme.Accent);
         ArtPlaceholder.Background = ThemePainter.Brush(theme.Accent, 0.18);
+        CompactArtPlaceholder.Background = ThemePainter.Brush(theme.Accent, 0.18);
         ArtPlaceholder.CornerRadius = new CornerRadius(Math.Max(10, theme.CornerRadius * 0.55));
+        CompactArtPlaceholder.CornerRadius = new CornerRadius(Math.Max(8, theme.CornerRadius * 0.45));
         WidgetSurfaceStyle.ApplyProgress(PlaybackProgress, theme);
 
         WidgetSurfaceStyle.ApplyActionButton(SearchButton, theme, accent: true);
         WidgetSurfaceStyle.ApplyGhostButton(PreviousButton, theme);
         WidgetSurfaceStyle.ApplyActionButton(PlayPauseButton, theme, accent: true);
         WidgetSurfaceStyle.ApplyGhostButton(NextButton, theme);
+        WidgetSurfaceStyle.ApplyGhostButton(CompactPreviousButton, theme);
+        WidgetSurfaceStyle.ApplyActionButton(CompactPlayPauseButton, theme, accent: true);
+        WidgetSurfaceStyle.ApplyGhostButton(CompactNextButton, theme);
+        WidgetSurfaceStyle.ApplyGhostButton(CompactModeButton, theme);
+        WidgetSurfaceStyle.ApplyGhostButton(CompactExpandButton, theme);
         WidgetSurfaceStyle.ApplyGhostButton(OpenWebSourceButton, theme);
         WidgetSurfaceStyle.ApplyActionButton(ConnectSpotifyButton, theme, accent: true);
         WidgetSurfaceStyle.ApplyGhostButton(ConnectYouTubeButton, theme);
+        ApplyCompactLayout(persistSize: false);
+    }
+
+    private void CompactModeButton_Click(object sender, RoutedEventArgs e)
+    {
+        _configuration.IsCompact = !_configuration.IsCompact;
+        Persist();
+        ApplyCompactLayout(persistSize: true);
+        if (_theme is not null)
+        {
+            WidgetSurfaceStyle.PulseScale(RootBorder);
+        }
+    }
+
+    private void ApplyCompactLayout(bool persistSize)
+    {
+        var compact = _configuration.IsCompact;
+        CompactPanel.Visibility = compact ? Visibility.Visible : Visibility.Collapsed;
+        FullPanel.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
+        RootBorder.Padding = compact ? new Thickness(10, 8, 10, 8) : new Thickness(14, 12, 14, 12);
+        if (!persistSize)
+        {
+            return;
+        }
+
+        if (compact)
+        {
+            _onPreferredSizeChanged?.Invoke(CompactWidth, CompactHeight);
+        }
+        else
+        {
+            _onPreferredSizeChanged?.Invoke(ExpandedWidth, ExpandedHeight);
+        }
     }
 
     private void SearchBox_KeyDown(object sender, KeyRoutedEventArgs e)
@@ -658,6 +718,8 @@ public sealed partial class MusicWidgetView : UserControl
         {
             TrackTitleText.Text = "No track selected";
             TrackArtistText.Text = "Search and pick a track";
+            CompactTrackTitleText.Text = TrackTitleText.Text;
+            CompactTrackArtistText.Text = TrackArtistText.Text;
             SourceLabel.Text = "Source: Demo catalog";
             SetPlayPauseIcon(isPlaying: false);
             return;
@@ -665,6 +727,8 @@ public sealed partial class MusicWidgetView : UserControl
 
         TrackTitleText.Text = track.Title;
         TrackArtistText.Text = string.IsNullOrWhiteSpace(track.Artist) ? track.Source : track.Artist;
+        CompactTrackTitleText.Text = TrackTitleText.Text;
+        CompactTrackArtistText.Text = TrackArtistText.Text;
         SourceLabel.Text = string.IsNullOrWhiteSpace(track.Source)
             ? $"Source: {track.ProviderId}"
             : $"Source: {track.Source}";
@@ -673,13 +737,24 @@ public sealed partial class MusicWidgetView : UserControl
 
     private void SetPlayPauseIcon(bool isPlaying)
     {
-        if (PlayPauseIcon is null)
+        var symbol = isPlaying ? Symbol.Pause : Symbol.Play;
+        if (PlayPauseIcon is not null)
         {
-            PlayPauseButton.Content = new SymbolIcon { Symbol = isPlaying ? Symbol.Pause : Symbol.Play };
-            return;
+            PlayPauseIcon.Symbol = symbol;
+        }
+        else
+        {
+            PlayPauseButton.Content = new SymbolIcon { Symbol = symbol };
         }
 
-        PlayPauseIcon.Symbol = isPlaying ? Symbol.Pause : Symbol.Play;
+        if (CompactPlayPauseIcon is not null)
+        {
+            CompactPlayPauseIcon.Symbol = symbol;
+        }
+        else
+        {
+            CompactPlayPauseButton.Content = new SymbolIcon { Symbol = symbol };
+        }
     }
 
     private void UpdateTransportEnabled()
@@ -690,12 +765,18 @@ public sealed partial class MusicWidgetView : UserControl
                        || _musicService.GetPlaybackProvider()?.CurrentTrack is not null;
 
         SearchButton.IsEnabled = caps.HasFlag(MusicProviderCapabilities.Search);
-        PreviousButton.IsEnabled = caps.HasFlag(MusicProviderCapabilities.Previous) && hasTrack;
-        NextButton.IsEnabled = caps.HasFlag(MusicProviderCapabilities.Next) && hasTrack;
-        PlayPauseButton.IsEnabled = hasTrack && (
+        var prev = caps.HasFlag(MusicProviderCapabilities.Previous) && hasTrack;
+        var next = caps.HasFlag(MusicProviderCapabilities.Next) && hasTrack;
+        var play = hasTrack && (
             caps.HasFlag(MusicProviderCapabilities.Playback)
             || caps.HasFlag(MusicProviderCapabilities.Pause)
             || caps.HasFlag(MusicProviderCapabilities.Resume));
+        PreviousButton.IsEnabled = prev;
+        NextButton.IsEnabled = next;
+        PlayPauseButton.IsEnabled = play;
+        CompactPreviousButton.IsEnabled = prev;
+        CompactNextButton.IsEnabled = next;
+        CompactPlayPauseButton.IsEnabled = play;
     }
 
     private async void OpenWebSourceButton_Click(object sender, RoutedEventArgs e)

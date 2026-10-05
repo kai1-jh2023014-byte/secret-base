@@ -53,6 +53,21 @@ public sealed partial class WidgetFrame : UserControl
 
     public string WidgetType => _instance.Type;
 
+    /// <summary>Apply a preferred size from a widget compact/expand toggle and persist via layout commit.</summary>
+    public void ApplyPreferredSize(double width, double height, bool commit = true)
+    {
+        _instance.Size.Width = width;
+        _instance.Size.Height = height;
+        _instance.Size.Clamp(_theme.WidgetMinWidth, _theme.WidgetMinHeight);
+        Width = _instance.Size.Width;
+        Height = _instance.Size.Height;
+        _onBoundsChanged?.Invoke();
+        if (commit)
+        {
+            _onLayoutCommitted();
+        }
+    }
+
     private void ApplyFloatingChrome(ThemeDefinition theme)
     {
         var radius = Math.Max(10, theme.CornerRadius);

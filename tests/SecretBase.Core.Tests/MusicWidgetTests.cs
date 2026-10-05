@@ -426,6 +426,7 @@ public class MusicWidgetConfigurationTests
         var original = new MusicWidgetConfiguration
         {
             ActiveSourceId = "spotify-default",
+            IsCompact = true,
             Sources =
             [
                 new MusicSource
@@ -449,6 +450,7 @@ public class MusicWidgetConfigurationTests
 
         var restored = MusicWidgetConfiguration.FromDictionary(original.ToDictionary());
         Assert.Equal("spotify-default", restored.ActiveSourceId);
+        Assert.True(restored.IsCompact);
         Assert.Equal(2, restored.Sources.Count);
         Assert.Equal("Spotify", restored.Sources[0].Name);
         Assert.Equal(MusicSourceType.Spotify, restored.Sources[0].Type);

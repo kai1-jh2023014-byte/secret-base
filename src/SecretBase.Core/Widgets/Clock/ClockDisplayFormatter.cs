@@ -32,6 +32,8 @@ public static class ClockDisplayFormatter
 
         return configuration.DisplayStyle switch
         {
+            ClockWidgetConfiguration.StyleLarge => instant.ToString("dddd, MMMM dd"),
+            ClockWidgetConfiguration.StyleDigital => instant.ToString("dddd, MMMM dd"),
             ClockWidgetConfiguration.StyleFocus => instant.ToString("dddd, MMMM d"),
             ClockWidgetConfiguration.StyleMinimal => instant.ToString("MMM d"),
             _ => $"{instant:dddd}\n{instant:MMMM d}"

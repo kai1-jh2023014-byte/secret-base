@@ -133,7 +133,7 @@ public sealed partial class DesktopPage : Page
         {
             HorizontalAlignment = HorizontalAlignment.Stretch,
             VerticalAlignment = VerticalAlignment.Bottom,
-            Margin = new Thickness(312, 0, 16, 6)
+            Margin = new Thickness(280, 0, 20, 12)
         };
         var canvasIndex = RootGrid.Children.IndexOf(WidgetCanvas);
         RootGrid.Children.Insert(canvasIndex < 0 ? 0 : canvasIndex + 1, TaskbarAiChat);
@@ -315,31 +315,32 @@ public sealed partial class DesktopPage : Page
 
     private void StyleFabButtons(ThemeDefinition theme)
     {
-        void StylePrimary(Button button)
+        void StyleStripIcon(Button button, bool accent = false)
         {
-            button.Background = ThemePainter.Brush(theme.Accent, 0.9);
-            button.Foreground = ThemePainter.Brush(theme.Foreground);
-            button.BorderBrush = ThemePainter.Brush(theme.Border, 0.35);
-            button.BorderThickness = new Thickness(1);
-            button.CornerRadius = new CornerRadius(Math.Max(12, theme.CornerRadius * 0.7));
+            button.Background = accent
+                ? ThemePainter.Brush(theme.Accent, 0.55)
+                : new SolidColorBrush(Microsoft.UI.Colors.Transparent);
+            button.Foreground = ThemePainter.Brush(theme.WidgetForeground, accent ? 1 : 0.88);
+            button.BorderBrush = ThemePainter.Brush(theme.Border, accent ? 0.2 : 0.0);
+            button.BorderThickness = new Thickness(accent ? 1 : 0);
+            button.CornerRadius = new CornerRadius(17);
             button.FontFamily = new FontFamily(theme.FontFamily);
         }
 
-        void StyleSecondary(Button button)
+        if (ControlStripShell is not null)
         {
-            button.Background = ThemePainter.Brush(theme.WidgetBackground, ThemePainter.EffectiveWidgetOpacity(theme));
-            button.Foreground = ThemePainter.Brush(theme.WidgetForeground);
-            button.BorderBrush = ThemePainter.Brush(theme.Border, 0.5);
-            button.BorderThickness = new Thickness(1);
-            button.CornerRadius = new CornerRadius(Math.Max(12, theme.CornerRadius * 0.7));
-            button.FontFamily = new FontFamily(theme.FontFamily);
+            ControlStripShell.Background = ThemePainter.Brush(
+                theme.WidgetBackground,
+                Math.Clamp(ThemePainter.EffectiveWidgetOpacity(theme) * 0.72, 0.35, 0.78));
+            ControlStripShell.BorderBrush = ThemePainter.Brush(theme.Border, 0.28);
+            ControlStripShell.CornerRadius = new CornerRadius(22);
         }
 
-        StylePrimary(AddWidgetFab);
-        StyleSecondary(AddBlockFab);
-        StyleSecondary(ThemeFab);
-        StyleSecondary(ArrangeFab);
-        StyleSecondary(SetupFab);
+        StyleStripIcon(AddWidgetFab, accent: true);
+        StyleStripIcon(AddBlockFab);
+        StyleStripIcon(ThemeFab);
+        StyleStripIcon(ArrangeFab);
+        StyleStripIcon(SetupFab);
         TaskbarAiChat.ApplyTheme(theme);
 
         if (HostStatusLabel is not null)
@@ -769,29 +770,37 @@ public sealed partial class DesktopPage : Page
             rects.Add(chromeRect);
         }
 
-        if (TryCreateClientRect(AddWidgetFab, scale, out var addWidgetFabRect))
+        if (ControlStripShell is not null
+            && TryCreateClientRect(ControlStripShell, scale, out var controlStripRect))
         {
-            rects.Add(addWidgetFabRect);
+            rects.Add(controlStripRect);
         }
-
-        if (TryCreateClientRect(AddBlockFab, scale, out var fabRect))
+        else
         {
-            rects.Add(fabRect);
-        }
+            if (TryCreateClientRect(AddWidgetFab, scale, out var addWidgetFabRect))
+            {
+                rects.Add(addWidgetFabRect);
+            }
 
-        if (TryCreateClientRect(ThemeFab, scale, out var themeFabRect))
-        {
-            rects.Add(themeFabRect);
-        }
+            if (TryCreateClientRect(AddBlockFab, scale, out var fabRect))
+            {
+                rects.Add(fabRect);
+            }
 
-        if (TryCreateClientRect(ArrangeFab, scale, out var arrangeFabRect))
-        {
-            rects.Add(arrangeFabRect);
-        }
+            if (TryCreateClientRect(ThemeFab, scale, out var themeFabRect))
+            {
+                rects.Add(themeFabRect);
+            }
 
-        if (TryCreateClientRect(SetupFab, scale, out var setupFabRect))
-        {
-            rects.Add(setupFabRect);
+            if (TryCreateClientRect(ArrangeFab, scale, out var arrangeFabRect))
+            {
+                rects.Add(arrangeFabRect);
+            }
+
+            if (TryCreateClientRect(SetupFab, scale, out var setupFabRect))
+            {
+                rects.Add(setupFabRect);
+            }
         }
 
         if (TaskbarAiChat.Visibility == Visibility.Visible
@@ -967,10 +976,18 @@ public sealed partial class DesktopPage : Page
                 musicService: _musicCommands.MusicService,
                 integrations: _integrationMemory,
                 dialogInput: _dialogInput,
-                systemNowPlaying: _systemNowPlaying ??= new WindowsSystemNowPlayingSource());
+                systemNowPlaying: _systemNowPlaying ??= new WindowsSystemNowPlayingSource(),
+                onPreferredSizeChanged: (w, h) => ApplyWidgetPreferredSize(instance.Id, w, h));
             if (_theme is not null)
             {
                 view.ApplyTheme(_theme);
+            }
+
+            // Restore compact geometry when layout already saved IsCompact.
+            if (config.IsCompact)
+            {
+                instance.Size.Width = MusicWidgetView.CompactWidth;
+                instance.Size.Height = MusicWidgetView.CompactHeight;
             }
 
             return view;
@@ -1126,16 +1143,38 @@ public sealed partial class DesktopPage : Page
                 chimeDirectory: Path.Combine(
                     Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                     "SecretBase",
-                    "sounds"));
+                    "sounds"),
+                onPreferredSizeChanged: (w, h) => ApplyWidgetPreferredSize(instance.Id, w, h));
             if (_theme is not null)
             {
                 view.ApplyTheme(_theme);
+            }
+
+            if (config.IsCompact)
+            {
+                instance.Size.Width = PomodoroWidgetView.CompactWidth;
+                instance.Size.Height = PomodoroWidgetView.CompactHeight;
             }
 
             return view;
         }
 
         return null;
+    }
+
+    private void ApplyWidgetPreferredSize(Guid widgetId, double width, double height)
+    {
+        foreach (var frame in WidgetCanvas.Children.OfType<WidgetFrame>())
+        {
+            if (frame.WidgetId != widgetId)
+            {
+                continue;
+            }
+
+            frame.ApplyPreferredSize(width, height);
+            SyncInteractiveInputRegions();
+            return;
+        }
     }
 
     private string? TryLaunchCreativeItem(CreativeItem item)

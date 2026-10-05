@@ -29,6 +29,31 @@ public class ClockDisplayFormatterTests
         var (_, date) = ClockDisplayFormatter.Format(provider, config);
         Assert.Equal(string.Empty, date);
     }
+
+    [Fact]
+    public void FormatDate_LargeStyle_UsesSingleLineTypography()
+    {
+        var provider = new FixedTimeProvider(new DateTimeOffset(2026, 9, 1, 22, 32, 0, TimeSpan.FromHours(9)));
+        var config = new ClockWidgetConfiguration
+        {
+            DisplayStyle = ClockWidgetConfiguration.StyleLarge,
+            ShowDate = true,
+            Use24HourFormat = true,
+            ShowSeconds = false
+        };
+
+        var (time, date) = ClockDisplayFormatter.Format(provider, config);
+        Assert.Equal("22:32", time);
+        Assert.Equal("Tuesday, September 01", date);
+    }
+
+    [Fact]
+    public void NormalizeStyle_MapsLegacyDigitalToLarge()
+    {
+        Assert.Equal(ClockWidgetConfiguration.StyleLarge, ClockWidgetConfiguration.NormalizeStyle("digital"));
+        Assert.Equal(ClockWidgetConfiguration.StyleBase, ClockWidgetConfiguration.NormalizeStyle("base"));
+        Assert.True(ClockWidgetConfiguration.IsLargeTypography(ClockWidgetConfiguration.StyleLarge));
+    }
 }
 
 public class WidgetInstanceTests
@@ -61,15 +86,28 @@ public class WidgetInstanceTests
     {
         var original = new ClockWidgetConfiguration
         {
+            DisplayStyle = ClockWidgetConfiguration.StyleLarge,
             Use24HourFormat = true,
             ShowSeconds = false,
             ShowDate = true
         };
 
         var restored = ClockWidgetConfiguration.FromDictionary(original.ToDictionary());
+        Assert.Equal(ClockWidgetConfiguration.StyleLarge, restored.DisplayStyle);
         Assert.True(restored.Use24HourFormat);
         Assert.False(restored.ShowSeconds);
         Assert.True(restored.ShowDate);
+    }
+
+    [Fact]
+    public void ClockConfiguration_FromDictionary_MigratesDigitalToLarge()
+    {
+        var legacy = new ClockWidgetConfiguration { DisplayStyle = "digital" }.ToDictionary();
+        // Force raw "digital" into the bag to simulate older layouts.
+        legacy[nameof(ClockWidgetConfiguration.DisplayStyle)] =
+            System.Text.Json.JsonSerializer.SerializeToElement("digital");
+        var restored = ClockWidgetConfiguration.FromDictionary(legacy);
+        Assert.Equal(ClockWidgetConfiguration.StyleLarge, restored.DisplayStyle);
     }
 
     [Fact]

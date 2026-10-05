@@ -21,6 +21,9 @@ public sealed class MusicWidgetConfiguration
     /// <summary>Last selected track metadata (never tokens). Used to restore UI.</summary>
     public MusicTrack? CurrentTrack { get; set; }
 
+    /// <summary>Compact floating face (art + title + transport) vs full search surface.</summary>
+    public bool IsCompact { get; set; }
+
     public static MusicWidgetConfiguration CreateDefault()
     {
         var config = new MusicWidgetConfiguration
@@ -74,6 +77,12 @@ public sealed class MusicWidgetConfiguration
             result.CurrentTrack = track;
         }
 
+        if (configuration.TryGetValue(nameof(IsCompact), out var compact)
+            && (compact.ValueKind is JsonValueKind.True or JsonValueKind.False))
+        {
+            result.IsCompact = compact.GetBoolean();
+        }
+
         if (configuration.TryGetValue(nameof(Sources), out var sources)
             && sources.ValueKind == JsonValueKind.Array)
         {
@@ -106,6 +115,7 @@ public sealed class MusicWidgetConfiguration
         var bag = new Dictionary<string, JsonElement>(StringComparer.Ordinal)
         {
             [nameof(ActiveSourceId)] = JsonSerializer.SerializeToElement(ActiveSourceId),
+            [nameof(IsCompact)] = JsonSerializer.SerializeToElement(IsCompact),
             [nameof(Sources)] = JsonSerializer.SerializeToElement(
                 cleaned.Select(SerializeSource).ToList())
         };
