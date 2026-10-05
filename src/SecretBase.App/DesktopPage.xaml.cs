@@ -2506,7 +2506,7 @@ public sealed partial class DesktopPage : Page
             {
                 Width = 28,
                 Height = 28,
-                Padding = 0,
+                Padding = new Thickness(0),
                 CornerRadius = new CornerRadius(14),
                 Background = ThemePainter.Brush(hex, 1),
                 BorderBrush = ThemePainter.Brush("#66FFFFFF", 1),
