@@ -1299,8 +1299,9 @@ public sealed partial class DesktopPage : Page
         foreach (var block in _layout.Blocks.OrderBy(b => b.Name, StringComparer.OrdinalIgnoreCase))
         {
             var frame = WidgetCanvas.Children.OfType<BlockFrame>().FirstOrDefault(f => f.BlockId == block.Id);
+            ResolvedRect resolvedRect = default;
             var hasResolved = _resolvedLayout is not null
-                && _resolvedLayout.Blocks.TryGetValue(block.Id, out var resolved);
+                && _resolvedLayout.Blocks.TryGetValue(block.Id, out resolvedRect);
             rows.Add(new DesktopObjectDiagnosticsRow
             {
                 Kind = "block",
@@ -1310,10 +1311,10 @@ public sealed partial class DesktopPage : Page
                 SavedY = block.Position.Y,
                 SavedW = block.Size.Width,
                 SavedH = block.Size.Height,
-                ResolvedX = hasResolved ? resolved.X : block.Position.X,
-                ResolvedY = hasResolved ? resolved.Y : block.Position.Y,
-                ResolvedW = hasResolved ? resolved.Width : block.Size.Width,
-                ResolvedH = hasResolved ? resolved.Height : block.Size.Height,
+                ResolvedX = hasResolved ? resolvedRect.X : block.Position.X,
+                ResolvedY = hasResolved ? resolvedRect.Y : block.Position.Y,
+                ResolvedW = hasResolved ? resolvedRect.Width : block.Size.Width,
+                ResolvedH = hasResolved ? resolvedRect.Height : block.Size.Height,
                 CanvasX = frame is null ? double.NaN : Canvas.GetLeft(frame),
                 CanvasY = frame is null ? double.NaN : Canvas.GetTop(frame),
                 CanvasW = frame?.Width ?? double.NaN,
@@ -1330,8 +1331,9 @@ public sealed partial class DesktopPage : Page
             }
 
             var frame = WidgetCanvas.Children.OfType<WidgetFrame>().FirstOrDefault(f => f.WidgetId == widget.Id);
+            ResolvedRect resolvedRect = default;
             var hasResolved = _resolvedLayout is not null
-                && _resolvedLayout.Widgets.TryGetValue(widget.Id, out var resolved);
+                && _resolvedLayout.Widgets.TryGetValue(widget.Id, out resolvedRect);
             rows.Add(new DesktopObjectDiagnosticsRow
             {
                 Kind = "widget",
@@ -1341,10 +1343,10 @@ public sealed partial class DesktopPage : Page
                 SavedY = widget.Position.Y,
                 SavedW = widget.Size.Width,
                 SavedH = widget.Size.Height,
-                ResolvedX = hasResolved ? resolved.X : widget.Position.X,
-                ResolvedY = hasResolved ? resolved.Y : widget.Position.Y,
-                ResolvedW = hasResolved ? resolved.Width : widget.Size.Width,
-                ResolvedH = hasResolved ? resolved.Height : widget.Size.Height,
+                ResolvedX = hasResolved ? resolvedRect.X : widget.Position.X,
+                ResolvedY = hasResolved ? resolvedRect.Y : widget.Position.Y,
+                ResolvedW = hasResolved ? resolvedRect.Width : widget.Size.Width,
+                ResolvedH = hasResolved ? resolvedRect.Height : widget.Size.Height,
                 CanvasX = frame is null ? double.NaN : Canvas.GetLeft(frame),
                 CanvasY = frame is null ? double.NaN : Canvas.GetTop(frame),
                 CanvasW = frame?.Width ?? double.NaN,
