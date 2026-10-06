@@ -65,6 +65,8 @@ public sealed partial class MainWindow : Window
                 if (RootFrame.Content is DesktopPage page)
                 {
                     page.RequestInteractiveRegionSync();
+                    // Baseline diagnostics for "normal" state before any RDP churn.
+                    page.HandleDisplayMetricsChanged(CaptureDisplayMetrics("startup-baseline"));
                 }
             });
         }
