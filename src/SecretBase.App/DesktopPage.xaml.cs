@@ -124,10 +124,13 @@ public sealed partial class DesktopPage : Page
     /// <summary>Monotonic Canvas Z-index so newly opened widgets can rise above Blocks.</summary>
     private int _frontZIndex;
 
-    /// <summary>Last viewport we fitted widgets into (detect RDP / aspect-ratio changes).</summary>
+    /// <summary>Last viewport we resolved widgets into (detect RDP / aspect-ratio changes).</summary>
     private double _fittedViewportWidth;
     private double _fittedViewportHeight;
     private DispatcherQueueTimer? _viewportFitTimer;
+
+    /// <summary>Transient display geometry — never written back into the saved layout.</summary>
+    private ResolvedDesktopLayout? _resolvedLayout;
 
     public DesktopPage()
     {
@@ -712,7 +715,7 @@ public sealed partial class DesktopPage : Page
                 instance,
                 content,
                 _theme,
-                onLayoutCommitted: PersistLayoutNow,
+                onLayoutCommitted: CommitUserGeometryEdit,
                 onBoundsChanged: SyncInteractiveInputRegions,
                 onRemoveRequested: RemoveWidget);
             Canvas.SetLeft(frame, instance.Position.X);
@@ -738,7 +741,7 @@ public sealed partial class DesktopPage : Page
                 _launcher,
                 _icons,
                 _intake,
-                onLayoutCommitted: PersistLayoutNow,
+                onLayoutCommitted: CommitUserGeometryEdit,
                 onDeleteRequested: DeleteBlock,
                 onBoundsChanged: SyncInteractiveInputRegions,
                 onStatus: ShowHostStatus,
@@ -909,135 +912,102 @@ public sealed partial class DesktopPage : Page
         }
 
         var dpiScale = XamlRoot?.RasterizationScale > 0 ? XamlRoot.RasterizationScale : 1.0;
-        var target = new DesktopDisplayContext(
+        var current = new DesktopDisplayContext(
             areaWidth,
             areaHeight,
             dpiScale,
             DesktopLayoutReference.Margin,
             DesktopLayoutReference.BottomReserve);
+        var authored = GetAuthoredDisplayContext(dpiScale);
 
-        var changed = AdaptLayoutToDisplay(target);
+        // One-way: Saved → Resolve → UI. Never mutate or persist saved geometry here.
+        _resolvedLayout = ResponsiveLayoutResolver.Resolve(
+            _layout.Widgets,
+            _layout.Blocks,
+            authored,
+            current);
 
         _fittedViewportWidth = areaWidth;
         _fittedViewportHeight = areaHeight;
 
-        if (!changed && !force)
+        ApplyResolvedGeometryToCanvas();
+        if (!_resolvedLayout.IsIdentity)
         {
-            ApplyCanvasGeometryFromLayout();
-            return;
-        }
-
-        if (changed)
-        {
-            PersistLayoutNow();
             _logger?.Info(
                 "layout",
-                $"Adapted desktop layout to viewport {areaWidth:0}×{areaHeight:0} (DIP, dpiScale={dpiScale:0.##}).");
+                $"Resolved desktop layout for viewport {areaWidth:0}×{areaHeight:0} from authored {authored.Width:0}×{authored.Height:0} (display-only).");
         }
 
-        ApplyCanvasGeometryFromLayout();
         TaskbarAiChat.RefreshShelfWidth();
         SyncInteractiveInputRegions();
     }
 
     /// <summary>
-    /// Remap geometry from the layout's authored viewport into <paramref name="target"/>.
-    /// First bind (null authored viewport) adopts the current display without shifting
-    /// existing placements — preserves whatever the user already has.
+    /// Authored viewport for saved coordinates. Null metadata → Reference 1920×1080
+    /// (never adopt the current host — that caused write-back contamination).
     /// </summary>
-    private bool AdaptLayoutToDisplay(DesktopDisplayContext target)
+    private DesktopDisplayContext GetAuthoredDisplayContext(double dpiScale)
+    {
+        EnsureReferenceMetadata();
+        var width = _layout?.LayoutViewportWidth is double w && w >= 160
+            ? w
+            : DesktopLayoutReference.Width;
+        var height = _layout?.LayoutViewportHeight is double h && h >= 120
+            ? h
+            : DesktopLayoutReference.Height;
+        return new DesktopDisplayContext(
+            width,
+            height,
+            dpiScale,
+            DesktopLayoutReference.Margin,
+            DesktopLayoutReference.BottomReserve);
+    }
+
+    private void EnsureReferenceMetadata()
     {
         if (_layout is null)
         {
-            return false;
-        }
-
-        var changed = false;
-        if (_layout.LayoutViewportWidth is not double fromW
-            || _layout.LayoutViewportHeight is not double fromH
-            || fromW < 160
-            || fromH < 120)
-        {
-            // Legacy / first bind: treat current coords as authored for this display.
-            // Prefer reference when the host already matches 1920×1080.
-            if (DesktopLayoutReference.Matches(target.Width, target.Height))
-            {
-                fromW = DesktopLayoutReference.Width;
-                fromH = DesktopLayoutReference.Height;
-            }
-            else
-            {
-                fromW = target.Width;
-                fromH = target.Height;
-            }
-
-            _layout.LayoutViewportWidth = fromW;
-            _layout.LayoutViewportHeight = fromH;
-            changed = true;
-        }
-
-        var from = new DesktopDisplayContext(
-            fromW,
-            fromH,
-            target.DpiScale,
-            target.Margin,
-            target.BottomReserve);
-
-        changed |= ResponsiveLayoutResolver.AdaptToDisplay(
-            _layout.Widgets,
-            _layout.Blocks,
-            from,
-            target);
-
-        if (!NearlyEqualViewport(_layout.LayoutViewportWidth, target.Width)
-            || !NearlyEqualViewport(_layout.LayoutViewportHeight, target.Height))
-        {
-            _layout.LayoutViewportWidth = target.Width;
-            _layout.LayoutViewportHeight = target.Height;
-            changed = true;
+            return;
         }
 
         if (_layout.ReferenceWidth <= 0)
         {
             _layout.ReferenceWidth = DesktopLayoutReference.Width;
-            changed = true;
         }
 
         if (_layout.ReferenceHeight <= 0)
         {
             _layout.ReferenceHeight = DesktopLayoutReference.Height;
-            changed = true;
         }
-
-        return changed;
     }
 
-    private static bool NearlyEqualViewport(double? a, double b) =>
-        a is double value && Math.Abs(value - b) < 0.5;
-
     /// <summary>
-    /// Stamp the current DIP viewport onto the layout before save so manual moves
-    /// are not remapped as if they still belonged to a previous display.
+    /// User dragged/resized a frame. Bake on-screen (current) geometry into the
+    /// saved layout and mark the host as the new authored viewport.
     /// </summary>
-    private void StampLayoutViewportFromHost()
+    private void CommitUserGeometryEdit()
     {
         if (_layout is null)
         {
             return;
         }
 
+        SyncSavedGeometryFromCanvas();
         var areaWidth = Math.Max(WidgetCanvas.ActualWidth, ActualWidth);
         var areaHeight = Math.Max(WidgetCanvas.ActualHeight, ActualHeight);
-        if (areaWidth < 160 || areaHeight < 120)
+        if (areaWidth >= 160 && areaHeight >= 120)
         {
-            return;
+            _layout.LayoutViewportWidth = areaWidth;
+            _layout.LayoutViewportHeight = areaHeight;
         }
 
-        _layout.LayoutViewportWidth = areaWidth;
-        _layout.LayoutViewportHeight = areaHeight;
+        EnsureReferenceMetadata();
+        PersistLayoutNow();
+        // Re-resolve so _resolvedLayout matches the new authored=current identity.
+        FitDesktopObjectsToViewport(force: true);
     }
 
-    private void ApplyCanvasGeometryFromLayout()
+    private void SyncSavedGeometryFromCanvas()
     {
         if (_layout is null)
         {
@@ -1052,10 +1022,10 @@ public sealed partial class DesktopPage : Page
                 continue;
             }
 
-            Canvas.SetLeft(frame, instance.Position.X);
-            Canvas.SetTop(frame, instance.Position.Y);
-            frame.Width = instance.Size.Width;
-            frame.Height = instance.Size.Height;
+            instance.Position.X = Canvas.GetLeft(frame);
+            instance.Position.Y = Canvas.GetTop(frame);
+            instance.Size.Width = frame.Width;
+            instance.Size.Height = frame.Height;
         }
 
         foreach (var frame in WidgetCanvas.Children.OfType<BlockFrame>())
@@ -1066,10 +1036,67 @@ public sealed partial class DesktopPage : Page
                 continue;
             }
 
-            Canvas.SetLeft(frame, block.Position.X);
-            Canvas.SetTop(frame, block.Position.Y);
-            frame.Width = block.Size.Width;
-            frame.Height = block.Size.Height;
+            block.Position.X = Canvas.GetLeft(frame);
+            block.Position.Y = Canvas.GetTop(frame);
+            block.Size.Width = frame.Width;
+            block.Size.Height = frame.Height;
+        }
+    }
+
+    private void ApplyResolvedGeometryToCanvas()
+    {
+        if (_layout is null)
+        {
+            return;
+        }
+
+        var resolved = _resolvedLayout;
+        foreach (var frame in WidgetCanvas.Children.OfType<WidgetFrame>())
+        {
+            var instance = _layout.Widgets.FirstOrDefault(w => w.Id == frame.WidgetId);
+            if (instance is null)
+            {
+                continue;
+            }
+
+            if (resolved is not null && resolved.Widgets.TryGetValue(instance.Id, out var rect))
+            {
+                Canvas.SetLeft(frame, rect.X);
+                Canvas.SetTop(frame, rect.Y);
+                frame.Width = rect.Width;
+                frame.Height = rect.Height;
+            }
+            else
+            {
+                Canvas.SetLeft(frame, instance.Position.X);
+                Canvas.SetTop(frame, instance.Position.Y);
+                frame.Width = instance.Size.Width;
+                frame.Height = instance.Size.Height;
+            }
+        }
+
+        foreach (var frame in WidgetCanvas.Children.OfType<BlockFrame>())
+        {
+            var block = _layout.Blocks.FirstOrDefault(b => b.Id == frame.BlockId);
+            if (block is null)
+            {
+                continue;
+            }
+
+            if (resolved is not null && resolved.Blocks.TryGetValue(block.Id, out var rect))
+            {
+                Canvas.SetLeft(frame, rect.X);
+                Canvas.SetTop(frame, rect.Y);
+                frame.Width = rect.Width;
+                frame.Height = rect.Height;
+            }
+            else
+            {
+                Canvas.SetLeft(frame, block.Position.X);
+                Canvas.SetTop(frame, block.Position.Y);
+                frame.Width = block.Size.Width;
+                frame.Height = block.Size.Height;
+            }
         }
     }
 
@@ -2772,7 +2799,16 @@ public sealed partial class DesktopPage : Page
 
         try
         {
-            StampLayoutViewportFromHost();
+            EnsureReferenceMetadata();
+            // Do not stamp host viewport here — responsive resolve must never
+            // rewrite authored metadata. User geometry edits go through
+            // CommitUserGeometryEdit, which sets LayoutViewport intentionally.
+            if (_layout.LayoutViewportWidth is null || _layout.LayoutViewportHeight is null)
+            {
+                _layout.LayoutViewportWidth = DesktopLayoutReference.Width;
+                _layout.LayoutViewportHeight = DesktopLayoutReference.Height;
+            }
+
             _layoutStore.Save(_layout);
             _logger?.Info("persistence", $"Layout saved ({_layout.Widgets.Count} widgets, {_layout.Blocks.Count} blocks).");
         }

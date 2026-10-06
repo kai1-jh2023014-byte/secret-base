@@ -4,23 +4,100 @@ using SecretBase.Core.Widgets;
 namespace SecretBase.Core.Desktop;
 
 /// <summary>
-/// Maps desktop object geometry between viewports without uniform stretch.
-/// Same-width taller displays (e.g. 1920×1080 → 1920×1200) keep X/size and
-/// redistribute Y via edge-preserving anchors; smaller displays clamp via
-/// <see cref="DesktopViewportLayout.FitToViewport"/>.
+/// Maps saved (authored) desktop geometry into a transient resolved layout for
+/// the current display. Never mutates the saved layout — callers must apply
+/// <see cref="ResolvedDesktopLayout"/> to the UI only.
 /// </summary>
 public static class ResponsiveLayoutResolver
 {
-    /// <summary>Relative position along an axis below which we pin the leading edge.</summary>
     public const double LeadingEdgeBias = 0.35;
-
-    /// <summary>Relative position along an axis above which we pin the trailing edge.</summary>
     public const double TrailingEdgeBias = 0.65;
+    private const double AxisEpsilon = 0.5;
+    private const double OverlapGap = 12;
 
     /// <summary>
-    /// Adapt layout authored for <paramref name="from"/> into <paramref name="to"/>.
-    /// Mutates widget/block geometry. Returns true when any value changed.
-    /// When viewports match, only an in-bounds fit runs (1920×1080 identity).
+    /// Pure resolve: saved geometry → current display. Input positions/sizes are
+    /// not modified. Same authored/current viewport yields an identity mapping
+    /// (plus in-bounds clamp).
+    /// </summary>
+    public static ResolvedDesktopLayout Resolve(
+        IEnumerable<WidgetInstance> widgets,
+        IEnumerable<Block> blocks,
+        DesktopDisplayContext authored,
+        DesktopDisplayContext current)
+    {
+        var result = new ResolvedDesktopLayout
+        {
+            Authored = authored,
+            Current = current
+        };
+
+        var authoredSafe = authored.SafeArea;
+        var currentSafe = current.SafeArea;
+        var sameWidth = NearlyEqual(authoredSafe.Width, currentSafe.Width);
+        var sameHeight = NearlyEqual(authoredSafe.Height, currentSafe.Height);
+        var identity = sameWidth && sameHeight;
+
+        foreach (var widget in widgets)
+        {
+            var rect = identity
+                ? new ResolvedRect(widget.Position.X, widget.Position.Y, widget.Size.Width, widget.Size.Height)
+                : RemapRect(
+                    widget.Position.X,
+                    widget.Position.Y,
+                    widget.Size.Width,
+                    widget.Size.Height,
+                    authoredSafe,
+                    currentSafe,
+                    sameWidth,
+                    sameHeight);
+            result.Widgets[widget.Id] = rect.ClampTo(currentSafe, minWidth: 120, minHeight: 80);
+        }
+
+        foreach (var block in blocks)
+        {
+            var minW = BlockLayoutMode.IsRail(block.LayoutMode) ? Block.RailMinWidth : Block.MinWidth;
+            var minH = BlockLayoutMode.IsRail(block.LayoutMode) ? Block.RailMinHeight : Block.MinHeight;
+            var rect = identity
+                ? new ResolvedRect(block.Position.X, block.Position.Y, block.Size.Width, block.Size.Height)
+                : RemapRect(
+                    block.Position.X,
+                    block.Position.Y,
+                    block.Size.Width,
+                    block.Size.Height,
+                    authoredSafe,
+                    currentSafe,
+                    sameWidth,
+                    sameHeight);
+            result.Blocks[block.Id] = rect.ClampTo(currentSafe, minW, minH);
+        }
+
+        if (!identity)
+        {
+            SeparateOverlaps(result, currentSafe);
+        }
+
+        return result;
+    }
+
+    public static ResolvedDesktopLayout Resolve(
+        IEnumerable<WidgetInstance> widgets,
+        IEnumerable<Block> blocks,
+        double authoredWidth,
+        double authoredHeight,
+        double currentWidth,
+        double currentHeight,
+        double margin = DesktopLayoutReference.Margin,
+        double bottomReserve = DesktopLayoutReference.BottomReserve,
+        double dpiScale = 1.0)
+    {
+        var authored = new DesktopDisplayContext(authoredWidth, authoredHeight, dpiScale, margin, bottomReserve);
+        var current = new DesktopDisplayContext(currentWidth, currentHeight, dpiScale, margin, bottomReserve);
+        return Resolve(widgets, blocks, authored, current);
+    }
+
+    /// <summary>
+    /// Mutating helper for tests / explicit rebases. Prefer <see cref="Resolve"/> for display.
     /// </summary>
     public static bool AdaptToDisplay(
         IEnumerable<WidgetInstance> widgets,
@@ -30,37 +107,32 @@ public static class ResponsiveLayoutResolver
     {
         var widgetList = widgets as IList<WidgetInstance> ?? widgets.ToList();
         var blockList = blocks as IList<Block> ?? blocks.ToList();
+        var resolved = Resolve(widgetList, blockList, from, to);
         var changed = false;
 
-        if (!NearlyEqual(from.Width, to.Width) || !NearlyEqual(from.Height, to.Height))
+        foreach (var widget in widgetList)
         {
-            var fromSafe = from.SafeArea;
-            var toSafe = to.SafeArea;
-            foreach (var widget in widgetList)
+            if (!resolved.Widgets.TryGetValue(widget.Id, out var rect))
             {
-                changed |= RemapRect(widget.Position, widget.Size, fromSafe, toSafe);
+                continue;
             }
 
-            foreach (var block in blockList)
-            {
-                changed |= RemapRect(block.Position, block.Size, fromSafe, toSafe);
-            }
+            changed |= ApplyRect(widget.Position, widget.Size, rect);
         }
 
-        changed |= DesktopViewportLayout.FitToViewport(
-            widgetList,
-            blockList,
-            to.Width,
-            to.Height,
-            margin: to.Margin,
-            bottomReserve: to.BottomReserve);
+        foreach (var block in blockList)
+        {
+            if (!resolved.Blocks.TryGetValue(block.Id, out var rect))
+            {
+                continue;
+            }
+
+            changed |= ApplyRect(block.Position, block.Size, rect);
+        }
 
         return changed;
     }
 
-    /// <summary>
-    /// Convenience overload using explicit DIP sizes (dpiScale defaults to 1).
-    /// </summary>
     public static bool AdaptToDisplay(
         IEnumerable<WidgetInstance> widgets,
         IEnumerable<Block> blocks,
@@ -99,9 +171,6 @@ public static class ResponsiveLayoutResolver
             (-1, -1) => LayoutAnchor.TopLeft,
             (0, -1) => LayoutAnchor.TopCenter,
             (1, -1) => LayoutAnchor.TopRight,
-            (-1, 0) => LayoutAnchor.Center,
-            (0, 0) => LayoutAnchor.Center,
-            (1, 0) => LayoutAnchor.Center,
             (-1, 1) => LayoutAnchor.BottomLeft,
             (0, 1) => LayoutAnchor.BottomCenter,
             (1, 1) => LayoutAnchor.BottomRight,
@@ -109,55 +178,6 @@ public static class ResponsiveLayoutResolver
         };
     }
 
-    private static bool RemapRect(
-        WidgetPosition position,
-        WidgetSize size,
-        DesktopSafeArea fromSafe,
-        DesktopSafeArea toSafe)
-    {
-        // Never grow widgets when the display grows — only reposition.
-        // FitToViewport may shrink later if the target is smaller.
-        var width = size.Width;
-        var height = size.Height;
-
-        var leadingX = position.X - fromSafe.Left;
-        var trailingX = fromSafe.Right - (position.X + width);
-        var leadingY = position.Y - fromSafe.Top;
-        var trailingY = fromSafe.Bottom - (position.Y + height);
-
-        var nextX = MapAxis(
-            leadingX,
-            trailingX,
-            width,
-            fromSafe.Width,
-            toSafe.Width,
-            toSafe.Left);
-        var nextY = MapAxis(
-            leadingY,
-            trailingY,
-            height,
-            fromSafe.Height,
-            toSafe.Height,
-            toSafe.Top);
-
-        var changed = false;
-        if (!NearlyEqual(position.X, nextX) || !NearlyEqual(position.Y, nextY))
-        {
-            position.X = nextX;
-            position.Y = nextY;
-            changed = true;
-        }
-
-        // Size intentionally unchanged here (no uniform scale).
-        _ = width;
-        _ = height;
-        return changed;
-    }
-
-    /// <summary>
-    /// Map one axis: pin leading/trailing edges when clearly biased; otherwise
-    /// keep relative position. Identical usable length → keep leading offset.
-    /// </summary>
     public static double MapAxis(
         double leading,
         double trailing,
@@ -182,20 +202,134 @@ public static class ResponsiveLayoutResolver
 
         if (t <= LeadingEdgeBias)
         {
-            // Top / left: keep inset so 1080→1200 does not push header objects down.
             return toOrigin + Math.Clamp(leading, 0, toSpan);
         }
 
         if (t >= TrailingEdgeBias)
         {
-            // Bottom / right: preserve distance to the trailing safe edge.
             var keepTrailing = Math.Max(0, trailing);
             return toOrigin + Math.Max(0, toSpan - keepTrailing);
         }
 
-        // Middle band: proportional — uses extra vertical space without enlarging widgets.
         return toOrigin + t * toSpan;
     }
 
-    private static bool NearlyEqual(double a, double b) => Math.Abs(a - b) < 0.5;
+    private static ResolvedRect RemapRect(
+        double x,
+        double y,
+        double width,
+        double height,
+        DesktopSafeArea fromSafe,
+        DesktopSafeArea toSafe,
+        bool sameWidth,
+        bool sameHeight)
+    {
+        // Same width: keep X exactly (no horizontal drift on 1920×1080 → 1920×1200).
+        var nextX = sameWidth
+            ? x
+            : MapAxis(
+                x - fromSafe.Left,
+                fromSafe.Right - (x + width),
+                width,
+                fromSafe.Width,
+                toSafe.Width,
+                toSafe.Left);
+
+        var nextY = sameHeight
+            ? y
+            : MapAxis(
+                y - fromSafe.Top,
+                fromSafe.Bottom - (y + height),
+                height,
+                fromSafe.Height,
+                toSafe.Height,
+                toSafe.Top);
+
+        // Never grow sizes when the display grows.
+        return new ResolvedRect(nextX, nextY, width, height);
+    }
+
+    private static void SeparateOverlaps(ResolvedDesktopLayout layout, DesktopSafeArea safe)
+    {
+        var items = new List<(Guid Id, bool IsBlock, ResolvedRect Rect)>();
+        foreach (var (id, rect) in layout.Widgets)
+        {
+            items.Add((id, false, rect));
+        }
+
+        foreach (var (id, rect) in layout.Blocks)
+        {
+            items.Add((id, true, rect));
+        }
+
+        items.Sort((a, b) => a.Rect.Y.CompareTo(b.Rect.Y));
+
+        for (var i = 1; i < items.Count; i++)
+        {
+            var prev = items[i - 1].Rect;
+            var cur = items[i].Rect;
+            if (!Intersects(prev, cur))
+            {
+                continue;
+            }
+
+            var pushedY = prev.Bottom + OverlapGap;
+            var maxY = Math.Max(safe.Top, safe.Bottom - cur.Height);
+            if (pushedY <= maxY)
+            {
+                cur = cur.WithPosition(cur.X, pushedY);
+            }
+            else
+            {
+                // Prefer keeping bottom widgets; nudge the upper one up when needed.
+                var prevY = Math.Max(safe.Top, cur.Y - cur.Height - OverlapGap);
+                prev = prev.WithPosition(prev.X, Math.Min(prev.Y, prevY));
+                items[i - 1] = (items[i - 1].Id, items[i - 1].IsBlock, prev);
+                WriteBack(layout, items[i - 1]);
+                continue;
+            }
+
+            items[i] = (items[i].Id, items[i].IsBlock, cur);
+            WriteBack(layout, items[i]);
+        }
+    }
+
+    private static void WriteBack(
+        ResolvedDesktopLayout layout,
+        (Guid Id, bool IsBlock, ResolvedRect Rect) item)
+    {
+        if (item.IsBlock)
+        {
+            layout.Blocks[item.Id] = item.Rect;
+        }
+        else
+        {
+            layout.Widgets[item.Id] = item.Rect;
+        }
+    }
+
+    private static bool Intersects(ResolvedRect a, ResolvedRect b) =>
+        a.X < b.Right && a.Right > b.X && a.Y < b.Bottom && a.Bottom > b.Y;
+
+    private static bool ApplyRect(WidgetPosition position, WidgetSize size, ResolvedRect rect)
+    {
+        var changed = false;
+        if (!NearlyEqual(position.X, rect.X) || !NearlyEqual(position.Y, rect.Y))
+        {
+            position.X = rect.X;
+            position.Y = rect.Y;
+            changed = true;
+        }
+
+        if (!NearlyEqual(size.Width, rect.Width) || !NearlyEqual(size.Height, rect.Height))
+        {
+            size.Width = rect.Width;
+            size.Height = rect.Height;
+            changed = true;
+        }
+
+        return changed;
+    }
+
+    private static bool NearlyEqual(double a, double b) => Math.Abs(a - b) < AxisEpsilon;
 }

@@ -6,161 +6,276 @@ namespace SecretBase.Core.Tests;
 
 public class ResponsiveLayoutResolverTests
 {
-    private static WidgetInstance Widget(double x, double y, double w, double h) =>
+    private static WidgetInstance Widget(Guid id, double x, double y, double w, double h) =>
         new()
         {
+            Id = id,
             Type = WidgetTypes.Clock,
             Position = new WidgetPosition(x, y),
             Size = new WidgetSize(w, h)
         };
 
-    private static Block BlockAt(double x, double y, double w, double h) =>
-        DefaultBlockFactory.Create("B", x: x, y: y, width: w, height: h);
-
-    [Fact]
-    public void Reference_1920x1080_IsIdentity_NoGeometryChange()
+    private static Block BlockAt(Guid id, double x, double y, double w, double h)
     {
+        var block = DefaultBlockFactory.Create("B", x: x, y: y, width: w, height: h);
+        block.Id = id;
+        return block;
+    }
+
+    private static (List<WidgetInstance> Widgets, List<Block> Blocks) SampleDesk()
+    {
+        var clockId = Guid.Parse("11111111-1111-1111-1111-111111111111");
+        var pomoId = Guid.Parse("22222222-2222-2222-2222-222222222222");
+        var musicId = Guid.Parse("33333333-3333-3333-3333-333333333333");
+        var aiId = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+        var productsId = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
+
         var widgets = new List<WidgetInstance>
         {
-            Widget(48, 48, 280, 200),
-            Widget(1500, 820, 320, 120)
+            Widget(clockId, 420, 280, 360, 200),
+            Widget(pomoId, 1180, 820, 200, 140),
+            Widget(musicId, 1400, 820, 420, 140)
         };
         var blocks = new List<Block>
         {
-            BlockAt(1400, 48, 360, 260),
-            BlockAt(1400, 340, 360, 260)
+            BlockAt(aiId, 1180, 48, 340, 240),
+            BlockAt(productsId, 1180, 560, 700, 220)
         };
-
-        var snapshot = Snapshot(widgets, blocks);
-        var changed = ResponsiveLayoutResolver.AdaptToDisplay(
-            widgets,
-            blocks,
-            fromWidth: DesktopLayoutReference.Width,
-            fromHeight: DesktopLayoutReference.Height,
-            toWidth: DesktopLayoutReference.Width,
-            toHeight: DesktopLayoutReference.Height);
-
-        Assert.False(changed);
-        AssertUnchanged(snapshot, widgets, blocks);
+        return (widgets, blocks);
     }
 
-    [Fact]
-    public void Tall_1920x1200_KeepsWidthAndTop_MovesBottomAnchoredDown()
+    private static List<(Guid Id, double X, double Y, double W, double H)> Snapshot(
+        IReadOnlyList<WidgetInstance> widgets,
+        IReadOnlyList<Block> blocks)
     {
-        // Top clock — should stay.
-        var clock = Widget(80, 60, 280, 160);
-        // Bottom music-like widget — should keep ~72px above safe bottom (shelf reserve).
-        // Safe bottom at 1080: 1080 - 72 - 16 = 992. Music bottom = 900+100=1000 → slightly below
-        // Use clearly bottom-anchored: y such that trailing bias applies.
-        var music = Widget(1520, 860, 320, 100);
-        var widgets = new List<WidgetInstance> { clock, music };
-
-        ResponsiveLayoutResolver.AdaptToDisplay(
-            widgets,
-            [],
-            fromWidth: 1920,
-            fromHeight: 1080,
-            toWidth: 1920,
-            toHeight: 1200);
-
-        Assert.Equal(80, clock.Position.X, 0.5);
-        Assert.Equal(60, clock.Position.Y, 0.5);
-        Assert.Equal(280, clock.Size.Width, 0.5);
-        Assert.Equal(160, clock.Size.Height, 0.5);
-
-        Assert.Equal(1520, music.Position.X, 0.5);
-        Assert.Equal(320, music.Size.Width, 0.5);
-        Assert.Equal(100, music.Size.Height, 0.5);
-        // Extra 120px height → bottom-anchored object shifts down by ~120.
-        Assert.InRange(music.Position.Y, 960, 1020);
-        Assert.True(music.Position.Y > 860 + 40);
-    }
-
-    [Fact]
-    public void Tall_1920x1200_DoesNotEnlargeWidgetSizes()
-    {
-        var block = BlockAt(1400, 200, 360, 260);
-        var blocks = new List<Block> { block };
-
-        ResponsiveLayoutResolver.AdaptToDisplay(
-            [],
-            blocks,
-            1920,
-            1080,
-            1920,
-            1200);
-
-        Assert.Equal(360, block.Size.Width, 0.5);
-        Assert.Equal(260, block.Size.Height, 0.5);
-    }
-
-    [Fact]
-    public void Qhd_2560x1440_StaysInsideSafeArea_WithoutUniformStretch()
-    {
-        var widgets = new List<WidgetInstance>
-        {
-            Widget(48, 48, 280, 200),
-            Widget(1600, 850, 300, 110)
-        };
-        var blocks = new List<Block> { BlockAt(1500, 80, 360, 400) };
-
-        ResponsiveLayoutResolver.AdaptToDisplay(
-            widgets,
-            blocks,
-            1920,
-            1080,
-            2560,
-            1440);
-
-        var safe = new DesktopDisplayContext(2560, 1440).SafeArea;
+        var list = new List<(Guid, double, double, double, double)>();
         foreach (var w in widgets)
         {
-            Assert.InRange(w.Position.X, safe.Left - 0.5, safe.Right - w.Size.Width + 0.5);
-            Assert.InRange(w.Position.Y, safe.Top - 0.5, safe.Bottom - w.Size.Height + 0.5);
-            // No uniform scale-up: sizes stay at authored values (or shrink only if needed).
-            Assert.True(w.Size.Width <= 300 + 0.5);
-            Assert.True(w.Size.Height <= 200 + 0.5);
+            list.Add((w.Id, w.Position.X, w.Position.Y, w.Size.Width, w.Size.Height));
         }
 
         foreach (var b in blocks)
         {
-            Assert.InRange(b.Position.X, safe.Left - 0.5, safe.Right - b.Size.Width + 0.5);
-            Assert.InRange(b.Position.Y, safe.Top - 0.5, safe.Bottom - b.Size.Height + 0.5);
+            list.Add((b.Id, b.Position.X, b.Position.Y, b.Size.Width, b.Size.Height));
+        }
+
+        return list;
+    }
+
+    private static void AssertSavedUnchanged(
+        List<(Guid Id, double X, double Y, double W, double H)> before,
+        IReadOnlyList<WidgetInstance> widgets,
+        IReadOnlyList<Block> blocks)
+    {
+        var after = Snapshot(widgets, blocks);
+        Assert.Equal(before.Count, after.Count);
+        for (var i = 0; i < before.Count; i++)
+        {
+            Assert.Equal(before[i].Id, after[i].Id);
+            Assert.Equal(before[i].X, after[i].X, 0.01);
+            Assert.Equal(before[i].Y, after[i].Y, 0.01);
+            Assert.Equal(before[i].W, after[i].W, 0.01);
+            Assert.Equal(before[i].H, after[i].H, 0.01);
         }
     }
 
     [Fact]
-    public void Small_1366x768_ClampsWithoutCrash()
+    public void TestA_Reference_1920x1080_MatchesSaved()
     {
-        var widgets = new List<WidgetInstance>
-        {
-            Widget(1600, 900, 400, 300),
-            Widget(48, 48, 280, 200)
-        };
-        var blocks = new List<Block> { BlockAt(1400, 40, 500, 400) };
+        var (widgets, blocks) = SampleDesk();
+        var saved = Snapshot(widgets, blocks);
 
-        ResponsiveLayoutResolver.AdaptToDisplay(
+        var resolved = ResponsiveLayoutResolver.Resolve(
             widgets,
             blocks,
             1920,
             1080,
-            1366,
-            768);
+            1920,
+            1080);
 
-        var safe = new DesktopDisplayContext(1366, 768).SafeArea;
+        Assert.True(resolved.IsIdentity);
+        AssertSavedUnchanged(saved, widgets, blocks);
         foreach (var w in widgets)
         {
-            Assert.True(w.Position.X + w.Size.Width <= safe.Right + 0.5);
-            Assert.True(w.Position.Y + w.Size.Height <= safe.Bottom + 0.5);
-            Assert.True(w.Position.X >= safe.Left - 0.5);
-            Assert.True(w.Position.Y >= safe.Top - 0.5);
+            var r = resolved.Widgets[w.Id];
+            Assert.Equal(w.Position.X, r.X, 0.5);
+            Assert.Equal(w.Position.Y, r.Y, 0.5);
+            Assert.Equal(w.Size.Width, r.Width, 0.5);
+            Assert.Equal(w.Size.Height, r.Height, 0.5);
+        }
+    }
+
+    [Fact]
+    public void TestB_RoundTrip_1080_1200_1080_RestoresSaved()
+    {
+        var (widgets, blocks) = SampleDesk();
+        var original = Snapshot(widgets, blocks);
+
+        var tall = ResponsiveLayoutResolver.Resolve(widgets, blocks, 1920, 1080, 1920, 1200);
+        AssertSavedUnchanged(original, widgets, blocks);
+
+        // Simulate "display" then return — resolve again from the same saved input.
+        var back = ResponsiveLayoutResolver.Resolve(widgets, blocks, 1920, 1080, 1920, 1080);
+        AssertSavedUnchanged(original, widgets, blocks);
+        foreach (var entry in original)
+        {
+            if (tall.Widgets.ContainsKey(entry.Id))
+            {
+                var r = back.Widgets[entry.Id];
+                Assert.Equal(entry.X, r.X, 0.5);
+                Assert.Equal(entry.Y, r.Y, 0.5);
+            }
+            else
+            {
+                var r = back.Blocks[entry.Id];
+                Assert.Equal(entry.X, r.X, 0.5);
+                Assert.Equal(entry.Y, r.Y, 0.5);
+            }
+        }
+    }
+
+    [Fact]
+    public void TestC_MultipleRoundTrips_NoCumulativeDrift()
+    {
+        var (widgets, blocks) = SampleDesk();
+        var original = Snapshot(widgets, blocks);
+
+        for (var i = 0; i < 5; i++)
+        {
+            _ = ResponsiveLayoutResolver.Resolve(widgets, blocks, 1920, 1080, 1920, 1200);
+            var back = ResponsiveLayoutResolver.Resolve(widgets, blocks, 1920, 1080, 1920, 1080);
+            AssertSavedUnchanged(original, widgets, blocks);
+            foreach (var entry in original)
+            {
+                var r = back.Widgets.TryGetValue(entry.Id, out var wr) ? wr : back.Blocks[entry.Id];
+                Assert.Equal(entry.X, r.X, 0.5);
+                Assert.Equal(entry.Y, r.Y, 0.5);
+                Assert.Equal(entry.W, r.Width, 0.5);
+                Assert.Equal(entry.H, r.Height, 0.5);
+            }
+        }
+    }
+
+    [Fact]
+    public void TestD_Resolve_DoesNotMutateInputReference()
+    {
+        var (widgets, blocks) = SampleDesk();
+        var before = Snapshot(widgets, blocks);
+
+        for (var i = 0; i < 10; i++)
+        {
+            _ = ResponsiveLayoutResolver.Resolve(widgets, blocks, 1920, 1080, 1920, 1200);
+            _ = ResponsiveLayoutResolver.Resolve(widgets, blocks, 1920, 1080, 2560, 1440);
+            _ = ResponsiveLayoutResolver.Resolve(widgets, blocks, 1920, 1080, 1366, 768);
+        }
+
+        AssertSavedUnchanged(before, widgets, blocks);
+    }
+
+    [Fact]
+    public void TestE_UserEdit_BecomesNewAuthoredLayout()
+    {
+        var (widgets, blocks) = SampleDesk();
+        // User drags music on a 1200 display — saved coords + authored viewport update.
+        var music = widgets[2];
+        music.Position.X = 1450;
+        music.Position.Y = 980;
+        const double authoredW = 1920;
+        const double authoredH = 1200;
+
+        var resolvedOn1080 = ResponsiveLayoutResolver.Resolve(
+            widgets,
+            blocks,
+            authoredW,
+            authoredH,
+            1920,
+            1080);
+
+        // Bottom-anchored music should keep trailing gap when shrinking height.
+        Assert.True(resolvedOn1080.Widgets[music.Id].Y < music.Position.Y);
+        Assert.Equal(1450, resolvedOn1080.Widgets[music.Id].X, 0.5);
+        // Saved user edit untouched.
+        Assert.Equal(1450, music.Position.X, 0.01);
+        Assert.Equal(980, music.Position.Y, 0.01);
+    }
+
+    [Fact]
+    public void TestF_Resolve_IsDisplayOnly_NoSaveSideEffects()
+    {
+        var (widgets, blocks) = SampleDesk();
+        var before = Snapshot(widgets, blocks);
+        var layout = new DesktopLayout
+        {
+            LayoutViewportWidth = 1920,
+            LayoutViewportHeight = 1080,
+            Widgets = widgets,
+            Blocks = blocks
+        };
+
+        _ = ResponsiveLayoutResolver.Resolve(layout.Widgets, layout.Blocks, 1920, 1080, 1920, 1200);
+
+        Assert.Equal(1920, layout.LayoutViewportWidth);
+        Assert.Equal(1080, layout.LayoutViewportHeight);
+        AssertSavedUnchanged(before, layout.Widgets, layout.Blocks);
+    }
+
+    [Fact]
+    public void Tall_1920x1200_KeepsX_AndDoesNotEnlarge()
+    {
+        var (widgets, blocks) = SampleDesk();
+        var resolved = ResponsiveLayoutResolver.Resolve(widgets, blocks, 1920, 1080, 1920, 1200);
+
+        foreach (var w in widgets)
+        {
+            var r = resolved.Widgets[w.Id];
+            Assert.Equal(w.Position.X, r.X, 0.5);
+            Assert.Equal(w.Size.Width, r.Width, 0.5);
+            Assert.Equal(w.Size.Height, r.Height, 0.5);
         }
 
         foreach (var b in blocks)
         {
-            Assert.True(b.Size.Width <= safe.Width + 0.5);
-            Assert.True(b.Position.X + b.Size.Width <= safe.Right + 0.5);
+            var r = resolved.Blocks[b.Id];
+            Assert.Equal(b.Position.X, r.X, 0.5);
+            Assert.Equal(b.Size.Width, r.Width, 0.5);
+            Assert.Equal(b.Size.Height, r.Height, 0.5);
         }
+    }
+
+    [Fact]
+    public void Tall_BottomAnchored_MovesDown_TopStays()
+    {
+        var topId = Guid.NewGuid();
+        var bottomId = Guid.NewGuid();
+        var widgets = new List<WidgetInstance>
+        {
+            Widget(topId, 80, 60, 280, 160),
+            Widget(bottomId, 1520, 860, 320, 100)
+        };
+
+        var resolved = ResponsiveLayoutResolver.Resolve(widgets, [], 1920, 1080, 1920, 1200);
+
+        Assert.Equal(60, resolved.Widgets[topId].Y, 0.5);
+        Assert.InRange(resolved.Widgets[bottomId].Y, 960, 1020);
+        Assert.True(resolved.Widgets[bottomId].Y > 860 + 40);
+    }
+
+    [Fact]
+    public void Tall_Resolved_DoesNotOverlap_WhenStacked()
+    {
+        var upperId = Guid.NewGuid();
+        var lowerId = Guid.NewGuid();
+        var blocks = new List<Block>
+        {
+            BlockAt(upperId, 1200, 500, 600, 220),
+            BlockAt(lowerId, 1200, 700, 600, 220)
+        };
+
+        var resolved = ResponsiveLayoutResolver.Resolve([], blocks, 1920, 1080, 1920, 1200);
+        var a = resolved.Blocks[upperId];
+        var b = resolved.Blocks[lowerId];
+        var overlaps = a.X < b.Right && a.Right > b.X && a.Y < b.Bottom && a.Bottom > b.Y;
+        Assert.False(overlaps);
     }
 
     [Theory]
@@ -169,62 +284,27 @@ public class ResponsiveLayoutResolverTests
     [InlineData(1.5)]
     public void DpiScale_DoesNotAlterDipGeometry(double dpiScale)
     {
-        var widgets = new List<WidgetInstance> { Widget(100, 100, 200, 120) };
+        var (widgets, blocks) = SampleDesk();
         var from = new DesktopDisplayContext(1920, 1080, dpiScale);
         var to = new DesktopDisplayContext(1920, 1080, dpiScale);
-
-        var changed = ResponsiveLayoutResolver.AdaptToDisplay(widgets, [], from, to);
-
-        Assert.False(changed);
-        Assert.Equal(100, widgets[0].Position.X, 0.5);
-        Assert.Equal(100, widgets[0].Position.Y, 0.5);
-        Assert.Equal(200, widgets[0].Size.Width, 0.5);
+        var resolved = ResponsiveLayoutResolver.Resolve(widgets, blocks, from, to);
+        Assert.True(resolved.IsIdentity);
+        Assert.Equal(widgets[0].Position.X, resolved.Widgets[widgets[0].Id].X, 0.5);
     }
 
     [Fact]
-    public void Resize_1080_to_1200_to_1080_RestoresBottomAnchor()
+    public void Small_1366x768_ClampsInsideSafeArea()
     {
-        var music = Widget(1520, 860, 320, 100);
-        var widgets = new List<WidgetInstance> { music };
-        var originalY = music.Position.Y;
-
-        ResponsiveLayoutResolver.AdaptToDisplay(widgets, [], 1920, 1080, 1920, 1200);
-        Assert.True(music.Position.Y > originalY);
-
-        ResponsiveLayoutResolver.AdaptToDisplay(widgets, [], 1920, 1200, 1920, 1080);
-        Assert.Equal(originalY, music.Position.Y, 1.0);
-        Assert.Equal(1520, music.Position.X, 0.5);
-    }
-
-    [Fact]
-    public void InferAnchor_BottomRight_ForCornerObject()
-    {
-        var safe = DesktopDisplayContext.Reference().SafeArea;
-        var pos = new WidgetPosition(safe.Right - 320 - 20, safe.Bottom - 100 - 20);
-        var size = new WidgetSize(320, 100);
-        Assert.Equal(LayoutAnchor.BottomRight, ResponsiveLayoutResolver.InferAnchor(pos, size, safe));
-    }
-
-    [Fact]
-    public void InferAnchor_TopLeft_ForHeaderObject()
-    {
-        var safe = DesktopDisplayContext.Reference().SafeArea;
-        var pos = new WidgetPosition(safe.Left + 10, safe.Top + 10);
-        var size = new WidgetSize(280, 160);
-        Assert.Equal(LayoutAnchor.TopLeft, ResponsiveLayoutResolver.InferAnchor(pos, size, safe));
-    }
-
-    [Fact]
-    public void MapAxis_SameUsable_KeepsLeading()
-    {
-        var mapped = ResponsiveLayoutResolver.MapAxis(
-            leading: 40,
-            trailing: 200,
-            size: 100,
-            fromUsable: 900,
-            toUsable: 900,
-            toOrigin: 16);
-        Assert.Equal(56, mapped, 0.01);
+        var (widgets, blocks) = SampleDesk();
+        var resolved = ResponsiveLayoutResolver.Resolve(widgets, blocks, 1920, 1080, 1366, 768);
+        var safe = new DesktopDisplayContext(1366, 768).SafeArea;
+        foreach (var rect in resolved.Widgets.Values.Concat(resolved.Blocks.Values))
+        {
+            Assert.True(rect.X >= safe.Left - 0.5);
+            Assert.True(rect.Y >= safe.Top - 0.5);
+            Assert.True(rect.Right <= safe.Right + 0.5);
+            Assert.True(rect.Bottom <= safe.Bottom + 0.5);
+        }
     }
 
     [Fact]
@@ -239,61 +319,9 @@ public class ResponsiveLayoutResolverTests
     }
 
     [Fact]
-    public void Tall_DoesNotCollideWithBottomReserve()
+    public void MapAxis_SameUsable_KeepsLeading()
     {
-        var music = Widget(1520, 860, 320, 100);
-        ResponsiveLayoutResolver.AdaptToDisplay(
-            new[] { music },
-            [],
-            1920,
-            1080,
-            1920,
-            1200);
-
-        var bottomLimit = 1200 - DesktopLayoutReference.BottomReserve - DesktopLayoutReference.Margin;
-        Assert.True(music.Position.Y + music.Size.Height <= bottomLimit + 0.5);
-    }
-
-    private static List<(double X, double Y, double W, double H)> Snapshot(
-        IReadOnlyList<WidgetInstance> widgets,
-        IReadOnlyList<Block> blocks)
-    {
-        var list = new List<(double, double, double, double)>();
-        foreach (var w in widgets)
-        {
-            list.Add((w.Position.X, w.Position.Y, w.Size.Width, w.Size.Height));
-        }
-
-        foreach (var b in blocks)
-        {
-            list.Add((b.Position.X, b.Position.Y, b.Size.Width, b.Size.Height));
-        }
-
-        return list;
-    }
-
-    private static void AssertUnchanged(
-        List<(double X, double Y, double W, double H)> snapshot,
-        IReadOnlyList<WidgetInstance> widgets,
-        IReadOnlyList<Block> blocks)
-    {
-        var i = 0;
-        foreach (var w in widgets)
-        {
-            Assert.Equal(snapshot[i].X, w.Position.X, 0.5);
-            Assert.Equal(snapshot[i].Y, w.Position.Y, 0.5);
-            Assert.Equal(snapshot[i].W, w.Size.Width, 0.5);
-            Assert.Equal(snapshot[i].H, w.Size.Height, 0.5);
-            i++;
-        }
-
-        foreach (var b in blocks)
-        {
-            Assert.Equal(snapshot[i].X, b.Position.X, 0.5);
-            Assert.Equal(snapshot[i].Y, b.Position.Y, 0.5);
-            Assert.Equal(snapshot[i].W, b.Size.Width, 0.5);
-            Assert.Equal(snapshot[i].H, b.Size.Height, 0.5);
-            i++;
-        }
+        var mapped = ResponsiveLayoutResolver.MapAxis(40, 200, 100, 900, 900, 16);
+        Assert.Equal(56, mapped, 0.01);
     }
 }
