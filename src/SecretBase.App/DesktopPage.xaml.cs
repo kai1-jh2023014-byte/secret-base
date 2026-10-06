@@ -908,13 +908,15 @@ public sealed partial class DesktopPage : Page
             return;
         }
 
-        var changed = DesktopViewportLayout.FitToViewport(
-            _layout.Widgets,
-            _layout.Blocks,
+        var dpiScale = XamlRoot?.RasterizationScale > 0 ? XamlRoot.RasterizationScale : 1.0;
+        var target = new DesktopDisplayContext(
             areaWidth,
             areaHeight,
-            margin: DesktopViewportLayout.DefaultMargin,
-            bottomReserve: DesktopViewportLayout.DefaultBottomReserve);
+            dpiScale,
+            DesktopLayoutReference.Margin,
+            DesktopLayoutReference.BottomReserve);
+
+        var changed = AdaptLayoutToDisplay(target);
 
         _fittedViewportWidth = areaWidth;
         _fittedViewportHeight = areaHeight;
@@ -930,12 +932,109 @@ public sealed partial class DesktopPage : Page
             PersistLayoutNow();
             _logger?.Info(
                 "layout",
-                $"Fitted desktop objects to viewport {areaWidth:0}×{areaHeight:0}.");
+                $"Adapted desktop layout to viewport {areaWidth:0}×{areaHeight:0} (DIP, dpiScale={dpiScale:0.##}).");
         }
 
         ApplyCanvasGeometryFromLayout();
         TaskbarAiChat.RefreshShelfWidth();
         SyncInteractiveInputRegions();
+    }
+
+    /// <summary>
+    /// Remap geometry from the layout's authored viewport into <paramref name="target"/>.
+    /// First bind (null authored viewport) adopts the current display without shifting
+    /// existing placements — preserves whatever the user already has.
+    /// </summary>
+    private bool AdaptLayoutToDisplay(DesktopDisplayContext target)
+    {
+        if (_layout is null)
+        {
+            return false;
+        }
+
+        var changed = false;
+        if (_layout.LayoutViewportWidth is not double fromW
+            || _layout.LayoutViewportHeight is not double fromH
+            || fromW < 160
+            || fromH < 120)
+        {
+            // Legacy / first bind: treat current coords as authored for this display.
+            // Prefer reference when the host already matches 1920×1080.
+            if (DesktopLayoutReference.Matches(target.Width, target.Height))
+            {
+                fromW = DesktopLayoutReference.Width;
+                fromH = DesktopLayoutReference.Height;
+            }
+            else
+            {
+                fromW = target.Width;
+                fromH = target.Height;
+            }
+
+            _layout.LayoutViewportWidth = fromW;
+            _layout.LayoutViewportHeight = fromH;
+            changed = true;
+        }
+
+        var from = new DesktopDisplayContext(
+            fromW,
+            fromH,
+            target.DpiScale,
+            target.Margin,
+            target.BottomReserve);
+
+        changed |= ResponsiveLayoutResolver.AdaptToDisplay(
+            _layout.Widgets,
+            _layout.Blocks,
+            from,
+            target);
+
+        if (!NearlyEqualViewport(_layout.LayoutViewportWidth, target.Width)
+            || !NearlyEqualViewport(_layout.LayoutViewportHeight, target.Height))
+        {
+            _layout.LayoutViewportWidth = target.Width;
+            _layout.LayoutViewportHeight = target.Height;
+            changed = true;
+        }
+
+        if (_layout.ReferenceWidth <= 0)
+        {
+            _layout.ReferenceWidth = DesktopLayoutReference.Width;
+            changed = true;
+        }
+
+        if (_layout.ReferenceHeight <= 0)
+        {
+            _layout.ReferenceHeight = DesktopLayoutReference.Height;
+            changed = true;
+        }
+
+        return changed;
+    }
+
+    private static bool NearlyEqualViewport(double? a, double b) =>
+        a is double value && Math.Abs(value - b) < 0.5;
+
+    /// <summary>
+    /// Stamp the current DIP viewport onto the layout before save so manual moves
+    /// are not remapped as if they still belonged to a previous display.
+    /// </summary>
+    private void StampLayoutViewportFromHost()
+    {
+        if (_layout is null)
+        {
+            return;
+        }
+
+        var areaWidth = Math.Max(WidgetCanvas.ActualWidth, ActualWidth);
+        var areaHeight = Math.Max(WidgetCanvas.ActualHeight, ActualHeight);
+        if (areaWidth < 160 || areaHeight < 120)
+        {
+            return;
+        }
+
+        _layout.LayoutViewportWidth = areaWidth;
+        _layout.LayoutViewportHeight = areaHeight;
     }
 
     private void ApplyCanvasGeometryFromLayout()
@@ -2673,6 +2772,7 @@ public sealed partial class DesktopPage : Page
 
         try
         {
+            StampLayoutViewportFromHost();
             _layoutStore.Save(_layout);
             _logger?.Info("persistence", $"Layout saved ({_layout.Widgets.Count} widgets, {_layout.Blocks.Count} blocks).");
         }

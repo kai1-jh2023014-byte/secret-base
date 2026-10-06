@@ -188,11 +188,13 @@ public class BlockModelTests
     }
 
     [Fact]
-    public void DesktopLayout_CreateDefault_HasSchemaV2AndEmptyBlocks()
+    public void DesktopLayout_CreateDefault_HasSchemaV3AndEmptyBlocks()
     {
         var layout = DesktopLayout.CreateDefault();
         Assert.Equal(DesktopLayout.CurrentSchemaVersion, layout.SchemaVersion);
-        Assert.Equal(2, layout.SchemaVersion);
+        Assert.Equal(3, layout.SchemaVersion);
+        Assert.Equal(DesktopLayoutReference.Width, layout.ReferenceWidth);
+        Assert.Equal(DesktopLayoutReference.Height, layout.ReferenceHeight);
         Assert.Equal(2, layout.Widgets.Count);
         Assert.Empty(layout.Blocks);
         Assert.Equal(WidgetTypes.Clock, layout.Widgets[0].Type);

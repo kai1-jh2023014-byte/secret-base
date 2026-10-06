@@ -4,8 +4,9 @@ using SecretBase.Core.Widgets;
 namespace SecretBase.Core.Desktop;
 
 /// <summary>
-/// Keeps widgets and Blocks inside the visible work area when the display
-/// size or aspect ratio changes (e.g. Remote Desktop session resize).
+/// Final in-bounds clamp for widgets and Blocks.
+/// Prefer <see cref="ResponsiveLayoutResolver"/> when the viewport size changed —
+/// this type only ensures objects remain inside the safe work area.
 /// </summary>
 public static class DesktopViewportLayout
 {

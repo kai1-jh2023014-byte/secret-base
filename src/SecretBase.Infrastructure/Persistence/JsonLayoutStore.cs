@@ -105,7 +105,17 @@ public sealed class JsonLayoutStore : ILayoutStore
 
         layout.Blocks ??= [];
 
-        // V1 → V2: add Blocks collection without touching existing widgets.
+        if (layout.ReferenceWidth <= 0)
+        {
+            layout.ReferenceWidth = DesktopLayoutReference.Width;
+        }
+
+        if (layout.ReferenceHeight <= 0)
+        {
+            layout.ReferenceHeight = DesktopLayoutReference.Height;
+        }
+
+        // V1 → V2: Blocks. V2 → V3: viewport metadata (null until first fit adopts).
         if (layout.SchemaVersion < DesktopLayout.CurrentSchemaVersion)
         {
             layout.SchemaVersion = DesktopLayout.CurrentSchemaVersion;
@@ -157,6 +167,10 @@ public sealed class JsonLayoutStore : ILayoutStore
         {
             RoomId = roomId,
             SchemaVersion = source.SchemaVersion,
+            ReferenceWidth = source.ReferenceWidth,
+            ReferenceHeight = source.ReferenceHeight,
+            LayoutViewportWidth = source.LayoutViewportWidth,
+            LayoutViewportHeight = source.LayoutViewportHeight,
             Widgets = source.Widgets
                 .Select(w => new WidgetInstance
                 {
