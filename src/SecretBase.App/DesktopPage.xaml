@@ -183,6 +183,12 @@
                     Padding="12,4"
                     ToolTipService.ToolTip="Create a Block" />
                 <Button
+                    x:Name="DisplayDiagButton"
+                    Content="Display"
+                    Click="DisplayDiagnosticsButton_Click"
+                    Padding="12,4"
+                    ToolTipService.ToolTip="Display / DPI / viewport diagnostics (also logged on every display change)" />
+                <Button
                     x:Name="ExitButton"
                     Content="Exit"
                     Click="ExitButton_Click"

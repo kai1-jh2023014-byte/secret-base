@@ -59,6 +59,7 @@ using SecretBase.Widgets.Text;
 using SecretBase.Widgets.Theming;
 using SecretBase.Widgets.Web;
 using SecretBase.Widgets.Workspace;
+using Windows.ApplicationModel.DataTransfer;
 using Windows.Foundation;
 
 namespace SecretBase.App;
@@ -131,6 +132,11 @@ public sealed partial class DesktopPage : Page
 
     /// <summary>Transient display geometry — never written back into the saved layout.</summary>
     private ResolvedDesktopLayout? _resolvedLayout;
+
+    private readonly List<DesktopDisplayDiagnosticsReport> _displayDiagHistory = [];
+    private DisplayMetricsHint? _lastDisplayHint;
+    private int _displayDiagSequence;
+    private const int DisplayDiagHistoryLimit = 24;
 
     public DesktopPage()
     {
@@ -671,11 +677,68 @@ public sealed partial class DesktopPage : Page
         if (_debugChromeVisible)
         {
             RefreshDebugStatus();
-            _logger?.Info("overlay", "Debug chrome shown (Ctrl+Shift+D).");
+            CaptureAndLogDisplayDiagnostics("debug-chrome-shown", _lastDisplayHint);
+            _logger?.Info("overlay", "Debug chrome shown (Ctrl+Shift+D). Use Display button for metrics panel.");
         }
         else
         {
             _logger?.Info("overlay", "Debug chrome hidden (Ctrl+Shift+D).");
+        }
+    }
+
+    private async void DisplayDiagnosticsButton_Click(object sender, RoutedEventArgs e)
+    {
+        CaptureAndLogDisplayDiagnostics("debug-panel-open", _lastDisplayHint);
+        var latest = _displayDiagHistory.LastOrDefault();
+        var body = latest?.Format() ?? "No diagnostics captured yet. Resize the window or reconnect RDP, then reopen.";
+        if (_displayDiagHistory.Count > 1)
+        {
+            body += "\n\n--- Recent history (compact) ---\n";
+            foreach (var entry in _displayDiagHistory.TakeLast(8))
+            {
+                body += $"\n#{entry.Sequence} {entry.Timestamp:HH:mm:ss} {entry.Reason}"
+                    + $" work={entry.WorkAreaWidthPx}x{entry.WorkAreaHeightPx}"
+                    + $" page={entry.PageActualWidthDip:0}x{entry.PageActualHeightDip:0}"
+                    + $" scale={entry.RasterizationScale:0.##}"
+                    + $" authored={entry.AuthoredViewportWidth:0}x{entry.AuthoredViewportHeight:0}"
+                    + $" identity={entry.ResolverIdentity}"
+                    + $" mutated={entry.SavedGeometryMutated}\n";
+            }
+        }
+
+        var scroller = new ScrollViewer
+        {
+            Content = new TextBlock
+            {
+                Text = body,
+                FontFamily = new FontFamily("Consolas"),
+                FontSize = 12,
+                TextWrapping = TextWrapping.Wrap,
+                IsTextSelectionEnabled = true
+            },
+            MaxHeight = 520,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto
+        };
+
+        var dialog = new ContentDialog
+        {
+            Title = "Display Diagnostics",
+            Content = scroller,
+            CloseButtonText = "Close",
+            PrimaryButtonText = "Copy latest",
+            DefaultButton = ContentDialogButton.Close,
+            XamlRoot = XamlRoot
+        };
+
+        using var _ = _dialogInput?.Enter();
+        var result = await dialog.ShowAsync();
+        if (result == ContentDialogResult.Primary && latest is not null)
+        {
+            var package = new DataPackage();
+            package.SetText(latest.Format());
+            Clipboard.SetContent(package);
+            ShowHostStatus("Display diagnostics copied to clipboard.");
         }
     }
 
@@ -847,8 +910,15 @@ public sealed partial class DesktopPage : Page
     /// Re-sync work-area overlay + pull widgets/Blocks into view after display changes
     /// (Remote Desktop aspect ratio, monitor switch, DPI). Safe to call often.
     /// </summary>
-    public void HandleDisplayMetricsChanged()
+    public void HandleDisplayMetricsChanged(DisplayMetricsHint? hint = null)
     {
+        if (hint is DisplayMetricsHint metrics)
+        {
+            _lastDisplayHint = metrics;
+        }
+
+        CaptureAndLogDisplayDiagnostics(hint?.Reason ?? "display-metrics-changed", hint);
+
         if (_overlay is not null && _overlayTarget is not null)
         {
             try
@@ -861,13 +931,14 @@ public sealed partial class DesktopPage : Page
             }
         }
 
-        FitDesktopObjectsToViewport(force: true);
+        FitDesktopObjectsToViewport(force: true, diagnosticsReason: hint?.Reason ?? "display-metrics-fit");
         TaskbarAiChat.RefreshShelfWidth();
         SyncInteractiveInputRegions();
     }
 
     private void OnHostSizeChanged()
     {
+        CaptureAndLogDisplayDiagnostics("host-size-changed", _lastDisplayHint);
         TaskbarAiChat.RefreshShelfWidth();
         ScheduleViewportFit();
         if (_modalInputDepth > 0)
@@ -886,11 +957,11 @@ public sealed partial class DesktopPage : Page
         _viewportFitTimer = DispatcherQueue.CreateTimer();
         _viewportFitTimer.Interval = TimeSpan.FromMilliseconds(120);
         _viewportFitTimer.IsRepeating = false;
-        _viewportFitTimer.Tick += (_, _) => FitDesktopObjectsToViewport(force: false);
+        _viewportFitTimer.Tick += (_, _) => FitDesktopObjectsToViewport(force: false, diagnosticsReason: "viewport-fit-debounced");
         _viewportFitTimer.Start();
     }
 
-    private void FitDesktopObjectsToViewport(bool force)
+    private void FitDesktopObjectsToViewport(bool force, string? diagnosticsReason = null)
     {
         if (_layout is null)
         {
@@ -920,6 +991,8 @@ public sealed partial class DesktopPage : Page
             DesktopLayoutReference.BottomReserve);
         var authored = GetAuthoredDisplayContext(dpiScale);
 
+        var savedBefore = SnapshotSavedGeometry();
+
         // One-way: Saved → Resolve → UI. Never mutate or persist saved geometry here.
         _resolvedLayout = ResponsiveLayoutResolver.Resolve(
             _layout.Widgets,
@@ -931,6 +1004,23 @@ public sealed partial class DesktopPage : Page
         _fittedViewportHeight = areaHeight;
 
         ApplyResolvedGeometryToCanvas();
+
+        var savedMutated = !SavedGeometryEquals(savedBefore);
+        CaptureAndLogDisplayDiagnostics(
+            diagnosticsReason ?? (force ? "viewport-fit-force" : "viewport-fit"),
+            _lastDisplayHint,
+            authored,
+            current,
+            savedMutated,
+            persistInvoked: false);
+
+        if (savedMutated)
+        {
+            _logger?.Warn(
+                "display-diag",
+                "Saved layout geometry changed during resolve/fit — this should not happen (write-back bug).");
+        }
+
         if (!_resolvedLayout.IsIdentity)
         {
             _logger?.Info(
@@ -1003,8 +1093,12 @@ public sealed partial class DesktopPage : Page
 
         EnsureReferenceMetadata();
         PersistLayoutNow();
+        CaptureAndLogDisplayDiagnostics(
+            "user-geometry-edit-persisted",
+            _lastDisplayHint,
+            persistInvoked: true);
         // Re-resolve so _resolvedLayout matches the new authored=current identity.
-        FitDesktopObjectsToViewport(force: true);
+        FitDesktopObjectsToViewport(force: true, diagnosticsReason: "user-geometry-edit-refit");
     }
 
     private void SyncSavedGeometryFromCanvas()
@@ -1098,6 +1192,215 @@ public sealed partial class DesktopPage : Page
                 frame.Height = block.Size.Height;
             }
         }
+    }
+
+    private void CaptureAndLogDisplayDiagnostics(
+        string reason,
+        DisplayMetricsHint? hint,
+        DesktopDisplayContext? authored = null,
+        DesktopDisplayContext? current = null,
+        bool savedMutated = false,
+        bool persistInvoked = false)
+    {
+        try
+        {
+            var scale = XamlRoot?.RasterizationScale > 0 ? XamlRoot.RasterizationScale : 1.0;
+            authored ??= _layout is null ? DesktopDisplayContext.Reference(scale) : GetAuthoredDisplayContext(scale);
+            current ??= new DesktopDisplayContext(
+                Math.Max(WidgetCanvas?.ActualWidth ?? 0, ActualWidth),
+                Math.Max(WidgetCanvas?.ActualHeight ?? 0, ActualHeight),
+                scale,
+                DesktopLayoutReference.Margin,
+                DesktopLayoutReference.BottomReserve);
+
+            var safe = current.Value.SafeArea;
+            var report = new DesktopDisplayDiagnosticsReport
+            {
+                Timestamp = DateTimeOffset.Now,
+                Reason = reason,
+                Sequence = ++_displayDiagSequence,
+                DisplayId = hint?.DisplayId ?? string.Empty,
+                DisplayBounds = hint is { } hb
+                    ? $"{hb.BoundsX},{hb.BoundsY} {hb.BoundsWidth}×{hb.BoundsHeight}"
+                    : string.Empty,
+                DisplayWorkArea = hint is { } hw
+                    ? $"{hw.WorkX},{hw.WorkY} {hw.WorkWidth}×{hw.WorkHeight}"
+                    : string.Empty,
+                WorkAreaWidthPx = hint?.WorkWidth ?? 0,
+                WorkAreaHeightPx = hint?.WorkHeight ?? 0,
+                BoundsWidthPx = hint?.BoundsWidth ?? 0,
+                BoundsHeightPx = hint?.BoundsHeight ?? 0,
+                WindowBounds = hint is { } win
+                    ? $"{win.WindowX},{win.WindowY} {win.WindowWidth}×{win.WindowHeight}"
+                    : string.Empty,
+                WindowWidthPx = hint?.WindowWidth ?? 0,
+                WindowHeightPx = hint?.WindowHeight ?? 0,
+                PageActualWidthDip = ActualWidth,
+                PageActualHeightDip = ActualHeight,
+                RootActualWidthDip = RootGrid?.ActualWidth ?? 0,
+                RootActualHeightDip = RootGrid?.ActualHeight ?? 0,
+                CanvasActualWidthDip = WidgetCanvas?.ActualWidth ?? 0,
+                CanvasActualHeightDip = WidgetCanvas?.ActualHeight ?? 0,
+                RasterizationScale = scale,
+                PhysicalWidthFromDip = ActualWidth * scale,
+                PhysicalHeightFromDip = ActualHeight * scale,
+                ReferenceWidth = _layout?.ReferenceWidth > 0 ? _layout.ReferenceWidth : DesktopLayoutReference.Width,
+                ReferenceHeight = _layout?.ReferenceHeight > 0 ? _layout.ReferenceHeight : DesktopLayoutReference.Height,
+                AuthoredViewportWidth = _layout?.LayoutViewportWidth,
+                AuthoredViewportHeight = _layout?.LayoutViewportHeight,
+                ResolverInputWidth = authored.Value.Width,
+                ResolverInputHeight = authored.Value.Height,
+                ResolverOutputWidth = current.Value.Width,
+                ResolverOutputHeight = current.Value.Height,
+                ResolverIdentity = Math.Abs(authored.Value.Width - current.Value.Width) < 0.5
+                    && Math.Abs(authored.Value.Height - current.Value.Height) < 0.5,
+                SafeArea =
+                    $"L={safe.Left:0.#} T={safe.Top:0.#} R={safe.Right:0.#} B={safe.Bottom:0.#}"
+                    + $" ({safe.Width:0.#}×{safe.Height:0.#})",
+                SavedGeometryMutated = savedMutated,
+                PersistInvoked = persistInvoked,
+                Objects = BuildObjectDiagnosticsRows()
+            };
+
+            _displayDiagHistory.Add(report);
+            while (_displayDiagHistory.Count > DisplayDiagHistoryLimit)
+            {
+                _displayDiagHistory.RemoveAt(0);
+            }
+
+            // Multi-line structured dump for log file comparison across A/B/C/D/E states.
+            foreach (var line in report.Format().Split('\n'))
+            {
+                _logger?.Info("display-diag", line.TrimEnd('\r'));
+            }
+
+            if (_debugChromeVisible && StatusText is not null)
+            {
+                StatusText.Text =
+                    $"#{report.Sequence} {report.Reason} · work {report.WorkAreaWidthPx}×{report.WorkAreaHeightPx}"
+                    + $" · page {report.PageActualWidthDip:0}×{report.PageActualHeightDip:0} DIP"
+                    + $" · scale {report.RasterizationScale:0.##}";
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger?.Warn("display-diag", $"Failed to capture diagnostics: {ex.Message}");
+        }
+    }
+
+    private List<DesktopObjectDiagnosticsRow> BuildObjectDiagnosticsRows()
+    {
+        var rows = new List<DesktopObjectDiagnosticsRow>();
+        if (_layout is null)
+        {
+            return rows;
+        }
+
+        foreach (var block in _layout.Blocks.OrderBy(b => b.Name, StringComparer.OrdinalIgnoreCase))
+        {
+            var frame = WidgetCanvas.Children.OfType<BlockFrame>().FirstOrDefault(f => f.BlockId == block.Id);
+            var hasResolved = _resolvedLayout is not null
+                && _resolvedLayout.Blocks.TryGetValue(block.Id, out var resolved);
+            rows.Add(new DesktopObjectDiagnosticsRow
+            {
+                Kind = "block",
+                Label = string.IsNullOrWhiteSpace(block.Name) ? "Block" : block.Name,
+                Id = block.Id,
+                SavedX = block.Position.X,
+                SavedY = block.Position.Y,
+                SavedW = block.Size.Width,
+                SavedH = block.Size.Height,
+                ResolvedX = hasResolved ? resolved.X : block.Position.X,
+                ResolvedY = hasResolved ? resolved.Y : block.Position.Y,
+                ResolvedW = hasResolved ? resolved.Width : block.Size.Width,
+                ResolvedH = hasResolved ? resolved.Height : block.Size.Height,
+                CanvasX = frame is null ? double.NaN : Canvas.GetLeft(frame),
+                CanvasY = frame is null ? double.NaN : Canvas.GetTop(frame),
+                CanvasW = frame?.Width ?? double.NaN,
+                CanvasH = frame?.Height ?? double.NaN
+            });
+        }
+
+        foreach (var widget in _layout.Widgets)
+        {
+            if (widget.Type is not (WidgetTypes.Pomodoro or WidgetTypes.Music or WidgetTypes.Clock
+                or WidgetTypes.Calendar or WidgetTypes.Assistant or WidgetTypes.Workspace))
+            {
+                continue;
+            }
+
+            var frame = WidgetCanvas.Children.OfType<WidgetFrame>().FirstOrDefault(f => f.WidgetId == widget.Id);
+            var hasResolved = _resolvedLayout is not null
+                && _resolvedLayout.Widgets.TryGetValue(widget.Id, out var resolved);
+            rows.Add(new DesktopObjectDiagnosticsRow
+            {
+                Kind = "widget",
+                Label = widget.Type,
+                Id = widget.Id,
+                SavedX = widget.Position.X,
+                SavedY = widget.Position.Y,
+                SavedW = widget.Size.Width,
+                SavedH = widget.Size.Height,
+                ResolvedX = hasResolved ? resolved.X : widget.Position.X,
+                ResolvedY = hasResolved ? resolved.Y : widget.Position.Y,
+                ResolvedW = hasResolved ? resolved.Width : widget.Size.Width,
+                ResolvedH = hasResolved ? resolved.Height : widget.Size.Height,
+                CanvasX = frame is null ? double.NaN : Canvas.GetLeft(frame),
+                CanvasY = frame is null ? double.NaN : Canvas.GetTop(frame),
+                CanvasW = frame?.Width ?? double.NaN,
+                CanvasH = frame?.Height ?? double.NaN
+            });
+        }
+
+        return rows;
+    }
+
+    private Dictionary<Guid, (double X, double Y, double W, double H)> SnapshotSavedGeometry()
+    {
+        var map = new Dictionary<Guid, (double, double, double, double)>();
+        if (_layout is null)
+        {
+            return map;
+        }
+
+        foreach (var widget in _layout.Widgets)
+        {
+            map[widget.Id] = (widget.Position.X, widget.Position.Y, widget.Size.Width, widget.Size.Height);
+        }
+
+        foreach (var block in _layout.Blocks)
+        {
+            map[block.Id] = (block.Position.X, block.Position.Y, block.Size.Width, block.Size.Height);
+        }
+
+        return map;
+    }
+
+    private bool SavedGeometryEquals(Dictionary<Guid, (double X, double Y, double W, double H)> before)
+    {
+        var after = SnapshotSavedGeometry();
+        if (before.Count != after.Count)
+        {
+            return false;
+        }
+
+        foreach (var (id, value) in before)
+        {
+            if (!after.TryGetValue(id, out var next))
+            {
+                return false;
+            }
+
+            if (Math.Abs(value.X - next.X) > 0.01
+                || Math.Abs(value.Y - next.Y) > 0.01
+                || Math.Abs(value.W - next.W) > 0.01
+                || Math.Abs(value.H - next.H) > 0.01)
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private bool TryCreateClientRect(FrameworkElement element, double scale, out OverlayInputRect rect)

@@ -96,7 +96,8 @@ public sealed partial class MainWindow : Window
 
     private void ResyncWorkAreaAndLayout(bool force)
     {
-        var work = CaptureWorkArea();
+        var hint = CaptureDisplayMetrics(force ? "resync-force" : "work-area-changed");
+        var work = new RectInt32(hint.WorkX, hint.WorkY, hint.WorkWidth, hint.WorkHeight);
         var changed = force
             || work.X != _lastWorkArea.X
             || work.Y != _lastWorkArea.Y
@@ -109,17 +110,43 @@ public sealed partial class MainWindow : Window
 
         _lastWorkArea = work;
         _overlayService.ApplyChromelessWorkAreaOverlay(_overlayTarget);
+        // Re-capture after MoveAndResize — RDP often changes WorkArea again mid-apply.
+        hint = CaptureDisplayMetrics(force ? "resync-force-after-overlay" : "work-area-changed-after-overlay");
         if (RootFrame.Content is DesktopPage page)
         {
-            page.HandleDisplayMetricsChanged();
+            page.HandleDisplayMetricsChanged(hint);
         }
     }
 
     private RectInt32 CaptureWorkArea()
     {
+        var hint = CaptureDisplayMetrics("capture-work-area");
+        return new RectInt32(hint.WorkX, hint.WorkY, hint.WorkWidth, hint.WorkHeight);
+    }
+
+    private DisplayMetricsHint CaptureDisplayMetrics(string reason)
+    {
         var windowId = new WindowId(AppWindow.Id.Value);
         var display = DisplayArea.GetFromWindowId(windowId, DisplayAreaFallback.Primary);
-        return display.WorkArea;
+        var work = display.WorkArea;
+        var bounds = display.OuterBounds;
+        var pos = AppWindow.Position;
+        var size = AppWindow.Size;
+        return new DisplayMetricsHint(
+            reason,
+            displayId: display.DisplayId.ToString() ?? string.Empty,
+            workX: work.X,
+            workY: work.Y,
+            workWidth: work.Width,
+            workHeight: work.Height,
+            boundsX: bounds.X,
+            boundsY: bounds.Y,
+            boundsWidth: bounds.Width,
+            boundsHeight: bounds.Height,
+            windowX: pos.X,
+            windowY: pos.Y,
+            windowWidth: size.Width,
+            windowHeight: size.Height);
     }
 
     private const int SwRestore = 9;
