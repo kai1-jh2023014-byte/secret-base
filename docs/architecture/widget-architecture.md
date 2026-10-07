@@ -3,7 +3,8 @@
 ## Goals
 
 Widgets are the building blocks of the Secret Base Desktop. Clock was the first
-**reference implementation**; Text, Web, Calendar, and Music reuse the same host patterns.
+**reference implementation**; Text, Web, Calendar, Music, Pomodoro, and Progress/Genesis
+reuse the same host patterns.
 
 ## Responsibilities
 
@@ -12,7 +13,7 @@ Widgets are the building blocks of the Secret Base Desktop. Clock was the first
 | **Core** | `WidgetInstance`, `WidgetTypes`, configs, Calendar + Music models/providers (pure), `ThemeDefinition`, `ITimeProvider` | XAML, WinUI/WebView2, network I/O |
 | **Infrastructure** | JSON persistence, Google ICS + Google API OAuth read providers, agenda cache | Widget visuals, Overlay HWND |
 | **Platform.Abstractions** | `ISecureSecretStore`, overlay/launch contracts | Implementations |
-| **Widgets** | Views (`Clock`, `Text`, `Web`, `Calendar`, `Music`, `Creative`, `Ai`, `Apps`, `Assistant`), theme helpers | Persistence paths, Desktop chrome, Overlay |
+| **Widgets** | Views (`Clock`, `Text`, `Web`, `Calendar`, `Music`, `Creative`, `Ai`, `Apps`, `Assistant`, `Pomodoro`, `Progress`), theme helpers | Persistence paths, Desktop chrome, Overlay |
 | **App** | Host, `WidgetFrame`, type→view wiring, FABs | Domain math beyond hosting |
 
 ## Shared
@@ -39,6 +40,12 @@ Widgets are the building blocks of the Secret Base Desktop. Clock was the first
 - Desk UI (`CreativeWorkspaceView`) — favorites / recent / search registered items
 - `CreativeCommand` → `CreativeCommandService` → workspace store → `ITargetLaunchService`
 - See [creative-workspace.md](creative-workspace.md)
+
+## Progress / Genesis
+
+- `ProgressWidgetView` — Progress % + Genesis phase/stage/milestones
+- `IProgressGenesisProvider` → Agent Arena live API (default), local JSON, or custom HTTPS
+- See [progress-widget.md](progress-widget.md)
 
 ## AI Workspace vs Secret Base AI
 
