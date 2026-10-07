@@ -204,6 +204,12 @@ public static class ProgressGenesisSourceKinds
     public const string Http = "http";
     public const string Memory = "memory";
 
-    /// <summary>Live Agent Arena (Base Sepolia) mint / duel counters.</summary>
+    /// <summary>Live Agent Arena (Base Sepolia) mint / duel counters (optional).</summary>
     public const string AgentArena = "agent-arena";
+
+    /// <summary>
+    /// Personal Progress learning API + local Genesis / MusicLab
+    /// (<c>kai1-jh2023014-byte/progress</c> + <c>~/genesis</c>).
+    /// </summary>
+    public const string PersonalSystems = "personal-systems";
 }

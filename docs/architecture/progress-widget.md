@@ -1,61 +1,76 @@
 # Progress / Genesis Widget
 
-Desktop widget that shows **Progress** (overall %) and **Genesis** advancement
-(phase, stage, %, milestones).
+Desktop widget that shows **Progress** (programming learning) and **Genesis**
+(MusicLab) advancement.
 
-## Live data source (default)
+## What Progress / Genesis are
 
-Verified fetch (2026-10-07) from the public Agent Arena API on Base Sepolia:
+| Track | Project | Where |
+|-------|---------|--------|
+| **Progress** | Personal programming learning system | [kai1-jh2023014-byte/progress](https://github.com/kai1-jh2023014-byte/progress) — FastAPI `:8001` |
+| **Genesis** | Local MusicLab / creative stack | `~/genesis` (WSL: `/home/kabuya/genesis`) with `scripts/windows/Start-MusicLab.bat` + `Stop-MusicLab.bat` (often copied to Desktop) |
 
-| Endpoint | Example |
-|----------|---------|
-| `GET /health` | `{"ok":true}` |
-| `GET /winners/summary` | `{"rounds":{"wins":40,"losses":22},"minted":{"total":36,"genesis":12,"ascension":24}}` |
-| `GET /winners/top` | leaderboard (optional personal wallet) |
-| `GET /rounds/current` | queue counters |
+## Default data source (`personal-systems`)
 
-Default API root: `https://agent-arena-api.agentarenaonbase.workers.dev`
+### Progress (verified API shape)
 
-Mapping (global):
+Progress backend (`uvicorn app.main:app --reload --port 8001`):
 
-- **Progress** = total minted / 3500 (500 Genesis + 3000 Ascension), win/loss caption
-- **Genesis** = Genesis minted / 500, phase/stage + supply milestones
+| Endpoint | Use |
+|----------|-----|
+| `GET /api/health` | Liveness |
+| `GET /api/problems` | Catalog size |
+| `GET /api/attempts` | Solved / recent activity |
 
-Optional widget config `WalletAddress` (`0x…`) switches Progress to personal identity
-completion (1 Genesis + 5 Ascensions) using `/winners/top`.
+Mapping: unique `result == "passed"` problems ÷ problem count → Progress %.
+
+### Genesis (local probe + optional status JSON)
+
+Because Genesis is a private local tree (not a public GitHub API), the provider:
+
+1. Resolves Genesis roots (`SECRETBASE_GENESIS_ROOT`, `~/genesis`, `/home/kabuya/genesis`, `\\wsl.localhost\Ubuntu\home\kabuya\genesis`, …)
+2. Detects `scripts/windows/Start-MusicLab.bat` / Desktop copies
+3. Optionally reads `genesis-status.json` (project root, `.secret-base/`, or `%LocalAppData%\SecretBase\settings\`)
+4. Optionally `GET`s widget config `GenesisStatusUrl` / status file `healthUrl`
+
+Example `genesis-status.json`:
+
+```json
+{
+  "phase": "MusicLab",
+  "status": "Session open",
+  "percent": 55,
+  "stage": 2,
+  "stageCount": 4,
+  "running": true,
+  "healthUrl": "http://127.0.0.1:8787/health",
+  "milestones": [
+    { "label": "Lab bootstrapped", "isComplete": true },
+    { "label": "First track exported", "isComplete": false }
+  ]
+}
+```
+
+Tip: have `Start-MusicLab.bat` / `Stop-MusicLab.bat` write/update this file so the widget stays accurate.
 
 ## Other sources
 
 | `Source` | Behavior |
 |----------|----------|
-| `agent-arena` (default) | Live Arena API; falls back to local JSON on failure |
-| `local` | `%LocalAppData%\SecretBase\settings\progress-genesis.json` |
-| `http` | Custom HTTPS JSON (same schema as local); falls back to local |
+| `personal-systems` (default) | Progress API + Genesis probe |
+| `local` | AppData `progress-genesis.json` only |
+| `http` | Custom HTTPS JSON snapshot |
+| `agent-arena` | Optional Base Sepolia Arena counters |
 
-Writes to the local store use `.tmp` → copy over target → delete `.tmp`.
-
-## Architecture
-
-```
-ProgressWidgetView (WinUI)
-        ↓
-IProgressGenesisProvider
-   ├─ AgentArenaProgressGenesisProvider  → /winners/summary (+ /top)
-   ├─ LocalJsonProgressGenesisProvider   → JsonProgressGenesisStore
-   └─ HttpProgressGenesisProvider        → HTTPS + local fallback
-        ↓
-AgentArenaProgressMapper (Core) → ProgressGenesisSnapshot
-```
-
-## Widget configuration (camelCase in layout JSON)
+## Widget configuration
 
 ```json
 {
-  "schemaVersion": 2,
-  "source": "agent-arena",
-  "walletAddress": null,
-  "arenaApiBase": null,
-  "remoteUrl": null,
+  "schemaVersion": 3,
+  "source": "personal-systems",
+  "progressApiBase": "http://127.0.0.1:8001",
+  "genesisRoot": null,
+  "genesisStatusUrl": null,
   "refreshSeconds": 60,
   "showMilestones": true
 }
@@ -63,12 +78,10 @@ AgentArenaProgressMapper (Core) → ProgressGenesisSnapshot
 
 ## UX
 
-Add via **Add Widget** → Information → **Progress / Genesis**.
-Refresh button + auto-refresh (default 60s, configurable 15–600).
+**Add Widget → Information → Progress / Genesis**. Refresh + auto-refresh (15–600s).
 
 ## Security
 
+- Progress HTTP only on localhost
+- No private keys; Genesis paths are local filesystem probes only
 - No Host Bridge / WebView
-- Agent Arena + custom HTTP require HTTPS
-- Wallet address is public on-chain identity only (no private keys)
-- No secrets in the snapshot JSON

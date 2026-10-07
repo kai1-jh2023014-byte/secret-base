@@ -4,7 +4,7 @@ using SecretBase.Core.Widgets.Progress;
 namespace SecretBase.Infrastructure.Progress;
 
 /// <summary>
-/// Picks Agent Arena (default), local JSON, or custom HTTPS from widget configuration.
+/// Picks personal Progress+Genesis (default), Agent Arena, local JSON, or custom HTTPS.
 /// </summary>
 public static class ProgressGenesisProviderFactory
 {
@@ -40,11 +40,28 @@ public static class ProgressGenesisProviderFactory
             }
         }
 
+        if (ProgressGenesisSources.IsAgentArena(source))
+        {
+            try
+            {
+                return new AgentArenaProgressGenesisProvider(
+                    apiBase: config.ArenaApiBase,
+                    walletAddress: config.WalletAddress,
+                    httpClient: httpClient,
+                    fallback: local);
+            }
+            catch (ArgumentException)
+            {
+                return local;
+            }
+        }
+
         try
         {
-            return new AgentArenaProgressGenesisProvider(
-                apiBase: config.ArenaApiBase,
-                walletAddress: config.WalletAddress,
+            return new PersonalProgressGenesisProvider(
+                progressApiBase: config.ProgressApiBase,
+                genesisStatusUrl: config.GenesisStatusUrl,
+                genesisRoot: config.GenesisRoot,
                 httpClient: httpClient,
                 fallback: local);
         }

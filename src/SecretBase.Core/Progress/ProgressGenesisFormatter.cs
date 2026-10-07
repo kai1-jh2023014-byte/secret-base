@@ -69,6 +69,7 @@ public static class ProgressGenesisFormatter
     public static string FormatSourceCaption(string? sourceKind) =>
         sourceKind?.Trim().ToLowerInvariant() switch
         {
+            ProgressGenesisSourceKinds.PersonalSystems => "Source · Progress + Genesis",
             ProgressGenesisSourceKinds.AgentArena => "Source · Agent Arena",
             ProgressGenesisSourceKinds.Http => "Source · HTTP JSON",
             ProgressGenesisSourceKinds.Memory => "Source · memory",
