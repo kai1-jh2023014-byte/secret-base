@@ -22,7 +22,7 @@ public class AssistantToolRegistryTests
     public void BuiltinRegistry_ListsMvpTools_WithConfirmationPolicy()
     {
         var registry = BuiltinAssistantToolRegistry.Instance;
-        Assert.Equal(28, registry.Tools.Count);
+        Assert.Equal(29, registry.Tools.Count);
         Assert.NotNull(registry.Find(AssistantToolNames.CalendarAddEvent));
         Assert.NotNull(registry.Find(AssistantToolNames.CalendarApplyUsual));
         Assert.NotNull(registry.Find(AssistantToolNames.WorkspaceOpenNamed));
@@ -352,7 +352,7 @@ public class AssistantToolExecutorTests
     }
 
     [Fact]
-    public async Task MusicPlay_FailsHonestly_WhenPlaybackCapabilityMissing()
+    public async Task MusicPlay_OpensSpotify_WhenPlaybackCapabilityMissing()
     {
         var music = new MusicCommandService(new MusicService([OpenWebMusicProvider.Instance]));
         var executor = new AssistantToolExecutor(
@@ -360,10 +360,12 @@ public class AssistantToolExecutorTests
             music: music);
         var search = await executor.ExecuteAsync(AssistantToolNames.MusicSearch, """{"query":"YOASOBI"}""");
         Assert.False(search.Succeeded);
-        var play = await executor.ExecuteAsync(AssistantToolNames.MusicPlay, """{"track_id":"demo-idol"}""");
-        Assert.False(play.Succeeded);
-        Assert.Contains("not available", play.ErrorMessage, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("Spotify", play.ErrorMessage, StringComparison.OrdinalIgnoreCase);
+        var play = await executor.ExecuteAsync(AssistantToolNames.MusicPlay, """{"query":"YOASOBI"}""");
+        Assert.True(play.Succeeded);
+        Assert.True(play.ShouldLaunch);
+        Assert.True(play.LaunchIsExternalLink);
+        Assert.StartsWith("https://open.spotify.com/", play.LaunchTarget, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Spotify", play.ContentForModel, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

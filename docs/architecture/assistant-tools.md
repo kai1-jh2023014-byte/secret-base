@@ -46,6 +46,7 @@ RequiresConfirmation
 |------|----------|
 | `workspace_prepare` | Build a workspace card from registered data. No launch. |
 | `focus_start` | Open Pomodoro widget + start/show local timer. No launch. |
+| `coding_environment_setup` | Composite: prepare Workspace, start Pomodoro, ensure Creative/Pomodoro/Workspace widgets, arrange desktop. No OS launch. |
 
 ### Suggest
 
@@ -66,8 +67,8 @@ RequiresConfirmation
 | `creative_open_project` | `CreativeCommand.OpenCreativeProject` |
 | `cursor_open_project` | `AiCommand.OpenProjectInCursor` → Host `ICursorLaunchService` |
 | `integration_open` | `IntegrationCommandService` (`classroom` / `calendar`) |
-| `apps_open` | `AppCommand.OpenApp` → Host |
-| `music_play` | `track_id` or `query` → Music widget (Spotify if connected) |
+| `apps_open` | `app_id` or `name` → My App / Block / known target via allowlist → Host |
+| `music_play` | `track_id` or `query` → Music widget; on Premium/API failure opens Spotify track/search page |
 | `workspace_open_named` | Open Block item / My App / Creative Project by **name** |
 | `workspace_continue` | Open the prepared workspace's registered project. Apps are listed, not auto-launched. |
 | `todo_add` | Local todo. Not Google Tasks. |
@@ -81,7 +82,7 @@ RequiresConfirmation
 
 ## Music honesty
 
-If only the demo catalog supports search/playback, tool results say so. Spotify/YouTube API playback is never invented. After Spotify is connected, play stays in the Music widget.
+If only the demo catalog supports search/playback, tool results say so. Spotify/YouTube API playback is never invented. After Spotify is connected, play stays in the Music widget. When Premium playback APIs fail (or no playback provider is available), `music_play` / `music_search` open a validated `https://open.spotify.com/…` page (track/album/artist/search) instead of failing hard.
 
 Connected integrations (Spotify, Google Calendar) are remembered in `settings/integrations.json` (flags only — tokens stay in the OS secret store). Classroom is remembered as “opened / web widget” because this repo has no Classroom API.
 

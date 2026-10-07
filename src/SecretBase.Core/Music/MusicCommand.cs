@@ -45,8 +45,14 @@ public sealed class MusicCommand
     public static MusicCommand PlayTrack(MusicTrack track) =>
         new() { Kind = MusicCommandKind.PlayTrack, Track = track, TrackId = track.Id, ProviderId = track.ProviderId };
 
-    public static MusicCommand PlayTrackById(string trackId, string providerId) =>
-        new() { Kind = MusicCommandKind.PlayTrack, TrackId = trackId, ProviderId = providerId };
+    public static MusicCommand PlayTrackById(string trackId, string providerId, string? query = null) =>
+        new()
+        {
+            Kind = MusicCommandKind.PlayTrack,
+            TrackId = trackId,
+            ProviderId = providerId,
+            Query = query
+        };
 
     public static MusicCommand Pause() => new() { Kind = MusicCommandKind.Pause };
 
