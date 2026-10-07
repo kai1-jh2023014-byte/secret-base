@@ -64,8 +64,9 @@ public class BlockModelTests
             .Select(i => new BlockItem { Name = $"I{i}", Target = $@"C:\a{i}.lnk" })
             .ToList();
 
-        BlockItemLayout.ArrangeEvenly(items, areaWidth: 320, areaHeight: 200);
+        var metrics = BlockItemLayout.ArrangeEvenly(items, areaWidth: 320, areaHeight: 200);
 
+        Assert.Equal(1.0, metrics.Scale, 3);
         Assert.All(items, i => Assert.True(i.HasPlacement));
         Assert.True(items[0].X < items[1].X);
         Assert.True(items[1].X < items[2].X);
@@ -86,18 +87,94 @@ public class BlockModelTests
     }
 
     [Fact]
+    public void BlockItemLayout_ArrangeEvenly_ShrinksTilesWhenAreaIsCramped()
+    {
+        var items = Enumerable.Range(0, 6)
+            .Select(i => new BlockItem { Name = $"I{i}", Target = $@"C:\a{i}.lnk" })
+            .ToList();
+
+        // Too small for 6 full-size labeled tiles without overlap.
+        var metrics = BlockItemLayout.ArrangeEvenly(items, areaWidth: 200, areaHeight: 160);
+
+        Assert.True(metrics.Scale < 1.0);
+        Assert.True(metrics.Scale >= BlockItemLayout.MinScale);
+        Assert.True(metrics.TileWidth < BlockItem.TileWidth);
+        Assert.True(metrics.TileHeight < BlockItem.TileHeight);
+        AssertNoTileOverlap(items, metrics.TileWidth, metrics.TileHeight);
+    }
+
+    [Fact]
+    public void BlockItemLayout_ArrangeEvenly_HideLabels_UsesShorterTiles()
+    {
+        var items = Enumerable.Range(0, 4)
+            .Select(i => new BlockItem { Name = $"I{i}", Target = $@"C:\a{i}.lnk" })
+            .ToList();
+
+        var withLabels = BlockItemLayout.ArrangeEvenly(items, areaWidth: 320, areaHeight: 220, showLabels: true);
+        var withoutLabels = BlockItemLayout.ArrangeEvenly(items, areaWidth: 320, areaHeight: 220, showLabels: false);
+
+        Assert.True(withLabels.ShowLabels);
+        Assert.False(withoutLabels.ShowLabels);
+        Assert.Equal(BlockItem.TileHeight, withLabels.TileHeight, 0.01);
+        Assert.Equal(BlockItem.IconOnlyTileHeight, withoutLabels.TileHeight, 0.01);
+        Assert.True(withoutLabels.TileHeight < withLabels.TileHeight);
+    }
+
+    [Fact]
     public void BlockItemLayout_ArrangeRail_StacksVerticallyWhenTall()
     {
         var items = Enumerable.Range(0, 3)
             .Select(i => new BlockItem { Name = $"I{i}", Target = $@"C:\a{i}.lnk" })
             .ToList();
 
-        BlockItemLayout.ArrangeRail(items, areaWidth: 80, areaHeight: 280);
+        var metrics = BlockItemLayout.ArrangeRail(items, areaWidth: 80, areaHeight: 280);
 
+        Assert.Equal(1.0, metrics.Scale, 3);
         Assert.All(items, i => Assert.True(i.HasPlacement));
         Assert.True(items[0].Y < items[1].Y);
         Assert.True(items[1].Y < items[2].Y);
         Assert.Equal(items[0].X, items[1].X, 0.01);
+    }
+
+    [Fact]
+    public void BlockItemLayout_ArrangeRail_ShrinksWhenStripIsShort()
+    {
+        var items = Enumerable.Range(0, 8)
+            .Select(i => new BlockItem { Name = $"I{i}", Target = $@"C:\a{i}.lnk" })
+            .ToList();
+
+        var metrics = BlockItemLayout.ArrangeRail(items, areaWidth: 72, areaHeight: 200);
+
+        Assert.True(metrics.Scale < 1.0);
+        Assert.True(metrics.TileWidth < BlockItem.RailTileWidth);
+        AssertNoTileOverlap(items, metrics.TileWidth, metrics.TileHeight);
+    }
+
+    [Fact]
+    public void Block_ShowLabels_DefaultsToTrue()
+    {
+        var block = DefaultBlockFactory.Create("Labels");
+        Assert.True(block.ShowLabels);
+    }
+
+    private static void AssertNoTileOverlap(
+        IReadOnlyList<BlockItem> items,
+        double tileWidth,
+        double tileHeight)
+    {
+        for (var i = 0; i < items.Count; i++)
+        {
+            for (var j = i + 1; j < items.Count; j++)
+            {
+                var a = items[i];
+                var b = items[j];
+                var overlapX = a.X < b.X + tileWidth && b.X < a.X + tileWidth;
+                var overlapY = a.Y < b.Y + tileHeight && b.Y < a.Y + tileHeight;
+                Assert.False(
+                    overlapX && overlapY,
+                    $"Tiles {i} and {j} overlap at ({a.X},{a.Y}) / ({b.X},{b.Y}) size {tileWidth}x{tileHeight}");
+            }
+        }
     }
 
     [Fact]

@@ -38,6 +38,11 @@ public sealed class Block
     /// <summary><see cref="BlockLayoutMode"/> — grid or compact rail.</summary>
     public string LayoutMode { get; set; } = BlockLayoutMode.Grid;
 
+    /// <summary>
+    /// When false, grid tiles hide the name under each icon (rail always hides labels).
+    /// </summary>
+    public bool ShowLabels { get; set; } = true;
+
     public RoomId RoomId { get; set; } = RoomId.DefaultRoomId;
 
     public List<BlockItem> Items { get; set; } = [];

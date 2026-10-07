@@ -192,6 +192,7 @@ public sealed class JsonLayoutStore : ILayoutStore
                     Theme = b.Theme,
                     IconStyle = BlockIconStyle.Normalize(b.IconStyle),
                     LayoutMode = BlockLayoutMode.Normalize(b.LayoutMode),
+                    ShowLabels = b.ShowLabels,
                     RoomId = roomId,
                     Items = b.Items
                         .Select(i => new BlockItem
