@@ -72,10 +72,15 @@ public static class AssistantConfirmationPolicy
                 && !string.IsNullOrWhiteSpace(target) =>
                 $"Open {target}.",
             AssistantToolNames.AppsOpen when
+                AssistantToolArgumentValidator.TryGetString(root, "name", required: false, out var appName, out _)
+                && !string.IsNullOrWhiteSpace(appName) =>
+                $"Launch registered app '{appName}'.",
+            AssistantToolNames.AppsOpen when
                 AssistantToolArgumentValidator.TryGetString(root, "app_id", required: false, out var appId, out _)
                 && !string.IsNullOrWhiteSpace(appId) =>
                 $"Launch registered app '{appId}'.",
-            AssistantToolNames.MusicPlay => "Play this track in the Secret Base music catalog (demo/local providers only).",
+            AssistantToolNames.MusicPlay =>
+                "Play in Secret Base music, or open the Spotify page if Premium playback is unavailable.",
             AssistantToolNames.CreativeOpenProject => "Open this Creative Project.",
             AssistantToolNames.CursorOpenProject => "Open this project in Cursor.",
             AssistantToolNames.IntegrationOpen => "Open this integration.",

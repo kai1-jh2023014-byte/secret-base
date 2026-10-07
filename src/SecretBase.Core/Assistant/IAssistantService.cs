@@ -63,8 +63,11 @@ public sealed class AssistantTurnResult
 
     public string? CursorFolderPath { get; init; }
 
-    /// <summary>Host should ensure this widget type is visible (add if missing).</summary>
+    /// <summary>Host should ensure this widget type is visible (add if missing). Comma-separated allowed.</summary>
     public string? EnsureWidgetType { get; init; }
+
+    /// <summary>Host may arrange desktop widgets after ensuring types.</summary>
+    public bool ShouldArrangeDesktop { get; init; }
 
     public static AssistantTurnResult Ok(
         string? text,
@@ -81,12 +84,14 @@ public sealed class AssistantTurnResult
         bool launchIsExternalLink = false,
         bool shouldOpenCursorAtFolder = false,
         string? cursorFolderPath = null,
-        string? ensureWidgetType = null) =>
+        string? ensureWidgetType = null,
+        bool shouldArrangeDesktop = false) =>
         new()
         {
             Succeeded = true,
             AssistantText = text,
-            ResponseKind = shouldLaunch || shouldOpenCursorAtFolder || !string.IsNullOrWhiteSpace(ensureWidgetType)
+            ResponseKind = shouldLaunch || shouldOpenCursorAtFolder || shouldArrangeDesktop
+                            || !string.IsNullOrWhiteSpace(ensureWidgetType)
                 ? AssistantResponseKind.Execute
                 : kind,
             Intent = intent,
@@ -101,7 +106,8 @@ public sealed class AssistantTurnResult
             LaunchIsExternalLink = launchIsExternalLink,
             ShouldOpenCursorAtFolder = shouldOpenCursorAtFolder,
             CursorFolderPath = cursorFolderPath,
-            EnsureWidgetType = ensureWidgetType
+            EnsureWidgetType = ensureWidgetType,
+            ShouldArrangeDesktop = shouldArrangeDesktop
         };
 
     public static AssistantTurnResult Confirm(
