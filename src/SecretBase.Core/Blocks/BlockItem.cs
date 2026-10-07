@@ -11,6 +11,9 @@ public sealed class BlockItem
     public const double TileWidth = 88;
     public const double TileHeight = 84;
 
+    /// <summary>Grid tile height when labels are hidden (icon + padding only).</summary>
+    public const double IconOnlyTileHeight = 56;
+
     /// <summary>Compact rail tile (icon only, no label).</summary>
     public const double RailTileWidth = 48;
     public const double RailTileHeight = 48;

@@ -46,6 +46,7 @@ public sealed partial class BlockFrame : UserControl
     private bool _itemDragging;
     private Point _itemLastPoint;
     private Point _itemPressPoint;
+    private BlockItemTileMetrics _tileMetrics = BlockItemTileMetrics.ForGrid(showLabels: true);
 
     public BlockFrame(
         Block block,
@@ -85,8 +86,8 @@ public sealed partial class BlockFrame : UserControl
         SetChromeEmphasis(emphasized: false);
         SizeChanged += (_, _) =>
         {
-            ArrangeItemsEvenly();
-            SyncTilePositionsFromModel();
+            // Rebuild tiles so icon scale tracks Block size (avoid overlap when cramped).
+            RefreshItems(arrangeIfNeeded: true);
             _onBoundsChanged?.Invoke();
         };
     }
@@ -225,9 +226,11 @@ public sealed partial class BlockFrame : UserControl
 
     private bool IsRail => BlockLayoutMode.IsRail(_block.LayoutMode);
 
-    private double TileW => IsRail ? BlockItem.RailTileWidth : BlockItem.TileWidth;
+    private bool LabelsVisible => !IsRail && _block.ShowLabels;
 
-    private double TileH => IsRail ? BlockItem.RailTileHeight : BlockItem.TileHeight;
+    private double TileW => _tileMetrics.TileWidth;
+
+    private double TileH => _tileMetrics.TileHeight;
 
     private double ContentWidth =>
         ItemCanvas.ActualWidth > 0 ? ItemCanvas.ActualWidth : Math.Max(TileW, _block.Size.Width - 24);
@@ -239,11 +242,15 @@ public sealed partial class BlockFrame : UserControl
     {
         if (IsRail)
         {
-            BlockItemLayout.ArrangeRail(_block.Items, ContentWidth, ContentHeight);
+            _tileMetrics = BlockItemLayout.ArrangeRail(_block.Items, ContentWidth, ContentHeight);
             return;
         }
 
-        BlockItemLayout.ArrangeEvenly(_block.Items, ContentWidth, ContentHeight);
+        _tileMetrics = BlockItemLayout.ArrangeEvenly(
+            _block.Items,
+            ContentWidth,
+            ContentHeight,
+            showLabels: _block.ShowLabels);
     }
 
     private void RefreshItems(bool arrangeIfNeeded)
@@ -251,6 +258,12 @@ public sealed partial class BlockFrame : UserControl
         if (arrangeIfNeeded || _block.Items.Any(i => !i.HasPlacement))
         {
             ArrangeItemsEvenly();
+        }
+        else if (_tileMetrics.TileWidth <= 0 || _tileMetrics.TileHeight <= 0)
+        {
+            _tileMetrics = IsRail
+                ? BlockItemTileMetrics.ForRail()
+                : BlockItemTileMetrics.ForGrid(_block.ShowLabels);
         }
 
         ItemCanvas.Children.Clear();
@@ -266,27 +279,30 @@ public sealed partial class BlockFrame : UserControl
     private FrameworkElement CreateItemTile(BlockItem item)
     {
         var rail = IsRail;
+        var showLabel = LabelsVisible;
         var silhouette = BlockIconStyle.IsSilhouette(_block.IconStyle);
-        var iconSize = rail ? 32.0 : 36.0;
+        var iconSize = _tileMetrics.IconSize;
+        var hostSize = _tileMetrics.IconHostSize;
+        var labelFont = Math.Clamp(11 * _tileMetrics.Scale, 8, 11);
 
         var label = new TextBlock
         {
             Text = string.IsNullOrWhiteSpace(item.Name) ? "Item" : item.Name,
-            FontSize = 11,
+            FontSize = labelFont,
             TextAlignment = TextAlignment.Center,
             TextWrapping = TextWrapping.WrapWholeWords,
             TextTrimming = TextTrimming.CharacterEllipsis,
             MaxLines = 2,
             Foreground = ThemePainter.Brush(_theme.WidgetForeground),
             FontFamily = new FontFamily(_theme.FontFamily),
-            Visibility = rail ? Visibility.Collapsed : Visibility.Visible
+            Visibility = showLabel ? Visibility.Visible : Visibility.Collapsed
         };
 
         var iconHost = new Border
         {
-            Width = rail ? 40 : 40,
-            Height = rail ? 40 : 40,
-            CornerRadius = new CornerRadius(rail ? 0 : 8),
+            Width = hostSize,
+            Height = hostSize,
+            CornerRadius = new CornerRadius(rail ? 0 : Math.Max(4, 8 * _tileMetrics.Scale)),
             HorizontalAlignment = HorizontalAlignment.Center,
             Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent)
         };
@@ -320,7 +336,7 @@ public sealed partial class BlockFrame : UserControl
                     BlockItemType.Folder => "DIR",
                     _ => "FILE"
                 },
-                FontSize = rail ? 9 : 10,
+                FontSize = Math.Clamp(rail ? 9 : 10 * _tileMetrics.Scale, 7, 10),
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
                 Foreground = silhouette
@@ -332,12 +348,12 @@ public sealed partial class BlockFrame : UserControl
         var stack = new StackPanel
         {
             Width = TileW,
-            Spacing = rail ? 0 : 4,
-            Padding = new Thickness(rail ? 0 : 2),
+            Spacing = showLabel ? Math.Max(2, 4 * _tileMetrics.Scale) : 0,
+            Padding = new Thickness(rail || !showLabel ? 0 : 2),
             VerticalAlignment = VerticalAlignment.Center
         };
         stack.Children.Add(iconHost);
-        if (!rail)
+        if (showLabel)
         {
             stack.Children.Add(label);
         }
@@ -347,7 +363,7 @@ public sealed partial class BlockFrame : UserControl
             Width = TileW,
             Height = TileH,
             Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
-            CornerRadius = new CornerRadius(rail ? 0 : 8),
+            CornerRadius = new CornerRadius(rail ? 0 : Math.Max(4, 8 * _tileMetrics.Scale)),
             Child = stack,
             Tag = item,
             CanDrag = false
@@ -918,12 +934,33 @@ public sealed partial class BlockFrame : UserControl
         };
         railItem.Click += (_, _) => ApplyLayoutMode(BlockLayoutMode.Rail);
 
+        var labelsItem = new ToggleMenuFlyoutItem
+        {
+            Text = "Show icon names",
+            IsChecked = _block.ShowLabels,
+            IsEnabled = !IsRail
+        };
+        labelsItem.Click += (_, _) => ApplyShowLabels(!_block.ShowLabels);
+
         flyout.Items.Add(colorItem);
         flyout.Items.Add(whiteItem);
         flyout.Items.Add(new MenuFlyoutSeparator());
         flyout.Items.Add(gridItem);
         flyout.Items.Add(railItem);
+        flyout.Items.Add(labelsItem);
         flyout.ShowAt(StyleButton);
+    }
+
+    private void ApplyShowLabels(bool show)
+    {
+        _block.ShowLabels = show;
+        RefreshItems(arrangeIfNeeded: true);
+        _onLayoutCommitted();
+        _onBoundsChanged?.Invoke();
+        _onStatus?.Invoke(
+            show
+                ? $"Icon names shown on '{_block.Name}'."
+                : $"Icon names hidden on '{_block.Name}'.");
     }
 
     private void ApplyIconStyle(string style)
@@ -1152,8 +1189,7 @@ public sealed partial class BlockFrame : UserControl
 
         Width = _block.Size.Width;
         Height = _block.Size.Height;
-        ArrangeItemsEvenly();
-        SyncTilePositionsFromModel();
+        RefreshItems(arrangeIfNeeded: true);
         _onBoundsChanged?.Invoke();
         e.Handled = true;
     }
@@ -1175,6 +1211,7 @@ public sealed partial class BlockFrame : UserControl
             ((UIElement)sender).ReleasePointerCapture(e.Pointer);
         }
 
+        RefreshItems(arrangeIfNeeded: true);
         SetChromeEmphasis(emphasized: _pointerInside);
         _onBoundsChanged?.Invoke();
         _onLayoutCommitted();
@@ -1183,8 +1220,7 @@ public sealed partial class BlockFrame : UserControl
 
     private void ArrangeButton_Click(object sender, RoutedEventArgs e)
     {
-        ArrangeItemsEvenly();
-        SyncTilePositionsFromModel();
+        RefreshItems(arrangeIfNeeded: true);
         _onLayoutCommitted();
         _onBoundsChanged?.Invoke();
         _onStatus?.Invoke($"Arranged {_block.Items.Count} icon(s) in '{_block.Name}'.");
