@@ -1,0 +1,154 @@
+<?xml version="1.0" encoding="utf-8"?>
+<UserControl
+    x:Class="SecretBase.Widgets.Progress.ProgressWidgetView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    Opacity="0">
+
+    <Border
+        x:Name="OuterShell"
+        Background="#20151A24"
+        CornerRadius="20"
+        Padding="2"
+        BorderThickness="1"
+        BorderBrush="#28FFFFFF">
+        <Border
+            x:Name="RootBorder"
+            Padding="18,16"
+            Background="#66181E28"
+            CornerRadius="18"
+            BorderThickness="1"
+            BorderBrush="#3DFFFFFF"
+            MinWidth="200"
+            MinHeight="160">
+            <Grid RowSpacing="12">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <Grid>
+                    <StackPanel Spacing="2">
+                        <TextBlock
+                            x:Name="HeaderText"
+                            Text="Progress"
+                            FontSize="15"
+                            FontWeight="SemiBold"
+                            CharacterSpacing="40" />
+                        <TextBlock
+                            x:Name="SubtitleText"
+                            Text="Progress + Genesis"
+                            FontSize="11"
+                            Opacity="0.75" />
+                    </StackPanel>
+                    <Button
+                        x:Name="RefreshButton"
+                        Content="↻"
+                        MinWidth="32"
+                        MinHeight="28"
+                        Padding="4,2"
+                        HorizontalAlignment="Right"
+                        VerticalAlignment="Top"
+                        Click="RefreshButton_Click"
+                        ToolTipService.ToolTip="Refresh Progress / Genesis" />
+                </Grid>
+
+                <StackPanel Grid.Row="1" Spacing="6">
+                    <Grid>
+                        <TextBlock
+                            x:Name="ProgressTitleText"
+                            Text="Progress · 0%"
+                            FontSize="13"
+                            FontWeight="SemiBold"
+                            VerticalAlignment="Center" />
+                        <TextBlock
+                            x:Name="ProgressStatusText"
+                            Text=""
+                            FontSize="11"
+                            Opacity="0.8"
+                            HorizontalAlignment="Right"
+                            VerticalAlignment="Center" />
+                    </Grid>
+                    <ProgressBar
+                        x:Name="ProgressBar"
+                        Minimum="0"
+                        Maximum="100"
+                        Value="0"
+                        Height="4" />
+                    <TextBlock
+                        x:Name="ProgressDetailText"
+                        Text=""
+                        FontSize="12"
+                        Opacity="0.8"
+                        TextWrapping="WrapWholeWords" />
+                </StackPanel>
+
+                <Border
+                    x:Name="Divider"
+                    Grid.Row="2"
+                    Height="1"
+                    Opacity="0.25"
+                    Background="#FFFFFFFF"
+                    Margin="0,2,0,2" />
+
+                <StackPanel Grid.Row="3" Spacing="6">
+                    <Grid>
+                        <TextBlock
+                            x:Name="GenesisTitleText"
+                            Text="Genesis"
+                            FontSize="13"
+                            FontWeight="SemiBold"
+                            VerticalAlignment="Center"
+                            TextWrapping="WrapWholeWords" />
+                        <TextBlock
+                            x:Name="GenesisStatusText"
+                            Text=""
+                            FontSize="11"
+                            Opacity="0.8"
+                            HorizontalAlignment="Right"
+                            VerticalAlignment="Top" />
+                    </Grid>
+                    <ProgressBar
+                        x:Name="GenesisBar"
+                        Minimum="0"
+                        Maximum="100"
+                        Value="0"
+                        Height="4" />
+                    <TextBlock
+                        x:Name="GenesisPercentText"
+                        Text="0%"
+                        FontSize="12"
+                        Opacity="0.85" />
+                    <TextBlock
+                        x:Name="MilestoneText"
+                        Text=""
+                        FontSize="12"
+                        Opacity="0.8"
+                        TextWrapping="WrapWholeWords" />
+                </StackPanel>
+
+                <Grid Grid.Row="4">
+                    <TextBlock
+                        x:Name="UpdatedText"
+                        Text="Updated —"
+                        FontSize="11"
+                        Opacity="0.65"
+                        VerticalAlignment="Center" />
+                    <TextBlock
+                        x:Name="SourceText"
+                        Text="Source · local JSON"
+                        FontSize="11"
+                        Opacity="0.65"
+                        HorizontalAlignment="Right"
+                        VerticalAlignment="Center" />
+                </Grid>
+            </Grid>
+        </Border>
+    </Border>
+</UserControl>
