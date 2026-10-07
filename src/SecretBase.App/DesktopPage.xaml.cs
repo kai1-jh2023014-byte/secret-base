@@ -55,10 +55,14 @@ using SecretBase.Widgets.Creative;
 using SecretBase.Widgets.Hosting;
 using SecretBase.Widgets.Music;
 using SecretBase.Widgets.Pomodoro;
+using SecretBase.Widgets.Progress;
 using SecretBase.Widgets.Text;
 using SecretBase.Widgets.Theming;
 using SecretBase.Widgets.Web;
 using SecretBase.Widgets.Workspace;
+using SecretBase.Infrastructure.Progress;
+using SecretBase.Core.Progress;
+using SecretBase.Core.Widgets.Progress;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.Foundation;
 
@@ -98,6 +102,7 @@ public sealed partial class DesktopPage : Page
     private BaseSettings? _baseSettings;
     private ITodoStore? _todoStore;
     private FocusSessionStore? _focus;
+    private IProgressGenesisStore? _progressStore;
     private IBaseExperienceServices? _baseExperience;
     private IReadOnlyList<CalendarEvent> _upcomingEvents = [];
     private IReadOnlyList<TodoItem> _shelfTodos = [];
@@ -230,6 +235,7 @@ public sealed partial class DesktopPage : Page
         _assistantSettings = assistantSettings;
         _todoStore = new JsonTodoStore();
         _focus = new FocusSessionStore();
+        _progressStore = new JsonProgressGenesisStore();
         var layoutExisted = _layoutStore.Exists(RoomId.DefaultRoomId);
         _baseSettingsStore = new JsonBaseSettingsStore();
         var baseSettings = _baseSettingsStore.LoadOrCreate(layoutExisted);
@@ -1325,7 +1331,8 @@ public sealed partial class DesktopPage : Page
         foreach (var widget in _layout.Widgets)
         {
             if (widget.Type is not (WidgetTypes.Pomodoro or WidgetTypes.Music or WidgetTypes.Clock
-                or WidgetTypes.Calendar or WidgetTypes.Assistant or WidgetTypes.Workspace))
+                or WidgetTypes.Calendar or WidgetTypes.Assistant or WidgetTypes.Workspace
+                or WidgetTypes.Progress))
             {
                 continue;
             }
@@ -1730,6 +1737,22 @@ public sealed partial class DesktopPage : Page
                 instance.Size.Height = PomodoroWidgetView.CompactHeight;
             }
 
+            return view;
+        }
+
+        if (instance.Type == WidgetTypes.Progress)
+        {
+            var config = ProgressWidgetConfiguration.FromDictionary(instance.Configuration);
+            instance.Configuration = config.ToDictionary();
+            var provider = ProgressGenesisProviderFactory.Create(config, _progressStore);
+            var view = new ProgressWidgetView();
+            view.Initialize(provider, config, timeProvider: _timeProvider);
+            if (_theme is not null)
+            {
+                view.ApplyTheme(_theme);
+            }
+
+            _widgetDisposables.Add(view);
             return view;
         }
 
@@ -2270,6 +2293,8 @@ public sealed partial class DesktopPage : Page
                 _layout.RoomId, 360 + cascade, 80 + cascade),
             WidgetTypes.Pomodoro => DefaultWidgetFactory.CreatePomodoro(
                 _layout.RoomId, 420 + cascade, 120 + cascade),
+            WidgetTypes.Progress => DefaultWidgetFactory.CreateProgress(
+                _layout.RoomId, 460 + cascade, 160 + cascade),
             _ => null
         };
 

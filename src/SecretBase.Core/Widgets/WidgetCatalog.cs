@@ -120,6 +120,13 @@ public static class WidgetCatalog
         },
         new()
         {
+            Id = "progress",
+            Group = WidgetCatalogGroups.Information,
+            Label = "Progress / Genesis",
+            WidgetType = WidgetTypes.Progress
+        },
+        new()
+        {
             Id = "apps",
             Group = WidgetCatalogGroups.Apps,
             Label = "My Apps",
