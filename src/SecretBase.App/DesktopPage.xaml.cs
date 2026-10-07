@@ -1932,7 +1932,17 @@ public sealed partial class DesktopPage : Page
     {
         if (!string.IsNullOrWhiteSpace(result.EnsureWidgetType))
         {
-            _ = EnsureWidgetAsync(result.EnsureWidgetType!);
+            foreach (var type in result.EnsureWidgetType!.Split(
+                         ',',
+                         StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            {
+                _ = EnsureWidgetAsync(type);
+            }
+        }
+
+        if (result.ShouldArrangeDesktop)
+        {
+            ArrangeDesktopEvenly();
         }
 
         if (result.ShouldOpenCursorAtFolder && !string.IsNullOrWhiteSpace(result.CursorFolderPath))
@@ -2023,7 +2033,9 @@ public sealed partial class DesktopPage : Page
     private async void ThemeButton_Click(object sender, RoutedEventArgs e) =>
         await ShowThemeEditorDialogAsync();
 
-    private void ArrangeButton_Click(object sender, RoutedEventArgs e)
+    private void ArrangeButton_Click(object sender, RoutedEventArgs e) => ArrangeDesktopEvenly();
+
+    private void ArrangeDesktopEvenly()
     {
         if (_layout is null)
         {

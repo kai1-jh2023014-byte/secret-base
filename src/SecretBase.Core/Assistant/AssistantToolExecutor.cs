@@ -108,6 +108,7 @@ public sealed class AssistantToolExecutor : IAiToolExecutor
             AssistantToolNames.TodoList => TodoList(),
             AssistantToolNames.TodoAdd => TodoAdd(root),
             AssistantToolNames.FocusStart => FocusStart(root),
+            AssistantToolNames.CodingEnvironmentSetup => CodingEnvironmentSetup(root),
             AssistantToolNames.FilesSuggestCleanup => FilesSuggestCleanup(),
             _ => AssistantToolResult.Fail(AssistantUserMessages.ToolUnavailable)
         };
@@ -570,9 +571,59 @@ public sealed class AssistantToolExecutor : IAiToolExecutor
                 activityDomain: AssistantActivityDomains.Apps);
         }
 
-        if (!AssistantToolArgumentValidator.TryGetString(root, "app_id", required: true, out var id, out var error))
+        AssistantToolArgumentValidator.TryGetString(root, "app_id", required: false, out var id, out var idError);
+        if (!string.IsNullOrWhiteSpace(idError) && root.TryGetProperty("app_id", out _))
         {
-            return AssistantToolResult.Fail(error, activityDomain: AssistantActivityDomains.Apps);
+            return AssistantToolResult.Fail(idError, activityDomain: AssistantActivityDomains.Apps);
+        }
+
+        AssistantToolArgumentValidator.TryGetString(root, "name", required: false, out var name, out var nameError);
+        if (!string.IsNullOrWhiteSpace(nameError) && root.TryGetProperty("name", out _))
+        {
+            return AssistantToolResult.Fail(nameError, activityDomain: AssistantActivityDomains.Apps);
+        }
+
+        if (string.IsNullOrWhiteSpace(id) && !string.IsNullOrWhiteSpace(name))
+        {
+            var listed = _apps.Execute(AppCommand.ListApps());
+            if (!listed.Succeeded)
+            {
+                return AssistantToolResult.Fail(
+                    listed.ErrorMessage ?? AssistantUserMessages.ToolUnavailable,
+                    activityDomain: AssistantActivityDomains.Apps);
+            }
+
+            var match = ResolveAppByName(listed.Apps, name);
+            if (match is null)
+            {
+                if (_workspace is not null)
+                {
+                    var openNamed = _workspace.Execute(WorkspaceCommand.OpenNamed(name));
+                    if (openNamed.Succeeded)
+                    {
+                        return AssistantToolResult.Ok(
+                            openNamed.Message ?? $"Host may open {name}.",
+                            activity: "Apps ✓",
+                            activityDomain: AssistantActivityDomains.Apps,
+                            shouldLaunch: openNamed.ShouldLaunch,
+                            launchTarget: openNamed.LaunchTarget,
+                            launchIsExternalLink: openNamed.LaunchIsExternalLink);
+                    }
+                }
+
+                return AssistantToolResult.Fail(
+                    $"No registered My App / Block / known target matched '{name}'.",
+                    activityDomain: AssistantActivityDomains.Apps);
+            }
+
+            id = match.Id;
+        }
+
+        if (string.IsNullOrWhiteSpace(id))
+        {
+            return AssistantToolResult.Fail(
+                "Provide app_id or name of a registered My App.",
+                activityDomain: AssistantActivityDomains.Apps);
         }
 
         var result = _apps.Execute(AppCommand.OpenApp(id));
@@ -590,6 +641,48 @@ public sealed class AssistantToolExecutor : IAiToolExecutor
             shouldLaunch: result.ShouldLaunch,
             launchTarget: result.LaunchTarget,
             launchIsExternalLink: result.LaunchIsExternalLink);
+    }
+
+    internal static CustomApp? ResolveAppByName(IReadOnlyList<CustomApp> apps, string query)
+    {
+        var q = StripAppPhrase(query);
+        if (apps.Count == 0 || string.IsNullOrWhiteSpace(q))
+        {
+            return null;
+        }
+
+        var exact = apps.FirstOrDefault(a => a.Name.Equals(q, StringComparison.OrdinalIgnoreCase));
+        if (exact is not null)
+        {
+            return exact;
+        }
+
+        var contains = apps
+            .Where(a => a.Name.Contains(q, StringComparison.OrdinalIgnoreCase)
+                        || q.Contains(a.Name, StringComparison.OrdinalIgnoreCase))
+            .OrderBy(a => a.Name.Length)
+            .ToList();
+        return contains.Count == 0 ? null : contains[0];
+    }
+
+    internal static string StripAppPhrase(string? text)
+    {
+        var q = text?.Trim() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(q))
+        {
+            return string.Empty;
+        }
+
+        foreach (var suffix in new[] { "のアプリ", "アプリ", " app", " application" })
+        {
+            if (q.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+            {
+                q = q[..^suffix.Length].Trim();
+                break;
+            }
+        }
+
+        return q;
     }
 
     private async Task<AssistantToolResult> MusicSearchAsync(JsonElement root, CancellationToken cancellationToken)
@@ -711,6 +804,7 @@ public sealed class AssistantToolExecutor : IAiToolExecutor
             return AssistantToolResult.Fail(queryError, activityDomain: AssistantActivityDomains.Music);
         }
 
+        MusicTrack? resolved = null;
         if (string.IsNullOrWhiteSpace(trackId) && !string.IsNullOrWhiteSpace(query))
         {
             var search = await _music.ExecuteAsync(MusicCommand.SearchTrack(query), cancellationToken)
@@ -718,23 +812,28 @@ public sealed class AssistantToolExecutor : IAiToolExecutor
             if (!string.IsNullOrWhiteSpace(search.WebSearchUrl)
                 && (!search.Succeeded || search.Tracks.Count == 0))
             {
-                return AssistantToolResult.Ok(
-                    $"Spotify's catalog API did not return tracks for \"{query}\". Opened that search in Spotify.",
-                    activity: "Music ✓",
-                    activityDomain: AssistantActivityDomains.Music,
-                    shouldLaunch: true,
-                    launchTarget: search.WebSearchUrl,
-                    launchIsExternalLink: true);
+                return OpenSpotifyFallback(
+                    search.WebSearchUrl,
+                    $"Spotify's catalog API did not return tracks for \"{query}\". Opened that search in Spotify.");
             }
 
             if (!search.Succeeded || search.Tracks.Count == 0)
             {
+                if (SpotifyWebSearch.TryCreateSearchUrl(query, out var searchUrl, out _)
+                    && !string.IsNullOrWhiteSpace(searchUrl))
+                {
+                    return OpenSpotifyFallback(
+                        searchUrl,
+                        $"No matching track in the Secret Base catalog for \"{query}\". Opened that search in Spotify.");
+                }
+
                 return AssistantToolResult.Fail(
                     search.ErrorMessage ?? "No matching track in the Secret Base music catalog.",
                     activityDomain: AssistantActivityDomains.Music);
             }
 
-            trackId = search.Tracks[0].Id;
+            resolved = search.Tracks[0];
+            trackId = resolved.Id;
         }
 
         if (string.IsNullOrWhiteSpace(trackId))
@@ -747,15 +846,39 @@ public sealed class AssistantToolExecutor : IAiToolExecutor
         var caps = _music.MusicService.AggregateCapabilities();
         if (!caps.HasFlag(MusicProviderCapabilities.Playback))
         {
+            if (SpotifyWebSearch.TryCreateOpenUrl(resolved, query ?? resolved?.Title, out var openUrl, out _)
+                && !string.IsNullOrWhiteSpace(openUrl))
+            {
+                return OpenSpotifyFallback(
+                    openUrl,
+                    "In-app Spotify playback needs Premium / an active device. Opened this music in Spotify instead.");
+            }
+
             return AssistantToolResult.Fail(
                 "Music playback is not available. Connect Spotify in the Music widget to play inside Secret Base. Secret Base does not invent Spotify playback.",
                 activityDomain: AssistantActivityDomains.Music);
         }
 
-        var result = await _music.ExecuteAsync(MusicCommand.PlayTrackById(trackId, providerId: string.Empty), cancellationToken)
+        var result = await _music
+            .ExecuteAsync(MusicCommand.PlayTrackById(trackId, providerId: string.Empty, query: query), cancellationToken)
             .ConfigureAwait(false);
         if (!result.Succeeded)
         {
+            if (!string.IsNullOrWhiteSpace(result.WebSearchUrl))
+            {
+                return OpenSpotifyFallback(
+                    result.WebSearchUrl,
+                    "Spotify playback API failed (Premium or active device may be required). Opened this music in Spotify instead.");
+            }
+
+            if (SpotifyWebSearch.TryCreateOpenUrl(result.CurrentTrack ?? resolved, query, out var fallback, out _)
+                && !string.IsNullOrWhiteSpace(fallback))
+            {
+                return OpenSpotifyFallback(
+                    fallback,
+                    "Spotify playback API failed (Premium or active device may be required). Opened this music in Spotify instead.");
+            }
+
             return AssistantToolResult.Fail(
                 result.ErrorMessage ?? AssistantUserMessages.ToolUnavailable,
                 activityDomain: AssistantActivityDomains.Music);
@@ -773,6 +896,15 @@ public sealed class AssistantToolExecutor : IAiToolExecutor
             activity: "Music ✓",
             activityDomain: AssistantActivityDomains.Music);
     }
+
+    private static AssistantToolResult OpenSpotifyFallback(string url, string message) =>
+        AssistantToolResult.Ok(
+            message,
+            activity: "Music ✓",
+            activityDomain: AssistantActivityDomains.Music,
+            shouldLaunch: true,
+            launchTarget: url,
+            launchIsExternalLink: true);
 
     private AssistantToolResult WorkspaceOpen(JsonElement root)
     {
@@ -1159,6 +1291,73 @@ public sealed class AssistantToolExecutor : IAiToolExecutor
             activity: "Focus ✓",
             activityDomain: AssistantActivityDomains.Focus,
             ensureWidgetType: WidgetTypes.Pomodoro);
+    }
+
+    /// <summary>
+    /// Composite Safe Auto: prepare coding workspace, start Pomodoro, surface Creative /
+    /// Pomodoro / Workspace widgets, and ask the host to arrange them. No OS launches.
+    /// </summary>
+    private AssistantToolResult CodingEnvironmentSetup(JsonElement root)
+    {
+        if (_base is null)
+        {
+            return AssistantToolResult.Fail(
+                AssistantUserMessages.ToolUnavailable,
+                activityDomain: AssistantActivityDomains.Workspace);
+        }
+
+        AssistantToolArgumentValidator.TryGetString(root, "intent", required: false, out var intent, out _);
+        var session = WorkspacePreparer.Prepare(
+            intent ?? "programming",
+            _base.ListProjects(),
+            _base.ListApps(),
+            _base.LoadTodos(),
+            _base.ListUpcomingEvents(),
+            _base.Now);
+        _base.CurrentWorkspace = session;
+
+        AssistantToolArgumentValidator.TryGetInt(root, "minutes", 25, 5, 120, out var minutes, out _);
+        AssistantToolArgumentValidator.TryGetInt(
+            root,
+            "break_minutes",
+            FocusSession.DefaultShortBreakMinutes,
+            1,
+            60,
+            out var breakMinutes,
+            out _);
+        var started = _base.Focus.Start(
+            _base.Now,
+            TimeSpan.FromMinutes(minutes),
+            "Pomodoro",
+            shortBreak: TimeSpan.FromMinutes(breakMinutes));
+
+        var todos = _base.LoadTodos().Items;
+        var openTodos = todos.Count(t => !t.IsDone);
+        var lines = new List<string>
+        {
+            "Coding environment prepared (Safe Auto — no apps launched):",
+            WorkspacePreparer.FormatCard(session),
+            started.AlreadyRunning
+                ? $"Pomodoro already running ({started.Session.StatusLine(_base.Now)})."
+                : $"Pomodoro focus started for {minutes} minutes (then {breakMinutes}m break).",
+            openTodos == 0
+                ? "Todo: no open local todos."
+                : $"Todo: {openTodos} open item(s) in Secret Base.",
+            "Surfacing Creative Projects, Pomodoro, and Workspace widgets; host may arrange the desktop."
+        };
+
+        var ensure = string.Join(
+            ',',
+            WidgetTypes.Creative,
+            WidgetTypes.Pomodoro,
+            WidgetTypes.Workspace);
+
+        return AssistantToolResult.Ok(
+            string.Join(Environment.NewLine, lines),
+            activity: "Coding env ✓",
+            activityDomain: AssistantActivityDomains.Workspace,
+            ensureWidgetType: ensure,
+            shouldArrangeDesktop: true);
     }
 
     private AssistantToolResult FilesSuggestCleanup()
