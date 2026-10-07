@@ -5,18 +5,36 @@ namespace SecretBase.Core.Widgets.Progress;
 
 /// <summary>
 /// Progress / Genesis widget settings.
-/// Default source is live Agent Arena counters; local JSON and custom HTTPS remain available.
+/// Default source is the personal Progress learning API + Genesis MusicLab.
 /// </summary>
 public sealed class ProgressWidgetConfiguration
 {
-    public const int CurrentSchemaVersion = 2;
+    public const int CurrentSchemaVersion = 3;
 
     public int SchemaVersion { get; set; } = CurrentSchemaVersion;
 
     /// <summary>
-    /// <see cref="ProgressGenesisSources"/> — agent-arena (default), local, or http.
+    /// <see cref="ProgressGenesisSources"/> — personal-systems (default), agent-arena, local, or http.
     /// </summary>
-    public string Source { get; set; } = ProgressGenesisSources.AgentArena;
+    public string Source { get; set; } = ProgressGenesisSources.PersonalSystems;
+
+    /// <summary>
+    /// Progress FastAPI root. Empty = <see cref="ProgressLearningMapper.DefaultApiBase"/>
+    /// (<c>http://127.0.0.1:8001</c>).
+    /// </summary>
+    public string? ProgressApiBase { get; set; }
+
+    /// <summary>
+    /// Optional Genesis / MusicLab status HTTPS or localhost URL (JSON).
+    /// When unset, the provider probes the Genesis folder + Desktop .bat launchers.
+    /// </summary>
+    public string? GenesisStatusUrl { get; set; }
+
+    /// <summary>
+    /// Optional path to the Genesis project root (contains <c>scripts/windows/Start-MusicLab.bat</c>).
+    /// Empty = auto-detect common WSL / home paths.
+    /// </summary>
+    public string? GenesisRoot { get; set; }
 
     /// <summary>
     /// When <see cref="Source"/> is http, fetch this URL (same JSON schema as the local store).
@@ -24,15 +42,11 @@ public sealed class ProgressWidgetConfiguration
     public string? RemoteUrl { get; set; }
 
     /// <summary>
-    /// Optional Agent Arena wallet (0x…). When set with agent-arena source, Progress shows
-    /// personal identity completion from the public leaderboard.
+    /// Optional Agent Arena wallet (0x…). Only used when Source = agent-arena.
     /// </summary>
     public string? WalletAddress { get; set; }
 
-    /// <summary>
-    /// Optional override for the Agent Arena API root.
-    /// Empty = <see cref="AgentArenaProgressMapper.DefaultApiBase"/>.
-    /// </summary>
+    /// <summary>Optional Agent Arena API root override.</summary>
     public string? ArenaApiBase { get; set; }
 
     /// <summary>Auto-refresh interval in seconds (15–600). Default 60.</summary>
@@ -80,8 +94,28 @@ public sealed class ProgressWidgetConfiguration
                  && legacyUrl.ValueKind == JsonValueKind.String
                  && !string.IsNullOrWhiteSpace(legacyUrl.GetString()))
         {
-            // Schema v1: RemoteUrl alone implied HTTP.
             result.Source = ProgressGenesisSources.Http;
+        }
+
+        if (configuration.TryGetValue(nameof(ProgressApiBase), out var progressBase)
+            && progressBase.ValueKind == JsonValueKind.String)
+        {
+            var raw = progressBase.GetString()?.Trim();
+            result.ProgressApiBase = string.IsNullOrWhiteSpace(raw) ? null : raw;
+        }
+
+        if (configuration.TryGetValue(nameof(GenesisStatusUrl), out var genesisUrl)
+            && genesisUrl.ValueKind == JsonValueKind.String)
+        {
+            var raw = genesisUrl.GetString()?.Trim();
+            result.GenesisStatusUrl = string.IsNullOrWhiteSpace(raw) ? null : raw;
+        }
+
+        if (configuration.TryGetValue(nameof(GenesisRoot), out var genesisRoot)
+            && genesisRoot.ValueKind == JsonValueKind.String)
+        {
+            var raw = genesisRoot.GetString()?.Trim();
+            result.GenesisRoot = string.IsNullOrWhiteSpace(raw) ? null : raw;
         }
 
         if (configuration.TryGetValue(nameof(RemoteUrl), out var url)
@@ -126,6 +160,9 @@ public sealed class ProgressWidgetConfiguration
         {
             [nameof(SchemaVersion)] = JsonSerializer.SerializeToElement(CurrentSchemaVersion),
             [nameof(Source)] = JsonSerializer.SerializeToElement(ProgressGenesisSources.Normalize(Source)),
+            [nameof(ProgressApiBase)] = JsonSerializer.SerializeToElement(ProgressApiBase),
+            [nameof(GenesisStatusUrl)] = JsonSerializer.SerializeToElement(GenesisStatusUrl),
+            [nameof(GenesisRoot)] = JsonSerializer.SerializeToElement(GenesisRoot),
             [nameof(RemoteUrl)] = JsonSerializer.SerializeToElement(RemoteUrl),
             [nameof(WalletAddress)] = JsonSerializer.SerializeToElement(NormalizeWallet(WalletAddress)),
             [nameof(ArenaApiBase)] = JsonSerializer.SerializeToElement(ArenaApiBase),

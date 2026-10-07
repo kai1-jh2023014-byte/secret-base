@@ -56,10 +56,13 @@ public class AgentArenaProgressMapperTests
     }
 
     [Fact]
-    public void FormatSourceCaption_RecognizesAgentArena()
+    public void FormatSourceCaption_RecognizesSources()
     {
         Assert.Equal(
             "Source · Agent Arena",
             ProgressGenesisFormatter.FormatSourceCaption(ProgressGenesisSourceKinds.AgentArena));
+        Assert.Equal(
+            "Source · Progress + Genesis",
+            ProgressGenesisFormatter.FormatSourceCaption(ProgressGenesisSourceKinds.PersonalSystems));
     }
 }

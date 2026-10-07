@@ -92,11 +92,19 @@ public class ProgressGenesisPersistenceTests
     }
 
     [Fact]
-    public void Factory_DefaultsToAgentArena()
+    public void Factory_DefaultsToPersonalSystems()
     {
         var provider = ProgressGenesisProviderFactory.Create(
             ProgressWidgetConfiguration.CreateDefault(),
             new MemoryProgressGenesisProvider());
+        Assert.Equal("personal-systems", provider.ProviderId);
+    }
+
+    [Fact]
+    public void Factory_UsesAgentArenaWhenRequested()
+    {
+        var config = new ProgressWidgetConfiguration { Source = ProgressGenesisSources.AgentArena };
+        var provider = ProgressGenesisProviderFactory.Create(config, new MemoryProgressGenesisProvider());
         Assert.Equal("agent-arena", provider.ProviderId);
     }
 
@@ -177,6 +185,53 @@ public class ProgressGenesisPersistenceTests
 
         var snapshot = await provider.GetAsync();
         Assert.Equal(7, snapshot.Progress.Percent);
+    }
+
+    [Fact]
+    public async Task PersonalProvider_MapsProgressApiPayload()
+    {
+        var problemsJson =
+            """[{"id":"p1","title":"One","difficulty":"easy"},{"id":"p2","title":"Two","difficulty":"easy"}]""";
+        var attemptsJson =
+            """[{"id":"a1","problem_id":"p1","problem_title":"One","result":"passed","score":1,"created_at":"2026-10-07T00:00:00Z"}]""";
+        var handler = new StubHttpHandler(req =>
+        {
+            var path = req.RequestUri?.AbsolutePath ?? string.Empty;
+            var body = path.EndsWith("/api/problems", StringComparison.Ordinal) ? problemsJson : attemptsJson;
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(body, Encoding.UTF8, "application/json")
+            };
+        });
+        var dir = CreateTempDir();
+        try
+        {
+            var genesisRoot = Path.Combine(dir, "genesis");
+            Directory.CreateDirectory(Path.Combine(genesisRoot, "scripts", "windows"));
+            await File.WriteAllTextAsync(
+                Path.Combine(genesisRoot, "scripts", "windows", "Start-MusicLab.bat"),
+                "@echo off");
+            await File.WriteAllTextAsync(
+                Path.Combine(genesisRoot, "genesis-status.json"),
+                """{"phase":"MusicLab","status":"Ready","percent":40,"running":false}""");
+
+            var provider = new PersonalProgressGenesisProvider(
+                progressApiBase: "http://127.0.0.1:8001",
+                genesisRoot: genesisRoot,
+                httpClient: new HttpClient(handler),
+                fallback: new MemoryProgressGenesisProvider());
+
+            var snapshot = await provider.GetAsync();
+            Assert.Equal(ProgressGenesisSourceKinds.PersonalSystems, snapshot.SourceKind);
+            Assert.Equal(50, snapshot.Progress.Percent, 3);
+            Assert.Equal("MusicLab", snapshot.Genesis.Phase);
+            Assert.Equal(40, snapshot.Genesis.Percent);
+            Assert.Contains("1/2", snapshot.Progress.Status);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
     }
 
     [Fact]

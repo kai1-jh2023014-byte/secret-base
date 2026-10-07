@@ -44,7 +44,7 @@ reuse the same host patterns.
 ## Progress / Genesis
 
 - `ProgressWidgetView` — Progress % + Genesis phase/stage/milestones
-- `IProgressGenesisProvider` → Agent Arena live API (default), local JSON, or custom HTTPS
+- `IProgressGenesisProvider` → Progress API + Genesis MusicLab (default), optional Arena / local / HTTPS
 - See [progress-widget.md](progress-widget.md)
 
 ## AI Workspace vs Secret Base AI
