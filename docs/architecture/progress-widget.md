@@ -3,20 +3,36 @@
 Desktop widget that shows **Progress** (overall %) and **Genesis** advancement
 (phase, stage, %, milestones).
 
-## Assumed data source (MVP)
+## Live data source (default)
 
-No external Progress/Genesis API was found in-repo, prior PRs, or Cursor cloud
-agent history. This MVP uses:
+Verified fetch (2026-10-07) from the public Agent Arena API on Base Sepolia:
 
-| Priority | Source | Path / shape |
-|----------|--------|----------------|
-| Default | Local JSON | `%LocalAppData%\SecretBase\settings\progress-genesis.json` (macOS: `~/Library/Application Support/SecretBase/settings/progress-genesis.json`) |
-| Optional | HTTPS JSON | Widget config `RemoteUrl` — same JSON schema; falls back to local on failure |
+| Endpoint | Example |
+|----------|---------|
+| `GET /health` | `{"ok":true}` |
+| `GET /winners/summary` | `{"rounds":{"wins":40,"losses":22},"minted":{"total":36,"genesis":12,"ascension":24}}` |
+| `GET /winners/top` | leaderboard (optional personal wallet) |
+| `GET /rounds/current` | queue counters |
 
-First missing local file is seeded with a demo snapshot so Add Widget is immediately useful.
-Edit the JSON (or point `RemoteUrl` at a compatible endpoint) to drive real values.
+Default API root: `https://agent-arena-api.agentarenaonbase.workers.dev`
 
-Writes use the standard atomic pattern: `.tmp` → copy over target → delete `.tmp`.
+Mapping (global):
+
+- **Progress** = total minted / 3500 (500 Genesis + 3000 Ascension), win/loss caption
+- **Genesis** = Genesis minted / 500, phase/stage + supply milestones
+
+Optional widget config `WalletAddress` (`0x…`) switches Progress to personal identity
+completion (1 Genesis + 5 Ascensions) using `/winners/top`.
+
+## Other sources
+
+| `Source` | Behavior |
+|----------|----------|
+| `agent-arena` (default) | Live Arena API; falls back to local JSON on failure |
+| `local` | `%LocalAppData%\SecretBase\settings\progress-genesis.json` |
+| `http` | Custom HTTPS JSON (same schema as local); falls back to local |
+
+Writes to the local store use `.tmp` → copy over target → delete `.tmp`.
 
 ## Architecture
 
@@ -24,54 +40,35 @@ Writes use the standard atomic pattern: `.tmp` → copy over target → delete `
 ProgressWidgetView (WinUI)
         ↓
 IProgressGenesisProvider
-   ├─ LocalJsonProgressGenesisProvider  → JsonProgressGenesisStore
-   └─ HttpProgressGenesisProvider       → HTTPS + local fallback
+   ├─ AgentArenaProgressGenesisProvider  → /winners/summary (+ /top)
+   ├─ LocalJsonProgressGenesisProvider   → JsonProgressGenesisStore
+   └─ HttpProgressGenesisProvider        → HTTPS + local fallback
         ↓
-ProgressGenesisSnapshot (Core)
-   ├─ ProgressTrack
-   └─ GenesisTrack (+ GenesisMilestone[])
+AgentArenaProgressMapper (Core) → ProgressGenesisSnapshot
 ```
 
-- **Core:** models, `IProgressGenesisProvider` / `IProgressGenesisStore`, formatter, widget config
-- **Infrastructure:** JSON store + local/HTTP providers + factory
-- **Widgets:** `ProgressWidgetView`
-- **App:** Desktop host wiring (catalog / factory / `CreateWidgetContent`)
-
-## JSON schema (camelCase)
+## Widget configuration (camelCase in layout JSON)
 
 ```json
 {
-  "schema": 1,
-  "updatedAt": "2026-10-07T12:00:00+00:00",
-  "sourceKind": "local-json",
-  "progress": {
-    "title": "Progress",
-    "percent": 28,
-    "status": "On track",
-    "detail": "Optional detail line"
-  },
-  "genesis": {
-    "title": "Genesis",
-    "phase": "Foundation",
-    "stage": 2,
-    "stageCount": 5,
-    "percent": 35,
-    "status": "Building",
-    "milestones": [
-      { "id": "…", "label": "Define model", "isComplete": true },
-      { "id": "…", "label": "Desktop widget", "isComplete": false }
-    ]
-  }
+  "schemaVersion": 2,
+  "source": "agent-arena",
+  "walletAddress": null,
+  "arenaApiBase": null,
+  "remoteUrl": null,
+  "refreshSeconds": 60,
+  "showMilestones": true
 }
 ```
 
 ## UX
 
-Add via **Add Widget** → Information → **Progress / Genesis**. Not seeded on first run.
-Refresh button + auto-refresh (default 60s, configurable `RefreshSeconds` 15–600).
+Add via **Add Widget** → Information → **Progress / Genesis**.
+Refresh button + auto-refresh (default 60s, configurable 15–600).
 
 ## Security
 
 - No Host Bridge / WebView
-- HTTP provider requires HTTPS except localhost
+- Agent Arena + custom HTTP require HTTPS
+- Wallet address is public on-chain identity only (no private keys)
 - No secrets in the snapshot JSON
