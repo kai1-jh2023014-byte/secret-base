@@ -1,68 +1,62 @@
 # Progress / Genesis Widget
 
-Desktop widget that shows **Progress** (programming learning) and **Genesis**
-(MusicLab) advancement.
+Desktop widget that mirrors the personal **Progress** dashboard and **Genesis MusicLab**.
 
-## What Progress / Genesis are
+## Truth source (do not invent %)
 
-| Track | Project | Where |
-|-------|---------|--------|
-| **Progress** | Personal programming learning system | [kai1-jh2023014-byte/progress](https://github.com/kai1-jh2023014-byte/progress) — FastAPI `:8001` |
-| **Genesis** | Local MusicLab / creative stack | `~/genesis` (WSL: `/home/kabuya/genesis`) with `scripts/windows/Start-MusicLab.bat` + `Stop-MusicLab.bat` (often copied to Desktop) |
+| Track | Real system | Metric the widget must show |
+|-------|-------------|-----------------------------|
+| **Progress** | [progress](https://github.com/kai1-jh2023014-byte/progress) UI「あなたの現在地」 | **Professional Readiness %** ・ **必須Skill completed/total** (+ Skill Map tip line) |
+| **Genesis** | `~/genesis` MusicLab (`Start/Stop-MusicLab.bat`) | Explicit `percent` from status JSON/API only; otherwise **0%** (launchers ≠ progress) |
 
-## Default data source (`personal-systems`)
+If Progress shows `Professional Readiness 0% ・ 必須Skill 0/29`, the Secret Base widget must also show **0%** — never Arena/demo/guessed values.
 
-### Progress (verified API shape)
+## Progress API probe order
 
-Progress backend (`uvicorn app.main:app --reload --port 8001`):
+Base default: `http://127.0.0.1:8001`
 
-| Endpoint | Use |
-|----------|-----|
-| `GET /api/health` | Liveness |
-| `GET /api/problems` | Catalog size |
-| `GET /api/attempts` | Solved / recent activity |
+1. Readiness/dashboard (first hit wins):  
+   `/api/readiness`, `/api/dashboard`, `/api/progress`, `/api/skills/summary`, `/api/me/progress`
+2. Legacy fallback: `/api/problems` + `/api/attempts` (unique passed ÷ catalog)
 
-Mapping: unique `result == "passed"` problems ÷ problem count → Progress %.
+Example readiness payload (matches the Progress dashboard):
 
-### Genesis (local probe + optional status JSON)
+```json
+{
+  "professionalReadinessPercent": 0,
+  "requiredSkillsCompleted": 0,
+  "requiredSkillsTotal": 29,
+  "skillMap": [
+    { "name": "Programming Fundamentals", "percent": 0 },
+    { "name": "Python", "percent": 0 }
+  ]
+}
+```
 
-Because Genesis is a private local tree (not a public GitHub API), the provider:
+## Genesis / MusicLab
 
-1. Resolves Genesis roots (`SECRETBASE_GENESIS_ROOT`, `~/genesis`, `/home/kabuya/genesis`, `\\wsl.localhost\Ubuntu\home\kabuya\genesis`, …)
-2. Detects `scripts/windows/Start-MusicLab.bat` / Desktop copies
-3. Optionally reads `genesis-status.json` (project root, `.secret-base/`, or `%LocalAppData%\SecretBase\settings\`)
-4. Optionally `GET`s widget config `GenesisStatusUrl` / status file `healthUrl`
-
-Example `genesis-status.json`:
+Probes folder + Desktop bats for *presence*, but **percent stays 0** until
+`genesis-status.json` (or `GenesisStatusUrl`) supplies `"percent"`.
 
 ```json
 {
   "phase": "MusicLab",
   "status": "Session open",
-  "percent": 55,
-  "stage": 2,
-  "stageCount": 4,
-  "running": true,
-  "healthUrl": "http://127.0.0.1:8787/health",
-  "milestones": [
-    { "label": "Lab bootstrapped", "isComplete": true },
-    { "label": "First track exported", "isComplete": false }
-  ]
+  "percent": 0,
+  "running": true
 }
 ```
 
-Tip: have `Start-MusicLab.bat` / `Stop-MusicLab.bat` write/update this file so the widget stays accurate.
-
 ## Other sources
 
-| `Source` | Behavior |
-|----------|----------|
-| `personal-systems` (default) | Progress API + Genesis probe |
-| `local` | AppData `progress-genesis.json` only |
-| `http` | Custom HTTPS JSON snapshot |
-| `agent-arena` | Optional Base Sepolia Arena counters |
+| `Source` | Notes |
+|----------|--------|
+| `personal-systems` (default) | Progress + Genesis above |
+| `local` | AppData JSON (empty 0% when missing — no demo seed) |
+| `http` | Custom snapshot JSON |
+| `agent-arena` | Optional only — not the Progress/Genesis product |
 
-## Widget configuration
+## Config
 
 ```json
 {
@@ -71,17 +65,6 @@ Tip: have `Start-MusicLab.bat` / `Stop-MusicLab.bat` write/update this file so t
   "progressApiBase": "http://127.0.0.1:8001",
   "genesisRoot": null,
   "genesisStatusUrl": null,
-  "refreshSeconds": 60,
-  "showMilestones": true
+  "refreshSeconds": 60
 }
 ```
-
-## UX
-
-**Add Widget → Information → Progress / Genesis**. Refresh + auto-refresh (15–600s).
-
-## Security
-
-- Progress HTTP only on localhost
-- No private keys; Genesis paths are local filesystem probes only
-- No Host Bridge / WebView

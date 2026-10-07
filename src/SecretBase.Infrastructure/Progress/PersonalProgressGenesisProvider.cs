@@ -8,17 +8,24 @@ using SecretBase.Infrastructure.Storage;
 namespace SecretBase.Infrastructure.Progress;
 
 /// <summary>
-/// Loads Progress from the local <c>progress</c> FastAPI
-/// (<c>/api/problems</c>, <c>/api/attempts</c>) and Genesis from MusicLab
-/// status file / Desktop launchers / optional status URL.
+/// Loads Progress from the local <c>progress</c> app (Professional Readiness dashboard)
+/// and Genesis from MusicLab status — never invents percentages.
 /// </summary>
 public sealed class PersonalProgressGenesisProvider : IProgressGenesisProvider
 {
+    private static readonly string[] ReadinessPaths =
+    [
+        "/api/readiness",
+        "/api/dashboard",
+        "/api/progress",
+        "/api/skills/summary",
+        "/api/me/progress"
+    ];
+
     private readonly HttpClient _http;
     private readonly string _progressApiBase;
     private readonly string? _genesisStatusUrl;
     private readonly string? _genesisRootOverride;
-    private readonly IProgressGenesisProvider _fallback;
     private readonly JsonSerializerOptions _options;
 
     public PersonalProgressGenesisProvider(
@@ -29,6 +36,7 @@ public sealed class PersonalProgressGenesisProvider : IProgressGenesisProvider
         IProgressGenesisProvider? fallback = null,
         JsonSerializerOptions? options = null)
     {
+        _ = fallback; // Personal systems must not fall back to demo seed percentages.
         var root = string.IsNullOrWhiteSpace(progressApiBase)
             ? ProgressLearningMapper.DefaultApiBase
             : progressApiBase.Trim().TrimEnd('/');
@@ -38,7 +46,6 @@ public sealed class PersonalProgressGenesisProvider : IProgressGenesisProvider
             throw new ArgumentException("Progress API base must be an absolute http(s) URI.", nameof(progressApiBase));
         }
 
-        // Progress is a local learning server — allow loopback HTTP.
         if (uri.Scheme == Uri.UriSchemeHttp
             && !uri.IsLoopback
             && !string.Equals(uri.Host, "localhost", StringComparison.OrdinalIgnoreCase))
@@ -50,7 +57,6 @@ public sealed class PersonalProgressGenesisProvider : IProgressGenesisProvider
         _genesisStatusUrl = string.IsNullOrWhiteSpace(genesisStatusUrl) ? null : genesisStatusUrl.Trim();
         _genesisRootOverride = string.IsNullOrWhiteSpace(genesisRoot) ? null : genesisRoot.Trim();
         _http = httpClient ?? new HttpClient { Timeout = TimeSpan.FromSeconds(8) };
-        _fallback = fallback ?? new LocalJsonProgressGenesisProvider();
         _options = options ?? SecretBaseJson.CreateOptions();
     }
 
@@ -62,7 +68,7 @@ public sealed class PersonalProgressGenesisProvider : IProgressGenesisProvider
 
     public async Task<ProgressGenesisSnapshot> GetAsync(CancellationToken cancellationToken = default)
     {
-        ProgressTrack? progressTrack = null;
+        ProgressTrack progressTrack;
         try
         {
             progressTrack = await LoadProgressTrackAsync(cancellationToken).ConfigureAwait(false);
@@ -73,30 +79,22 @@ public sealed class PersonalProgressGenesisProvider : IProgressGenesisProvider
         }
         catch
         {
-            progressTrack = null;
+            progressTrack = ProgressLearningMapper.CreateOffline();
         }
 
         var genesisTrack = await LoadGenesisTrackAsync(cancellationToken).ConfigureAwait(false);
-
-        if (progressTrack is null)
-        {
-            // Keep Genesis live even when Progress API is down.
-            var fallback = await _fallback.GetAsync(cancellationToken).ConfigureAwait(false);
-            progressTrack = fallback.Progress;
-            progressTrack.Title = "Progress";
-            if (string.IsNullOrWhiteSpace(progressTrack.Status)
-                || progressTrack.Status.Contains("Not started", StringComparison.OrdinalIgnoreCase)
-                || progressTrack.Status.Contains("On track", StringComparison.OrdinalIgnoreCase))
-            {
-                progressTrack.Status = "progress API offline (start uvicorn :8001)";
-            }
-        }
-
         return GenesisMusicLabMapper.Combine(progressTrack, genesisTrack, DateTimeOffset.UtcNow);
     }
 
     private async Task<ProgressTrack> LoadProgressTrackAsync(CancellationToken cancellationToken)
     {
+        var readiness = await TryLoadReadinessAsync(cancellationToken).ConfigureAwait(false);
+        if (readiness is not null)
+        {
+            return ProgressLearningMapper.FromReadiness(readiness);
+        }
+
+        // Legacy Phase-1 endpoints (problems / attempts) — still honest 0% when nothing solved.
         var problemsTask = _http.GetFromJsonAsync<List<ProgressProblemDto>>(
             $"{_progressApiBase}/api/problems",
             _options,
@@ -128,6 +126,192 @@ public sealed class PersonalProgressGenesisProvider : IProgressGenesisProvider
             .ToList();
 
         return ProgressLearningMapper.FromLearningData(problems, attempts);
+    }
+
+    private async Task<ProgressReadinessSummary?> TryLoadReadinessAsync(CancellationToken cancellationToken)
+    {
+        foreach (var path in ReadinessPaths)
+        {
+            try
+            {
+                using var response = await _http
+                    .GetAsync($"{_progressApiBase}{path}", cancellationToken)
+                    .ConfigureAwait(false);
+                if (!response.IsSuccessStatusCode)
+                {
+                    continue;
+                }
+
+                await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken)
+                    .ConfigureAwait(false);
+                using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken)
+                    .ConfigureAwait(false);
+                if (TryParseReadiness(doc.RootElement, out var summary))
+                {
+                    return summary;
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch
+            {
+                // try next path
+            }
+        }
+
+        return null;
+    }
+
+    internal static bool TryParseReadiness(JsonElement root, out ProgressReadinessSummary summary)
+    {
+        summary = new ProgressReadinessSummary();
+        if (root.ValueKind != JsonValueKind.Object)
+        {
+            return false;
+        }
+
+        // Unwrap { "data": { ... } } / { "readiness": { ... } }
+        var obj = root;
+        foreach (var wrap in new[] { "data", "readiness", "dashboard", "progress" })
+        {
+            if (obj.TryGetProperty(wrap, out var inner) && inner.ValueKind == JsonValueKind.Object)
+            {
+                obj = inner;
+                break;
+            }
+        }
+
+        var percent = ReadDouble(obj,
+            "professionalReadinessPercent",
+            "professional_readiness_percent",
+            "readinessPercent",
+            "readiness_percent",
+            "professionalReadiness",
+            "readiness");
+        var requiredDone = ReadInt(obj,
+            "requiredSkillsCompleted",
+            "required_skills_completed",
+            "requiredCompleted",
+            "必須SkillCompleted");
+        var requiredTotal = ReadInt(obj,
+            "requiredSkillsTotal",
+            "required_skills_total",
+            "requiredTotal",
+            "必須SkillTotal");
+
+        // Also accept "requiredSkills": { "completed": 0, "total": 29 }
+        if (obj.TryGetProperty("requiredSkills", out var reqObj) && reqObj.ValueKind == JsonValueKind.Object)
+        {
+            requiredDone = ReadInt(reqObj, "completed", "done", "current") ?? requiredDone;
+            requiredTotal = ReadInt(reqObj, "total", "count", "max") ?? requiredTotal;
+        }
+
+        // "必須Skill": "0/29"
+        if ((!requiredDone.HasValue || !requiredTotal.HasValue)
+            && TryReadString(obj, out var requiredText, "requiredSkillLabel", "requiredSkillsLabel", "必須Skill")
+            && requiredText.Contains('/'))
+        {
+            var parts = requiredText.Split('/', 2, StringSplitOptions.TrimEntries);
+            if (parts.Length == 2
+                && int.TryParse(parts[0], out var done)
+                && int.TryParse(parts[1], out var total))
+            {
+                requiredDone ??= done;
+                requiredTotal ??= total;
+            }
+        }
+
+        var skillMap = ReadSkillMap(obj);
+        var hasSignal = percent.HasValue
+                        || requiredTotal.HasValue
+                        || requiredDone.HasValue
+                        || skillMap.Count > 0;
+        if (!hasSignal)
+        {
+            return false;
+        }
+
+        // If only required skills are present, derive readiness % from them (matches 0/29 → 0%).
+        var readinessPercent = percent
+            ?? (requiredTotal is > 0
+                ? 100.0 * (requiredDone ?? 0) / requiredTotal.Value
+                : 0);
+
+        summary = new ProgressReadinessSummary
+        {
+            ProfessionalReadinessPercent = readinessPercent,
+            RequiredSkillsCompleted = requiredDone ?? 0,
+            RequiredSkillsTotal = requiredTotal ?? 0,
+            Detail = TryReadString(obj, out var detail, "detail", "note", "message") ? detail : null,
+            SkillMap = skillMap
+        };
+        return true;
+    }
+
+    private static List<ProgressSkillMapEntry> ReadSkillMap(JsonElement obj)
+    {
+        JsonElement mapEl = default;
+        var found = false;
+        foreach (var name in new[] { "skillMap", "skill_map", "skills", "categories" })
+        {
+            if (obj.TryGetProperty(name, out mapEl)
+                && mapEl.ValueKind is JsonValueKind.Array or JsonValueKind.Object)
+            {
+                found = true;
+                break;
+            }
+        }
+
+        if (!found)
+        {
+            return [];
+        }
+
+        var list = new List<ProgressSkillMapEntry>();
+        if (mapEl.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var item in mapEl.EnumerateArray())
+            {
+                if (item.ValueKind != JsonValueKind.Object)
+                {
+                    continue;
+                }
+
+                var name = TryReadString(item, out var n, "name", "title", "id", "label") ? n : null;
+                var pct = ReadDouble(item, "percent", "progress", "value", "completion");
+                if (string.IsNullOrWhiteSpace(name))
+                {
+                    continue;
+                }
+
+                list.Add(new ProgressSkillMapEntry
+                {
+                    Name = name!,
+                    Percent = pct ?? 0
+                });
+            }
+        }
+        else if (mapEl.ValueKind == JsonValueKind.Object)
+        {
+            foreach (var prop in mapEl.EnumerateObject())
+            {
+                double pct = 0;
+                if (prop.Value.ValueKind == JsonValueKind.Number && prop.Value.TryGetDouble(out var d))
+                {
+                    pct = d;
+                }
+                else if (prop.Value.ValueKind == JsonValueKind.Object)
+                {
+                    pct = ReadDouble(prop.Value, "percent", "progress", "value") ?? 0;
+                }
+
+                list.Add(new ProgressSkillMapEntry { Name = prop.Name, Percent = pct });
+            }
+        }
+
+        return list;
     }
 
     private async Task<GenesisTrack> LoadGenesisTrackAsync(CancellationToken cancellationToken)
@@ -177,13 +361,11 @@ public sealed class PersonalProgressGenesisProvider : IProgressGenesisProvider
             .Select(m => GenesisMilestone.Create(m.Label!, m.IsComplete))
             .ToList() ?? [];
 
-        // Fold Progress learning milestones into Genesis when Progress is up — kept separate visually;
-        // Genesis milestones stay MusicLab-focused here.
         return GenesisMusicLabMapper.FromStatus(new GenesisMusicLabStatus
         {
             Phase = string.IsNullOrWhiteSpace(fileDto?.Phase) ? "MusicLab" : fileDto!.Phase!,
             Status = fileDto?.Status,
-            Percent = fileDto?.Percent,
+            Percent = fileDto?.Percent, // null → 0% (no invented numbers)
             Stage = fileDto?.Stage,
             StageCount = fileDto?.StageCount ?? 4,
             IsInstalled = installed || hasLaunchers || running,
@@ -232,6 +414,70 @@ public sealed class PersonalProgressGenesisProvider : IProgressGenesisProvider
         }
 
         return DateTimeOffset.TryParse(raw, out var dto) ? dto : null;
+    }
+
+    private static double? ReadDouble(JsonElement obj, params string[] names)
+    {
+        foreach (var name in names)
+        {
+            if (!obj.TryGetProperty(name, out var el))
+            {
+                continue;
+            }
+
+            if (el.ValueKind == JsonValueKind.Number && el.TryGetDouble(out var d))
+            {
+                return d;
+            }
+
+            if (el.ValueKind == JsonValueKind.String
+                && double.TryParse(el.GetString()?.TrimEnd('%'), out var parsed))
+            {
+                return parsed;
+            }
+        }
+
+        return null;
+    }
+
+    private static int? ReadInt(JsonElement obj, params string[] names)
+    {
+        foreach (var name in names)
+        {
+            if (!obj.TryGetProperty(name, out var el))
+            {
+                continue;
+            }
+
+            if (el.ValueKind == JsonValueKind.Number && el.TryGetInt32(out var i))
+            {
+                return i;
+            }
+
+            if (el.ValueKind == JsonValueKind.String && int.TryParse(el.GetString(), out var parsed))
+            {
+                return parsed;
+            }
+        }
+
+        return null;
+    }
+
+    private static bool TryReadString(JsonElement obj, out string value, params string[] names)
+    {
+        foreach (var name in names)
+        {
+            if (obj.TryGetProperty(name, out var el)
+                && el.ValueKind == JsonValueKind.String
+                && !string.IsNullOrWhiteSpace(el.GetString()))
+            {
+                value = el.GetString()!.Trim();
+                return true;
+            }
+        }
+
+        value = string.Empty;
+        return false;
     }
 
     private sealed class ProgressProblemDto
@@ -329,7 +575,6 @@ internal static class GenesisPathProbe
         Add(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "genesis"));
         Add(Path.Combine("/home", Environment.UserName, "genesis"));
         Add("/home/kabuya/genesis");
-        // Windows reaching WSL home via UNC (user-provided Desktop copy source).
         Add(@"\\wsl.localhost\Ubuntu\home\kabuya\genesis");
         Add(Path.Combine(AppDataPaths.SettingsDirectory, "genesis"));
         return list;

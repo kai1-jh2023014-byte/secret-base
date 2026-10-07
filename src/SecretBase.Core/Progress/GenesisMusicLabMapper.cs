@@ -2,7 +2,7 @@ namespace SecretBase.Core.Progress;
 
 /// <summary>
 /// Maps local Genesis / MusicLab presence + optional status JSON into a Genesis track.
-/// Genesis lives under the user's <c>~/genesis</c> tree (MusicLab Start/Stop .bat launchers).
+/// Never invents percentage — percent stays 0 unless MusicLab reports it explicitly.
 /// </summary>
 public static class GenesisMusicLabMapper
 {
@@ -16,19 +16,23 @@ public static class GenesisMusicLabMapper
         var running = status.IsRunning;
         var installed = status.IsInstalled || running || status.HasDesktopLaunchers;
 
-        var percent = status.Percent ?? (running ? 60 : installed ? 25 : 0);
+        // Honest percent: only use an explicit value from status JSON / API.
+        var percent = status.Percent.HasValue
+            ? Math.Clamp(status.Percent.Value, 0, 100)
+            : 0;
+
         var stageCount = Math.Max(1, status.StageCount <= 0 ? 4 : status.StageCount);
         var stage = status.Stage is > 0
             ? Math.Clamp(status.Stage.Value, 1, stageCount)
-            : running ? Math.Min(3, stageCount) : installed ? 2 : 1;
+            : 1;
 
         var trackStatus = !string.IsNullOrWhiteSpace(status.Status)
             ? status.Status.Trim()
             : running
                 ? "MusicLab running"
                 : installed
-                    ? "Launchers ready (Start-MusicLab.bat)"
-                    : "Genesis folder not found";
+                    ? "Launchers ready — no status % yet"
+                    : "Genesis / MusicLab not found";
 
         var milestones = status.Milestones.Count > 0
             ? status.Milestones
@@ -37,7 +41,7 @@ public static class GenesisMusicLabMapper
                 GenesisMilestone.Create("Genesis tree present", status.IsInstalled),
                 GenesisMilestone.Create("Desktop MusicLab launchers", status.HasDesktopLaunchers),
                 GenesisMilestone.Create("MusicLab running", running),
-                GenesisMilestone.Create("Status file reporting", status.HasStatusFile)
+                GenesisMilestone.Create("Status file with percent", status.HasStatusFile && status.Percent.HasValue)
             ];
 
         var track = new GenesisTrack
@@ -53,6 +57,13 @@ public static class GenesisMusicLabMapper
         track.Normalize();
         return track;
     }
+
+    public static GenesisTrack CreateUnknown() =>
+        FromStatus(new GenesisMusicLabStatus
+        {
+            Status = "Genesis / MusicLab status unknown",
+            Percent = 0
+        });
 
     public static ProgressGenesisSnapshot Combine(
         ProgressTrack progress,
@@ -79,6 +90,7 @@ public sealed class GenesisMusicLabStatus
 
     public string? Status { get; init; }
 
+    /// <summary>Explicit percent from MusicLab status JSON/API. Null = unknown (display 0).</summary>
     public double? Percent { get; init; }
 
     public int? Stage { get; init; }

@@ -34,17 +34,17 @@ public sealed class JsonProgressGenesisStore : IProgressGenesisStore
         {
             if (!File.Exists(_path))
             {
-                var seeded = ProgressGenesisSnapshot.CreateDemoSeed();
-                seeded.SourceKind = ProgressGenesisSourceKinds.LocalJson;
-                SaveUnlocked(seeded);
-                return Clone(seeded);
+                // Empty 0% snapshot — never invent demo percentages for live personal systems.
+                var empty = ProgressGenesisSnapshot.CreateEmpty(ProgressGenesisSourceKinds.LocalJson);
+                SaveUnlocked(empty);
+                return Clone(empty);
             }
 
             try
             {
                 var json = File.ReadAllText(_path);
                 var snapshot = JsonSerializer.Deserialize<ProgressGenesisSnapshot>(json, _options)
-                    ?? ProgressGenesisSnapshot.CreateDemoSeed();
+                    ?? ProgressGenesisSnapshot.CreateEmpty(ProgressGenesisSourceKinds.LocalJson);
                 snapshot.SourceKind = ProgressGenesisSourceKinds.LocalJson;
                 snapshot.Normalize();
                 return Clone(snapshot);
