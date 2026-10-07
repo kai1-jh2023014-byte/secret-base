@@ -5,6 +5,27 @@ namespace SecretBase.Core.Tests;
 public class ProgressLearningMapperTests
 {
     [Fact]
+    public void FromReadiness_MatchesDashboardZeroState()
+    {
+        var track = ProgressLearningMapper.FromReadiness(new ProgressReadinessSummary
+        {
+            ProfessionalReadinessPercent = 0,
+            RequiredSkillsCompleted = 0,
+            RequiredSkillsTotal = 29,
+            SkillMap =
+            [
+                new ProgressSkillMapEntry { Name = "Programming Fundamentals", Percent = 0 },
+                new ProgressSkillMapEntry { Name = "Python", Percent = 0 }
+            ]
+        });
+
+        Assert.Equal(0, track.Percent);
+        Assert.Contains("Professional Readiness 0%", track.Status);
+        Assert.Contains("必須Skill 0/29", track.Status);
+        Assert.Contains("Programming Fundamentals 0%", track.Detail);
+    }
+
+    [Fact]
     public void FromLearningData_ComputesSolvedPercent()
     {
         var problems = new[]
@@ -47,45 +68,52 @@ public class ProgressLearningMapperTests
     }
 
     [Fact]
-    public void FromLearningData_OfflineEmptyCatalog()
+    public void CreateOffline_IsZeroPercent()
     {
-        var track = ProgressLearningMapper.FromLearningData([], []);
+        var track = ProgressLearningMapper.CreateOffline();
         Assert.Equal(0, track.Percent);
-        Assert.Contains("progress", track.Status, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("offline", track.Status, StringComparison.OrdinalIgnoreCase);
     }
 }
 
 public class GenesisMusicLabMapperTests
 {
     [Fact]
-    public void FromStatus_RunningMusicLab()
+    public void FromStatus_DoesNotInventPercentFromLaunchers()
     {
         var track = GenesisMusicLabMapper.FromStatus(new GenesisMusicLabStatus
         {
             IsInstalled = true,
             IsRunning = true,
             HasDesktopLaunchers = true,
-            HasStatusFile = true,
-            Percent = 70,
-            Status = "Session open"
+            Percent = null
         });
 
-        Assert.Equal("Genesis", track.Title);
-        Assert.Equal("MusicLab", track.Phase);
-        Assert.Equal(70, track.Percent);
-        Assert.Equal("Session open", track.Status);
-        Assert.Contains(track.Milestones, m => m.Label.Contains("running", StringComparison.OrdinalIgnoreCase) && m.IsComplete);
+        Assert.Equal(0, track.Percent);
+        Assert.Contains("running", track.Status, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void FromStatus_UsesExplicitPercentOnly()
+    {
+        var track = GenesisMusicLabMapper.FromStatus(new GenesisMusicLabStatus
+        {
+            IsInstalled = true,
+            Percent = 10,
+            Status = "Session"
+        });
+
+        Assert.Equal(10, track.Percent);
+        Assert.Equal("Session", track.Status);
     }
 
     [Fact]
     public void Combine_UsesPersonalSystemsSource()
     {
         var snapshot = GenesisMusicLabMapper.Combine(
-            new ProgressTrack { Percent = 40, Status = "ok" },
-            new GenesisTrack { Percent = 25, Status = "ready" });
+            new ProgressTrack { Percent = 0, Status = "Professional Readiness 0% ・ 必須Skill 0/29" },
+            new GenesisTrack { Percent = 0, Status = "ready" });
         Assert.Equal(ProgressGenesisSourceKinds.PersonalSystems, snapshot.SourceKind);
-        Assert.Equal(
-            "Source · Progress + Genesis",
-            ProgressGenesisFormatter.FormatSourceCaption(snapshot.SourceKind));
+        Assert.Equal(0, snapshot.Progress.Percent);
     }
 }
