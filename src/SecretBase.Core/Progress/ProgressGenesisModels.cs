@@ -203,4 +203,7 @@ public static class ProgressGenesisSourceKinds
     public const string LocalJson = "local-json";
     public const string Http = "http";
     public const string Memory = "memory";
+
+    /// <summary>Live Agent Arena (Base Sepolia) mint / duel counters.</summary>
+    public const string AgentArena = "agent-arena";
 }

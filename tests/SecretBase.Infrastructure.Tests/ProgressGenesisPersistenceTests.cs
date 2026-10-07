@@ -92,29 +92,28 @@ public class ProgressGenesisPersistenceTests
     }
 
     [Fact]
-    public void Factory_UsesLocalWhenRemoteUrlMissing()
+    public void Factory_DefaultsToAgentArena()
     {
-        var dir = CreateTempDir();
-        try
-        {
-            var path = Path.Combine(dir, "progress-genesis.json");
-            var store = new JsonProgressGenesisStore(path);
-            var provider = ProgressGenesisProviderFactory.Create(
-                ProgressWidgetConfiguration.CreateDefault(),
-                store);
-            Assert.Equal("local-json", provider.ProviderId);
-        }
-        finally
-        {
-            Directory.Delete(dir, recursive: true);
-        }
+        var provider = ProgressGenesisProviderFactory.Create(
+            ProgressWidgetConfiguration.CreateDefault(),
+            new MemoryProgressGenesisProvider());
+        Assert.Equal("agent-arena", provider.ProviderId);
     }
 
     [Fact]
-    public void Factory_UsesHttpWhenRemoteUrlSet()
+    public void Factory_UsesLocalWhenSourceLocal()
+    {
+        var config = new ProgressWidgetConfiguration { Source = ProgressGenesisSources.Local };
+        var provider = ProgressGenesisProviderFactory.Create(config, new MemoryProgressGenesisProvider());
+        Assert.Equal("local-json", provider.ProviderId);
+    }
+
+    [Fact]
+    public void Factory_UsesHttpWhenSourceHttpAndRemoteUrlSet()
     {
         var config = new ProgressWidgetConfiguration
         {
+            Source = ProgressGenesisSources.Http,
             RemoteUrl = "https://example.com/progress-genesis.json"
         };
         var provider = ProgressGenesisProviderFactory.Create(config, new MemoryProgressGenesisProvider());
@@ -124,9 +123,60 @@ public class ProgressGenesisPersistenceTests
     [Fact]
     public void Factory_FallsBackToLocalOnInvalidRemoteUrl()
     {
-        var config = new ProgressWidgetConfiguration { RemoteUrl = "not a url" };
+        var config = new ProgressWidgetConfiguration
+        {
+            Source = ProgressGenesisSources.Http,
+            RemoteUrl = "not a url"
+        };
         var provider = ProgressGenesisProviderFactory.Create(config, new MemoryProgressGenesisProvider());
         Assert.Equal("local-json", provider.ProviderId);
+    }
+
+    [Fact]
+    public async Task AgentArenaProvider_MapsSummaryPayload()
+    {
+        var summaryJson =
+            """{"rounds":{"wins":40,"losses":22},"minted":{"total":36,"genesis":12,"ascension":24}}""";
+        var topJson = """{"count":0,"leaders":[]}""";
+        var handler = new StubHttpHandler(req =>
+        {
+            var path = req.RequestUri?.AbsolutePath ?? string.Empty;
+            var body = path.EndsWith("/winners/summary", StringComparison.Ordinal)
+                ? summaryJson
+                : topJson;
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(body, Encoding.UTF8, "application/json")
+            };
+        });
+        var http = new HttpClient(handler);
+        var provider = new AgentArenaProgressGenesisProvider(
+            apiBase: "https://agent-arena-api.agentarenaonbase.workers.dev",
+            httpClient: http,
+            fallback: new MemoryProgressGenesisProvider());
+
+        var snapshot = await provider.GetAsync();
+        Assert.Equal(ProgressGenesisSourceKinds.AgentArena, snapshot.SourceKind);
+        Assert.Equal(100.0 * 36 / AgentArenaProgressMapper.TotalCap, snapshot.Progress.Percent, 3);
+        Assert.Equal(100.0 * 12 / AgentArenaProgressMapper.GenesisCap, snapshot.Genesis.Percent, 3);
+    }
+
+    [Fact]
+    public async Task AgentArenaProvider_FallsBackWhenSummaryFails()
+    {
+        var fallback = new MemoryProgressGenesisProvider(
+            new ProgressGenesisSnapshot
+            {
+                Progress = new ProgressTrack { Percent = 7, Status = "Offline" },
+                Genesis = GenesisTrack.CreateDefault()
+            });
+        var handler = new StubHttpHandler(_ => new HttpResponseMessage(HttpStatusCode.BadGateway));
+        var provider = new AgentArenaProgressGenesisProvider(
+            httpClient: new HttpClient(handler),
+            fallback: new LocalJsonProgressGenesisProvider(fallback));
+
+        var snapshot = await provider.GetAsync();
+        Assert.Equal(7, snapshot.Progress.Percent);
     }
 
     [Fact]
