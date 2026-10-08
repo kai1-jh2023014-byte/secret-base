@@ -4,8 +4,8 @@ using SecretBase.Platform.Abstractions;
 namespace SecretBase.Platform.Windows;
 
 /// <summary>
-/// Hides Desktop apps/shortcuts by moving them into block-items storage.
-/// Program Files / Windows trees stay as path references. Restore returns the file to Desktop.
+/// Moves Desktop apps/shortcuts into a per-Block folder under block-items storage
+/// (keeps original file names). Program Files / Windows trees stay as path references.
 /// </summary>
 public sealed class BlockItemIntakeService : IBlockItemIntakeService
 {
@@ -28,7 +28,16 @@ public sealed class BlockItemIntakeService : IBlockItemIntakeService
         _protectedRoots = protectedRoots ?? DefaultProtectedRoots();
     }
 
-    public BlockItemIntakeResult TryIntake(string sourceAbsolutePath, Guid blockId, Guid itemId)
+    public string RootDirectory => _rootDirectory;
+
+    public string EnsureBlockFolder(Guid blockId, string? blockDisplayName) =>
+        BlockItemStorage.EnsureBlockDirectory(_rootDirectory, blockId, blockDisplayName);
+
+    public BlockItemIntakeResult TryIntake(
+        string sourceAbsolutePath,
+        Guid blockId,
+        Guid itemId,
+        string? blockDisplayName = null)
     {
         var moved = DesktopItemRelocator.TryHide(
             sourceAbsolutePath,
@@ -36,7 +45,8 @@ public sealed class BlockItemIntakeService : IBlockItemIntakeService
             itemId,
             _rootDirectory,
             _desktopRoots,
-            _protectedRoots);
+            _protectedRoots,
+            blockDisplayName);
         return new BlockItemIntakeResult(
             moved.Succeeded,
             moved.TargetPath,
