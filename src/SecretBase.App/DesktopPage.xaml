@@ -118,16 +118,6 @@
                         <SymbolIcon Symbol="Font" />
                     </Button>
                     <Button
-                        x:Name="ArrangeFab"
-                        Width="34"
-                        Height="34"
-                        Padding="0"
-                        CornerRadius="17"
-                        Click="ArrangeButton_Click"
-                        ToolTipService.ToolTip="Arrange widgets &amp; blocks evenly">
-                        <SymbolIcon Symbol="ViewAll" />
-                    </Button>
-                    <Button
                         x:Name="SetupFab"
                         Width="34"
                         Height="34"
@@ -164,12 +154,6 @@
                     Click="ThemeButton_Click"
                     Padding="12,4"
                     ToolTipService.ToolTip="Edit colors &amp; design" />
-                <Button
-                    x:Name="ArrangeButton"
-                    Content="Arrange"
-                    Click="ArrangeButton_Click"
-                    Padding="12,4"
-                    ToolTipService.ToolTip="Arrange widgets &amp; blocks evenly" />
                 <Button
                     x:Name="AddWidgetButton"
                     Content="Add Widget"

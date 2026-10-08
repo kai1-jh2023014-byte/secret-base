@@ -322,7 +322,6 @@ public sealed partial class DesktopPage : Page
         _logger.Info("assistant", "Taskbar shelf ready (focus, next, AI). Ctrl+Shift+K focuses the field. Does not replace the Windows taskbar.");
         _logger.Info("block", "Block host ready (use Blk button to add; drop + drag icons inside a Block).");
         _logger.Info("theme", "Theme editor ready (Aa button) — colors apply to all widgets and Blocks.");
-        _logger.Info("layout", "Arrange ready (Grid button) — even placement for widgets and blocks.");
         _logger.Info("widget", "Add Widget (+) — grouped catalog (Information / Creative / AI / Apps). Classroom opens the existing Web Widget.");
     }
 
@@ -362,12 +361,10 @@ public sealed partial class DesktopPage : Page
         StyleStripIcon(AddWidgetFab, accent: true);
         StyleStripIcon(AddBlockFab);
         StyleStripIcon(ThemeFab);
-        StyleStripIcon(ArrangeFab);
         StyleStripIcon(SetupFab);
         TintStripIcon(AddWidgetFab, theme, accent: true);
         TintStripIcon(AddBlockFab, theme);
         TintStripIcon(ThemeFab, theme);
-        TintStripIcon(ArrangeFab, theme);
         TintStripIcon(SetupFab, theme);
         TaskbarAiChat.ApplyTheme(theme);
 
@@ -875,11 +872,6 @@ public sealed partial class DesktopPage : Page
             if (TryCreateClientRect(ThemeFab, scale, out var themeFabRect))
             {
                 rects.Add(themeFabRect);
-            }
-
-            if (TryCreateClientRect(ArrangeFab, scale, out var arrangeFabRect))
-            {
-                rects.Add(arrangeFabRect);
             }
 
             if (TryCreateClientRect(SetupFab, scale, out var setupFabRect))
@@ -1746,10 +1738,32 @@ public sealed partial class DesktopPage : Page
             instance.Configuration = config.ToDictionary();
             var provider = ProgressGenesisProviderFactory.Create(config, _progressStore);
             var view = new ProgressWidgetView();
-            view.Initialize(provider, config, timeProvider: _timeProvider);
+            view.Initialize(
+                provider,
+                config,
+                timeProvider: _timeProvider,
+                onConfigurationChanged: () =>
+                {
+                    instance.Configuration = config.ToDictionary();
+                    if (config.IsMinimal)
+                    {
+                        ApplyWidgetPreferredSize(instance.Id, width: 200, height: 72);
+                    }
+                    else
+                    {
+                        ApplyWidgetPreferredSize(instance.Id, width: 280, height: 240);
+                    }
+
+                    PersistLayoutNow();
+                });
             if (_theme is not null)
             {
                 view.ApplyTheme(_theme);
+            }
+
+            if (config.IsMinimal)
+            {
+                ApplyWidgetPreferredSize(instance.Id, width: 200, height: 72);
             }
 
             _widgetDisposables.Add(view);
@@ -1940,10 +1954,7 @@ public sealed partial class DesktopPage : Page
             }
         }
 
-        if (result.ShouldArrangeDesktop)
-        {
-            ArrangeDesktopEvenly();
-        }
+        // Arrange-widgets UI removed; AI desktop-arrange requests are ignored.
 
         if (result.ShouldOpenCursorAtFolder && !string.IsNullOrWhiteSpace(result.CursorFolderPath))
         {
@@ -2032,46 +2043,6 @@ public sealed partial class DesktopPage : Page
 
     private async void ThemeButton_Click(object sender, RoutedEventArgs e) =>
         await ShowThemeEditorDialogAsync();
-
-    private void ArrangeButton_Click(object sender, RoutedEventArgs e) => ArrangeDesktopEvenly();
-
-    private void ArrangeDesktopEvenly()
-    {
-        if (_layout is null)
-        {
-            return;
-        }
-
-        var areaWidth = Math.Max(WidgetCanvas.ActualWidth, ActualWidth);
-        var areaHeight = Math.Max(WidgetCanvas.ActualHeight, ActualHeight);
-        areaWidth = Math.Max(320, areaWidth);
-        areaHeight = Math.Max(240, areaHeight);
-        const double margin = 24;
-        const double gap = 24;
-
-        DesktopWidgetLayout.ArrangeEvenly(_layout.Widgets, areaWidth, areaHeight, margin, gap);
-
-        var widgetBottom = _layout.Widgets.Count == 0
-            ? margin
-            : _layout.Widgets.Max(w => w.Position.Y + w.Size.Height) + gap;
-
-        DesktopBlockLayout.ArrangeEvenlyBelow(
-            _layout.Blocks,
-            areaWidth,
-            areaHeight,
-            topOffset: widgetBottom,
-            margin: margin,
-            gap: gap);
-
-        PersistLayoutNow();
-        RenderDesktopObjects();
-        RefreshDebugStatus();
-        _logger?.Info("layout", "Arranged widgets and blocks evenly.");
-        if (_debugChromeVisible)
-        {
-            StatusText.Text = "Arranged widgets & blocks evenly.";
-        }
-    }
 
     private async void ThemeAccelerator_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
     {

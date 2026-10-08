@@ -75,4 +75,23 @@ public static class ProgressGenesisFormatter
             ProgressGenesisSourceKinds.Memory => "Source · memory",
             _ => "Source · local JSON"
         };
+
+    /// <summary>Compact one-line Progress label for transparent minimal mode.</summary>
+    public static string FormatMinimalProgressLine(ProgressTrack progress)
+    {
+        ArgumentNullException.ThrowIfNull(progress);
+        progress.Normalize();
+        return $"Progress  {FormatPercent(progress.Percent)}";
+    }
+
+    /// <summary>Compact one-line Genesis / MusicLab label for transparent minimal mode.</summary>
+    public static string FormatMinimalGenesisLine(GenesisTrack genesis)
+    {
+        ArgumentNullException.ThrowIfNull(genesis);
+        genesis.Normalize();
+        var name = string.IsNullOrWhiteSpace(genesis.Phase) || genesis.Phase == "Foundation"
+            ? "MusicLab"
+            : genesis.Phase;
+        return $"{name}  {FormatPercent(genesis.Percent)}";
+    }
 }

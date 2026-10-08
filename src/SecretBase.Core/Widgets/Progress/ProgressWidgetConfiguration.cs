@@ -9,7 +9,10 @@ namespace SecretBase.Core.Widgets.Progress;
 /// </summary>
 public sealed class ProgressWidgetConfiguration
 {
-    public const int CurrentSchemaVersion = 3;
+    public const int CurrentSchemaVersion = 4;
+
+    public const string DisplayFull = "full";
+    public const string DisplayMinimal = "minimal";
 
     public int SchemaVersion { get; set; } = CurrentSchemaVersion;
 
@@ -17,6 +20,11 @@ public sealed class ProgressWidgetConfiguration
     /// <see cref="ProgressGenesisSources"/> — personal-systems (default), agent-arena, local, or http.
     /// </summary>
     public string Source { get; set; } = ProgressGenesisSources.PersonalSystems;
+
+    /// <summary>
+    /// <see cref="DisplayFull"/> (card) or <see cref="DisplayMinimal"/> (transparent, two-line).
+    /// </summary>
+    public string DisplayMode { get; set; } = DisplayFull;
 
     /// <summary>
     /// Progress FastAPI root. Empty = <see cref="ProgressLearningMapper.DefaultApiBase"/>
@@ -52,12 +60,29 @@ public sealed class ProgressWidgetConfiguration
     /// <summary>Auto-refresh interval in seconds (15–600). Default 60.</summary>
     public int RefreshSeconds { get; set; } = 60;
 
-    /// <summary>Show Genesis milestones list (first incomplete + completed count).</summary>
+    /// <summary>Show Genesis milestones list (first incomplete + completed count). Ignored in minimal mode.</summary>
     public bool ShowMilestones { get; set; } = true;
+
+    public bool IsMinimal =>
+        string.Equals(NormalizeDisplayMode(DisplayMode), DisplayMinimal, StringComparison.Ordinal);
 
     public static ProgressWidgetConfiguration CreateDefault() => new();
 
     public static int ClampRefreshSeconds(int value) => Math.Clamp(value, 15, 600);
+
+    public static string NormalizeDisplayMode(string? mode)
+    {
+        if (string.IsNullOrWhiteSpace(mode))
+        {
+            return DisplayFull;
+        }
+
+        return mode.Trim().ToLowerInvariant() switch
+        {
+            "minimal" or "min" or "clear" or "transparent" or "overlay" => DisplayMinimal,
+            _ => DisplayFull
+        };
+    }
 
     public static string? NormalizeWallet(string? wallet)
     {
@@ -95,6 +120,12 @@ public sealed class ProgressWidgetConfiguration
                  && !string.IsNullOrWhiteSpace(legacyUrl.GetString()))
         {
             result.Source = ProgressGenesisSources.Http;
+        }
+
+        if (configuration.TryGetValue(nameof(DisplayMode), out var display)
+            && display.ValueKind == JsonValueKind.String)
+        {
+            result.DisplayMode = NormalizeDisplayMode(display.GetString());
         }
 
         if (configuration.TryGetValue(nameof(ProgressApiBase), out var progressBase)
@@ -152,6 +183,7 @@ public sealed class ProgressWidgetConfiguration
         }
 
         result.Source = ProgressGenesisSources.Normalize(result.Source);
+        result.DisplayMode = NormalizeDisplayMode(result.DisplayMode);
         return result;
     }
 
@@ -160,6 +192,7 @@ public sealed class ProgressWidgetConfiguration
         {
             [nameof(SchemaVersion)] = JsonSerializer.SerializeToElement(CurrentSchemaVersion),
             [nameof(Source)] = JsonSerializer.SerializeToElement(ProgressGenesisSources.Normalize(Source)),
+            [nameof(DisplayMode)] = JsonSerializer.SerializeToElement(NormalizeDisplayMode(DisplayMode)),
             [nameof(ProgressApiBase)] = JsonSerializer.SerializeToElement(ProgressApiBase),
             [nameof(GenesisStatusUrl)] = JsonSerializer.SerializeToElement(GenesisStatusUrl),
             [nameof(GenesisRoot)] = JsonSerializer.SerializeToElement(GenesisRoot),
