@@ -315,7 +315,7 @@ public sealed partial class WidgetFrame : UserControl
             ((UIElement)sender).ReleasePointerCapture(e.Pointer);
         }
 
-        SetChromeEmphasis(emphasized: _pointerInside);
+        SetChromeEmphasis(emphasized: _pointerInside || _selected);
         _onBoundsChanged?.Invoke();
         _onLayoutCommitted();
         e.Handled = true;
