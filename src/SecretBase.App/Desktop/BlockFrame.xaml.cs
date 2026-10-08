@@ -960,13 +960,31 @@ public sealed partial class BlockFrame : UserControl
         };
         labelsItem.Click += (_, _) => ApplyShowLabels(!_block.ShowLabels);
 
+        var openFolderItem = new MenuFlyoutItem { Text = "Open Block folder" };
+        openFolderItem.Click += (_, _) => OpenBlockFolder();
+
         flyout.Items.Add(colorItem);
         flyout.Items.Add(whiteItem);
         flyout.Items.Add(new MenuFlyoutSeparator());
         flyout.Items.Add(gridItem);
         flyout.Items.Add(railItem);
         flyout.Items.Add(labelsItem);
+        flyout.Items.Add(new MenuFlyoutSeparator());
+        flyout.Items.Add(openFolderItem);
         flyout.ShowAt(StyleButton);
+    }
+
+    private void OpenBlockFolder()
+    {
+        var folder = _intake.EnsureBlockFolder(_block.Id, _block.Name);
+        var result = _launcher.TryLaunch(new TargetLaunchRequest(
+            folder,
+            ItemType: "Folder",
+            DisplayName: _block.Name));
+        _onStatus?.Invoke(
+            result.Succeeded
+                ? $"Opened Block folder:\n{folder}"
+                : result.ErrorMessage ?? $"Could not open:\n{folder}");
     }
 
     private void ApplyShowLabels(bool show)
@@ -1299,7 +1317,7 @@ public sealed partial class BlockFrame : UserControl
             }
 
             var itemId = Guid.NewGuid();
-            var intake = _intake.TryIntake(normalized, _block.Id, itemId);
+            var intake = _intake.TryIntake(normalized, _block.Id, itemId, _block.Name);
             if (!intake.Succeeded || string.IsNullOrWhiteSpace(intake.TargetPath))
             {
                 _onStatus?.Invoke(intake.ErrorMessage ?? "Could not add item.");
@@ -1357,10 +1375,16 @@ public sealed partial class BlockFrame : UserControl
             RefreshItems(arrangeIfNeeded: true);
             _onLayoutCommitted();
             _onBoundsChanged?.Invoke();
-            var msg = moved > 0
-                ? $"Moved {moved} item(s) off the Desktop into '{_block.Name}'."
-                : $"Linked {added} item(s) into '{_block.Name}'.";
-            _onStatus?.Invoke(msg);
+            if (moved > 0)
+            {
+                var folder = _intake.EnsureBlockFolder(_block.Id, _block.Name);
+                _onStatus?.Invoke(
+                    $"Moved {moved} item(s) into Block folder:\n{folder}");
+            }
+            else
+            {
+                _onStatus?.Invoke($"Linked {added} item(s) into '{_block.Name}'.");
+            }
         }
     }
 

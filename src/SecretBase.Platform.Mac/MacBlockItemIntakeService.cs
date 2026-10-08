@@ -4,8 +4,7 @@ using SecretBase.Platform.Abstractions;
 namespace SecretBase.Platform.Mac;
 
 /// <summary>
-/// Hides Desktop files by moving them into block-items storage. Never relocates .app bundles
-/// or /Applications. Restore returns the file to Desktop.
+/// Moves Desktop files into a per-Block folder. Never relocates .app bundles or /Applications.
 /// </summary>
 public sealed class MacBlockItemIntakeService : IBlockItemIntakeService
 {
@@ -28,7 +27,14 @@ public sealed class MacBlockItemIntakeService : IBlockItemIntakeService
         _protectedRoots = protectedRoots ?? ["/Applications", "/System", "/Library"];
     }
 
-    public BlockItemIntakeResult TryIntake(string sourceAbsolutePath, Guid blockId, Guid itemId)
+    public string EnsureBlockFolder(Guid blockId, string? blockDisplayName) =>
+        BlockItemStorage.EnsureBlockDirectory(_rootDirectory, blockId, blockDisplayName);
+
+    public BlockItemIntakeResult TryIntake(
+        string sourceAbsolutePath,
+        Guid blockId,
+        Guid itemId,
+        string? blockDisplayName = null)
     {
         var moved = DesktopItemRelocator.TryHide(
             sourceAbsolutePath,
@@ -36,7 +42,8 @@ public sealed class MacBlockItemIntakeService : IBlockItemIntakeService
             itemId,
             _rootDirectory,
             _desktopRoots,
-            _protectedRoots);
+            _protectedRoots,
+            blockDisplayName);
         return new BlockItemIntakeResult(
             moved.Succeeded,
             moved.TargetPath,
