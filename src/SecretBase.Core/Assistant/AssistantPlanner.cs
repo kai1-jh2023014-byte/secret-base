@@ -483,6 +483,12 @@ public static class AssistantPlanner
             return false;
         }
 
+        // 「19時勉強、20時食事…をいれて」 — no 予定 word required when times parse.
+        if (LocalScheduleParser.LooksLikeScheduleWrite(text))
+        {
+            return true;
+        }
+
         var wantsWrite = text.Contains("入れて", StringComparison.Ordinal)
                          || text.Contains("いれて", StringComparison.Ordinal)
                          || text.Contains("追加", StringComparison.Ordinal)

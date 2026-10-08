@@ -176,8 +176,63 @@ public sealed class AssistantService : IAssistantService
 
         _history.Add(new AiMessage { Role = AiMessageRole.User, Content = text });
         TrimHistory();
+
+        // Timed Japanese schedules: confirm locally — do not wait on a remote model (timeout).
+        if (LocalScheduleParser.TryParse(text, out var scheduleEvents)
+            && scheduleEvents.Count > 0
+            && LocalScheduleParser.LooksLikeScheduleWrite(text))
+        {
+            return QueueLocalScheduleConfirmation(scheduleEvents);
+        }
+
         await ConsultJevAsync(text, snapshot, cancellationToken).ConfigureAwait(false);
         return await ContinueModelAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    private AssistantTurnResult QueueLocalScheduleConfirmation(IReadOnlyList<LocalScheduleEvent> events)
+    {
+        var args = LocalScheduleParser.ToAddEventArgumentsJson(events);
+        var label = LocalScheduleParser.FormatConfirmationLabel(events);
+        var action = new AssistantPendingAction
+        {
+            ToolCallId = "local-schedule-" + Guid.NewGuid().ToString("N")[..12],
+            ToolName = AssistantToolNames.CalendarAddEvent,
+            ArgumentsJson = args,
+            Label = label
+        };
+        _pending = new AssistantPendingConfirmation
+        {
+            Prompt = AssistantConfirmationPolicy.PromptForActions([action]),
+            Actions = [action],
+            HasRiskyAction = false
+        };
+        _turnPlan ??= new AssistantPlan
+        {
+            Summary = "今日のローカルカレンダーに予定を追加します（確認が必要）。",
+            Steps =
+            [
+                new AssistantPlanStep
+                {
+                    Index = 1,
+                    Title = $"予定 {events.Count} 件を追加（確認が必要）",
+                    Kind = AssistantPlanStepKind.ConfirmAction,
+                    ToolName = AssistantToolNames.CalendarAddEvent,
+                    RequiresConfirmation = true
+                }
+            ]
+        };
+        _turnActivities.Add(new AssistantActivity
+        {
+            Text = "Calendar add waiting for confirmation",
+            Domain = "Confirm",
+            Status = AssistantActivityStatus.PendingConfirmation
+        });
+        _history.Add(new AiMessage
+        {
+            Role = AiMessageRole.Assistant,
+            Content = label + " Confirm to write to the Today widget."
+        });
+        return Finish(AssistantTurnResult.Confirm(_pending, SnapshotActivities(), _turnPlan, _turnIntent));
     }
 
     public async Task<AssistantTurnResult> ConfirmPendingAsync(CancellationToken cancellationToken = default)
@@ -231,6 +286,17 @@ public sealed class AssistantService : IAssistantService
                     canRetry: true,
                     retryUserText: LatestUserText()));
             }
+        }
+
+        // Local calendar writes already produced the user-facing note — skip a second
+        // remote model round that often times out after Run.
+        if (_turnToolNotes.Count > 0
+            && _actionResults.Count > 0
+            && _actionResults.All(a => a.Succeeded)
+            && _actionResults.All(a =>
+                string.Equals(a.ToolName, AssistantToolNames.CalendarAddEvent, StringComparison.Ordinal)))
+        {
+            return FinishFromToolNotes(string.Join("\n", _turnToolNotes), canRetry: false);
         }
 
         return await ContinueModelAsync(cancellationToken).ConfigureAwait(false);

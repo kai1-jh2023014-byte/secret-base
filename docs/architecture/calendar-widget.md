@@ -54,6 +54,8 @@ Provider-specific DTOs never enter Core. Core never references Google SDKs.
 
 `calendar_add_event` defaults to **local** (Today widget). Pass `events:[{title,hour,...}]` for a full day plan in one confirmation. Use `destination=google` only when asking for Google. `calendar_remember_usual` is only for 「いつも」 recurring slots.
 
+Japanese timed lists such as `19時勉強、20時食事、22時半ギターをいれて` are parsed **locally** (no remote model round) and go straight to Confirm → Run, so they do not hit `AI response timed out.` when Gemini/OpenAI is slow.
+
 ## Security
 
 - Overlay / HWND / DWM / SetWindowRgn — **unchanged**
