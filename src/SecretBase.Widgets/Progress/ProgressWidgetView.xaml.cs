@@ -64,8 +64,12 @@ public sealed partial class ProgressWidgetView : UserControl, IDisposable
         WidgetSurfaceStyle.ApplyGhostButton(MinimalModeButton, theme);
         WidgetSurfaceStyle.ApplyProgress(ProgressBar, theme);
         WidgetSurfaceStyle.ApplyProgress(GenesisBar, theme);
+        WidgetSurfaceStyle.ApplyProgress(MinimalProgressBar, theme);
+        WidgetSurfaceStyle.ApplyProgress(MinimalGenesisBar, theme);
+        WidgetSurfaceStyle.ApplyMuted(MinimalProgressLabel, theme);
+        WidgetSurfaceStyle.ApplyMuted(MinimalGenesisLabel, theme);
         WidgetSurfaceStyle.ApplyBody(MinimalProgressText, theme);
-        WidgetSurfaceStyle.ApplyMuted(MinimalGenesisText, theme);
+        WidgetSurfaceStyle.ApplyBody(MinimalGenesisText, theme);
         Divider.Background = ThemePainter.Brush(theme.Border, 0.35);
         ModeButton.Content = _configuration.IsMinimal ? "◆" : "◇";
         ToolTipService.SetToolTip(
@@ -84,9 +88,9 @@ public sealed partial class ProgressWidgetView : UserControl, IDisposable
             RootBorder.Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
             RootBorder.BorderBrush = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
             RootBorder.BorderThickness = new Thickness(0);
-            RootBorder.Padding = new Thickness(8, 4, 8, 4);
-            RootBorder.MinHeight = 56;
-            RootBorder.MinWidth = 140;
+            RootBorder.Padding = new Thickness(10, 8, 10, 8);
+            RootBorder.MinHeight = 96;
+            RootBorder.MinWidth = 180;
             return;
         }
 
@@ -195,8 +199,10 @@ public sealed partial class ProgressWidgetView : UserControl, IDisposable
             }
 
             UpdatedText.Text = "Refresh failed";
-            MinimalProgressText.Text = "Progress  —";
-            MinimalGenesisText.Text = "MusicLab  —";
+            MinimalProgressText.Text = "—";
+            MinimalGenesisText.Text = "—";
+            MinimalProgressBar.Value = 0;
+            MinimalGenesisBar.Value = 0;
         }
         finally
         {
@@ -210,8 +216,12 @@ public sealed partial class ProgressWidgetView : UserControl, IDisposable
         _lastSnapshot = snapshot;
         var now = _timeProvider.GetLocalNow();
 
-        MinimalProgressText.Text = ProgressGenesisFormatter.FormatMinimalProgressLine(snapshot.Progress);
-        MinimalGenesisText.Text = ProgressGenesisFormatter.FormatMinimalGenesisLine(snapshot.Genesis);
+        MinimalProgressLabel.Text = "Progress";
+        MinimalProgressText.Text = ProgressGenesisFormatter.FormatMinimalProgressPercent(snapshot.Progress);
+        MinimalProgressBar.Value = snapshot.Progress.Percent;
+        MinimalGenesisLabel.Text = ProgressGenesisFormatter.FormatMinimalGenesisLabel(snapshot.Genesis);
+        MinimalGenesisText.Text = ProgressGenesisFormatter.FormatMinimalGenesisPercent(snapshot.Genesis);
+        MinimalGenesisBar.Value = snapshot.Genesis.Percent;
 
         ProgressTitleText.Text = ProgressGenesisFormatter.FormatProgressHeadline(snapshot.Progress);
         ProgressStatusText.Text = snapshot.Progress.Status;

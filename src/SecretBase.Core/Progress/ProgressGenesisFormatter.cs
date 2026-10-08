@@ -76,22 +76,29 @@ public static class ProgressGenesisFormatter
             _ => "Source · local JSON"
         };
 
-    /// <summary>Compact one-line Progress label for transparent minimal mode.</summary>
-    public static string FormatMinimalProgressLine(ProgressTrack progress)
+    /// <summary>Compact Progress % number for transparent minimal mode.</summary>
+    public static string FormatMinimalProgressPercent(ProgressTrack progress)
     {
         ArgumentNullException.ThrowIfNull(progress);
         progress.Normalize();
-        return $"Progress  {FormatPercent(progress.Percent)}";
+        return FormatPercent(progress.Percent);
     }
 
-    /// <summary>Compact one-line Genesis / MusicLab label for transparent minimal mode.</summary>
-    public static string FormatMinimalGenesisLine(GenesisTrack genesis)
+    /// <summary>Compact Genesis / MusicLab label (phase name) for transparent minimal mode.</summary>
+    public static string FormatMinimalGenesisLabel(GenesisTrack genesis)
     {
         ArgumentNullException.ThrowIfNull(genesis);
         genesis.Normalize();
-        var name = string.IsNullOrWhiteSpace(genesis.Phase) || genesis.Phase == "Foundation"
+        return string.IsNullOrWhiteSpace(genesis.Phase) || genesis.Phase == "Foundation"
             ? "MusicLab"
             : genesis.Phase;
-        return $"{name}  {FormatPercent(genesis.Percent)}";
+    }
+
+    /// <summary>Compact Genesis % number for transparent minimal mode.</summary>
+    public static string FormatMinimalGenesisPercent(GenesisTrack genesis)
+    {
+        ArgumentNullException.ThrowIfNull(genesis);
+        genesis.Normalize();
+        return FormatPercent(genesis.Percent);
     }
 }

@@ -164,38 +164,73 @@
                     </Grid>
                 </Grid>
 
-                <!-- Minimal transparent: two data lines only -->
-                <StackPanel
+                <!-- Minimal transparent: labels + % numbers + gauges -->
+                <Grid
                     x:Name="MinimalPanel"
-                    Spacing="4"
                     Visibility="Collapsed"
                     VerticalAlignment="Center">
-                    <Grid>
-                        <TextBlock
-                            x:Name="MinimalProgressText"
-                            Text="Progress  0%"
-                            FontSize="20"
-                            FontWeight="SemiBold"
-                            CharacterSpacing="20" />
-                        <Button
-                            x:Name="MinimalModeButton"
-                            Content="◆"
-                            MinWidth="28"
-                            MinHeight="24"
-                            Padding="2"
-                            HorizontalAlignment="Right"
-                            VerticalAlignment="Top"
-                            Opacity="0.55"
-                            Click="ModeButton_Click"
-                            ToolTipService.ToolTip="Full card mode" />
-                    </Grid>
-                    <TextBlock
-                        x:Name="MinimalGenesisText"
-                        Text="MusicLab  0%"
-                        FontSize="16"
-                        Opacity="0.88"
-                        CharacterSpacing="10" />
-                </StackPanel>
+                    <StackPanel Spacing="12" Margin="0,0,28,0">
+                        <StackPanel Spacing="4">
+                            <Grid>
+                                <TextBlock
+                                    x:Name="MinimalProgressLabel"
+                                    Text="Progress"
+                                    FontSize="13"
+                                    FontWeight="SemiBold"
+                                    Opacity="0.9"
+                                    VerticalAlignment="Center" />
+                                <TextBlock
+                                    x:Name="MinimalProgressText"
+                                    Text="0%"
+                                    FontSize="18"
+                                    FontWeight="SemiBold"
+                                    HorizontalAlignment="Right"
+                                    VerticalAlignment="Center" />
+                            </Grid>
+                            <ProgressBar
+                                x:Name="MinimalProgressBar"
+                                Minimum="0"
+                                Maximum="100"
+                                Value="0"
+                                Height="5" />
+                        </StackPanel>
+                        <StackPanel Spacing="4">
+                            <Grid>
+                                <TextBlock
+                                    x:Name="MinimalGenesisLabel"
+                                    Text="MusicLab"
+                                    FontSize="13"
+                                    FontWeight="SemiBold"
+                                    Opacity="0.9"
+                                    VerticalAlignment="Center" />
+                                <TextBlock
+                                    x:Name="MinimalGenesisText"
+                                    Text="0%"
+                                    FontSize="18"
+                                    FontWeight="SemiBold"
+                                    HorizontalAlignment="Right"
+                                    VerticalAlignment="Center" />
+                            </Grid>
+                            <ProgressBar
+                                x:Name="MinimalGenesisBar"
+                                Minimum="0"
+                                Maximum="100"
+                                Value="0"
+                                Height="5" />
+                        </StackPanel>
+                    </StackPanel>
+                    <Button
+                        x:Name="MinimalModeButton"
+                        Content="◆"
+                        MinWidth="28"
+                        MinHeight="24"
+                        Padding="2"
+                        HorizontalAlignment="Right"
+                        VerticalAlignment="Top"
+                        Opacity="0.45"
+                        Click="ModeButton_Click"
+                        ToolTipService.ToolTip="Full card mode" />
+                </Grid>
             </Grid>
         </Border>
     </Border>

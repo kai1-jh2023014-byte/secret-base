@@ -82,7 +82,7 @@ Until then, `running` / `status` still update the Genesis line; percent stays **
 | `displayMode` | Look |
 |---------------|------|
 | `full` (default) | Card chrome, bars, status, milestones |
-| `minimal` | Transparent background; two lines only — `Progress  N%` / `MusicLab  N%` |
+| `minimal` | Transparent background; label + **% number** + **gauge** for Progress and MusicLab |
 
 Toggle with the ◇ / ◆ button on the widget (persisted in layout JSON).
 

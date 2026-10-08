@@ -1747,7 +1747,7 @@ public sealed partial class DesktopPage : Page
                     instance.Configuration = config.ToDictionary();
                     if (config.IsMinimal)
                     {
-                        ApplyWidgetPreferredSize(instance.Id, width: 200, height: 72);
+                        ApplyWidgetPreferredSize(instance.Id, width: 220, height: 110);
                     }
                     else
                     {
@@ -1763,7 +1763,7 @@ public sealed partial class DesktopPage : Page
 
             if (config.IsMinimal)
             {
-                ApplyWidgetPreferredSize(instance.Id, width: 200, height: 72);
+                ApplyWidgetPreferredSize(instance.Id, width: 220, height: 110);
             }
 
             _widgetDisposables.Add(view);

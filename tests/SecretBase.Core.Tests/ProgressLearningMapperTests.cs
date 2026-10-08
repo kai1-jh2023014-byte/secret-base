@@ -118,17 +118,26 @@ public class GenesisMusicLabMapperTests
     }
 
     [Fact]
-    public void MinimalLines_AreCompact()
+    public void MinimalPercentAndLabel_KeepNumbers()
     {
         Assert.Equal(
-            "Progress  0%",
-            ProgressGenesisFormatter.FormatMinimalProgressLine(new ProgressTrack { Percent = 0 }));
+            "0%",
+            ProgressGenesisFormatter.FormatMinimalProgressPercent(new ProgressTrack { Percent = 0 }));
         Assert.Equal(
-            "MusicLab  12%",
-            ProgressGenesisFormatter.FormatMinimalGenesisLine(new GenesisTrack
+            "42.5%",
+            ProgressGenesisFormatter.FormatMinimalProgressPercent(new ProgressTrack { Percent = 42.5 }));
+        Assert.Equal(
+            "12%",
+            ProgressGenesisFormatter.FormatMinimalGenesisPercent(new GenesisTrack
             {
                 Phase = "MusicLab",
                 Percent = 12
             }));
+        Assert.Equal(
+            "MusicLab",
+            ProgressGenesisFormatter.FormatMinimalGenesisLabel(new GenesisTrack { Phase = "Foundation" }));
+        Assert.Equal(
+            "Stage B",
+            ProgressGenesisFormatter.FormatMinimalGenesisLabel(new GenesisTrack { Phase = "Stage B" }));
     }
 }
