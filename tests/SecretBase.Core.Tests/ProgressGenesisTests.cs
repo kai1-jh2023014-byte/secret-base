@@ -127,15 +127,30 @@ public class ProgressWidgetConfigurationTests
     {
         var config = new ProgressWidgetConfiguration
         {
+            Source = ProgressGenesisSources.Http,
             RemoteUrl = "https://example.com/progress-genesis.json",
+            DisplayMode = ProgressWidgetConfiguration.DisplayMinimal,
             RefreshSeconds = 90,
             ShowMilestones = false
         };
 
         var roundTrip = ProgressWidgetConfiguration.FromDictionary(config.ToDictionary());
         Assert.Equal(config.RemoteUrl, roundTrip.RemoteUrl);
+        Assert.Equal(ProgressWidgetConfiguration.DisplayMinimal, roundTrip.DisplayMode);
+        Assert.True(roundTrip.IsMinimal);
         Assert.Equal(90, roundTrip.RefreshSeconds);
         Assert.False(roundTrip.ShowMilestones);
+    }
+
+    [Fact]
+    public void NormalizeDisplayMode_AcceptsTransparentAliases()
+    {
+        Assert.Equal(
+            ProgressWidgetConfiguration.DisplayMinimal,
+            ProgressWidgetConfiguration.NormalizeDisplayMode("transparent"));
+        Assert.Equal(
+            ProgressWidgetConfiguration.DisplayFull,
+            ProgressWidgetConfiguration.NormalizeDisplayMode(null));
     }
 
     [Fact]

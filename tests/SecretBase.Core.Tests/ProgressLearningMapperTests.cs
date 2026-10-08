@@ -116,4 +116,19 @@ public class GenesisMusicLabMapperTests
         Assert.Equal(ProgressGenesisSourceKinds.PersonalSystems, snapshot.SourceKind);
         Assert.Equal(0, snapshot.Progress.Percent);
     }
+
+    [Fact]
+    public void MinimalLines_AreCompact()
+    {
+        Assert.Equal(
+            "Progress  0%",
+            ProgressGenesisFormatter.FormatMinimalProgressLine(new ProgressTrack { Percent = 0 }));
+        Assert.Equal(
+            "MusicLab  12%",
+            ProgressGenesisFormatter.FormatMinimalGenesisLine(new GenesisTrack
+            {
+                Phase = "MusicLab",
+                Percent = 12
+            }));
+    }
 }

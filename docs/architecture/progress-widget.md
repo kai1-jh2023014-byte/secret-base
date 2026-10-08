@@ -33,10 +33,40 @@ Example readiness payload (matches the Progress dashboard):
 }
 ```
 
-## Genesis / MusicLab
+## Genesis / MusicLab — what to do on the Genesis side
 
-Probes folder + Desktop bats for *presence*, but **percent stays 0** until
-`genesis-status.json` (or `GenesisStatusUrl`) supplies `"percent"`.
+Secret Base cannot invent MusicLab %. Have the lab write a status file.
+
+**Recommended path (any one):**
+
+1. `~/genesis/genesis-status.json` (WSL: `/home/kabuya/genesis/genesis-status.json`)
+2. `%LocalAppData%\SecretBase\settings\genesis-status.json`
+3. Widget config `GenesisStatusUrl` → localhost JSON
+
+**Write from the bat scripts** (append near the end of each):
+
+`Start-MusicLab.bat` — after the lab is up:
+
+```bat
+powershell -NoProfile -Command ^
+  "$p=Join-Path $env:USERPROFILE 'genesis\genesis-status.json'; ^
+   if (-not (Test-Path (Split-Path $p))) { $p='\\wsl.localhost\Ubuntu\home\kabuya\genesis\genesis-status.json' }; ^
+   @{ phase='MusicLab'; status='Running'; percent=0; running=$true; updatedAt=(Get-Date).ToString('o') } ^
+   | ConvertTo-Json | Set-Content -Encoding utf8 $p"
+```
+
+`Stop-MusicLab.bat` — after shutdown:
+
+```bat
+powershell -NoProfile -Command ^
+  "$p=Join-Path $env:USERPROFILE 'genesis\genesis-status.json'; ^
+   if (-not (Test-Path (Split-Path $p))) { $p='\\wsl.localhost\Ubuntu\home\kabuya\genesis\genesis-status.json' }; ^
+   @{ phase='MusicLab'; status='Stopped'; percent=0; running=$false; updatedAt=(Get-Date).ToString('o') } ^
+   | ConvertTo-Json | Set-Content -Encoding utf8 $p"
+```
+
+When you have a real MusicLab progress metric, set `"percent"` to that value (0–100).
+Until then, `running` / `status` still update the Genesis line; percent stays **0**.
 
 ```json
 {
@@ -46,6 +76,15 @@ Probes folder + Desktop bats for *presence*, but **percent stays 0** until
   "running": true
 }
 ```
+
+## Display modes
+
+| `displayMode` | Look |
+|---------------|------|
+| `full` (default) | Card chrome, bars, status, milestones |
+| `minimal` | Transparent background; two lines only — `Progress  N%` / `MusicLab  N%` |
+
+Toggle with the ◇ / ◆ button on the widget (persisted in layout JSON).
 
 ## Other sources
 

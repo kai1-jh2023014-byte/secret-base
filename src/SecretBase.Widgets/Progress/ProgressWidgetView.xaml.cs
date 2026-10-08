@@ -1,5 +1,6 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media;
 using SecretBase.Core.Progress;
 using SecretBase.Core.Themes;
 using SecretBase.Core.Time;
@@ -15,10 +16,12 @@ public sealed partial class ProgressWidgetView : UserControl, IDisposable
     private ProgressWidgetConfiguration _configuration = ProgressWidgetConfiguration.CreateDefault();
     private ITimeProvider _timeProvider = new SystemTimeProvider();
     private ThemeDefinition? _theme;
+    private ProgressGenesisSnapshot? _lastSnapshot;
     private DispatcherTimer? _timer;
     private int _refreshGeneration;
     private bool _disposed;
     private bool _refreshInFlight;
+    private Action? _onConfigurationChanged;
 
     public ProgressWidgetView()
     {
@@ -30,19 +33,22 @@ public sealed partial class ProgressWidgetView : UserControl, IDisposable
     public void Initialize(
         IProgressGenesisProvider provider,
         ProgressWidgetConfiguration? configuration = null,
-        ITimeProvider? timeProvider = null)
+        ITimeProvider? timeProvider = null,
+        Action? onConfigurationChanged = null)
     {
         _provider = provider ?? throw new ArgumentNullException(nameof(provider));
         _configuration = configuration ?? ProgressWidgetConfiguration.CreateDefault();
         _timeProvider = timeProvider ?? new SystemTimeProvider();
+        _onConfigurationChanged = onConfigurationChanged;
         ApplyTimerInterval();
+        ApplyDisplayMode();
         _ = RefreshAsync();
     }
 
     public void ApplyTheme(ThemeDefinition theme)
     {
         _theme = theme;
-        WidgetSurfaceStyle.ApplyLayeredChrome(OuterShell, RootBorder, theme);
+        ApplySurface(theme);
         WidgetSurfaceStyle.ApplyHeader(HeaderText, SubtitleText, theme);
         WidgetSurfaceStyle.ApplyBody(ProgressTitleText, theme);
         WidgetSurfaceStyle.ApplyMuted(ProgressStatusText, theme);
@@ -54,9 +60,50 @@ public sealed partial class ProgressWidgetView : UserControl, IDisposable
         WidgetSurfaceStyle.ApplyMuted(UpdatedText, theme);
         WidgetSurfaceStyle.ApplyMuted(SourceText, theme);
         WidgetSurfaceStyle.ApplyGhostButton(RefreshButton, theme);
+        WidgetSurfaceStyle.ApplyGhostButton(ModeButton, theme);
+        WidgetSurfaceStyle.ApplyGhostButton(MinimalModeButton, theme);
         WidgetSurfaceStyle.ApplyProgress(ProgressBar, theme);
         WidgetSurfaceStyle.ApplyProgress(GenesisBar, theme);
+        WidgetSurfaceStyle.ApplyBody(MinimalProgressText, theme);
+        WidgetSurfaceStyle.ApplyMuted(MinimalGenesisText, theme);
         Divider.Background = ThemePainter.Brush(theme.Border, 0.35);
+        ModeButton.Content = _configuration.IsMinimal ? "◆" : "◇";
+        ToolTipService.SetToolTip(
+            ModeButton,
+            _configuration.IsMinimal ? "Full card mode" : "Minimal transparent mode");
+    }
+
+    private void ApplySurface(ThemeDefinition theme)
+    {
+        if (_configuration.IsMinimal)
+        {
+            OuterShell.Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
+            OuterShell.BorderBrush = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
+            OuterShell.BorderThickness = new Thickness(0);
+            OuterShell.Padding = new Thickness(0);
+            RootBorder.Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
+            RootBorder.BorderBrush = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
+            RootBorder.BorderThickness = new Thickness(0);
+            RootBorder.Padding = new Thickness(8, 4, 8, 4);
+            RootBorder.MinHeight = 56;
+            RootBorder.MinWidth = 140;
+            return;
+        }
+
+        WidgetSurfaceStyle.ApplyLayeredChrome(OuterShell, RootBorder, theme);
+        RootBorder.MinHeight = 160;
+        RootBorder.MinWidth = 200;
+    }
+
+    private void ApplyDisplayMode()
+    {
+        var minimal = _configuration.IsMinimal;
+        FullPanel.Visibility = minimal ? Visibility.Collapsed : Visibility.Visible;
+        MinimalPanel.Visibility = minimal ? Visibility.Visible : Visibility.Collapsed;
+        if (_theme is not null)
+        {
+            ApplyTheme(_theme);
+        }
     }
 
     private void OnLoaded(object sender, RoutedEventArgs e)
@@ -101,10 +148,24 @@ public sealed partial class ProgressWidgetView : UserControl, IDisposable
     private async void RefreshButton_Click(object sender, RoutedEventArgs e)
     {
         await RefreshAsync();
-        if (_theme is not null)
+        if (_theme is not null && !_configuration.IsMinimal)
         {
             WidgetSurfaceStyle.PulseScale(RootBorder);
         }
+    }
+
+    private void ModeButton_Click(object sender, RoutedEventArgs e)
+    {
+        _configuration.DisplayMode = _configuration.IsMinimal
+            ? ProgressWidgetConfiguration.DisplayFull
+            : ProgressWidgetConfiguration.DisplayMinimal;
+        ApplyDisplayMode();
+        if (_lastSnapshot is not null)
+        {
+            ApplySnapshot(_lastSnapshot);
+        }
+
+        _onConfigurationChanged?.Invoke();
     }
 
     private async Task RefreshAsync()
@@ -134,6 +195,8 @@ public sealed partial class ProgressWidgetView : UserControl, IDisposable
             }
 
             UpdatedText.Text = "Refresh failed";
+            MinimalProgressText.Text = "Progress  —";
+            MinimalGenesisText.Text = "MusicLab  —";
         }
         finally
         {
@@ -144,7 +207,11 @@ public sealed partial class ProgressWidgetView : UserControl, IDisposable
     private void ApplySnapshot(ProgressGenesisSnapshot snapshot)
     {
         snapshot.Normalize();
+        _lastSnapshot = snapshot;
         var now = _timeProvider.GetLocalNow();
+
+        MinimalProgressText.Text = ProgressGenesisFormatter.FormatMinimalProgressLine(snapshot.Progress);
+        MinimalGenesisText.Text = ProgressGenesisFormatter.FormatMinimalGenesisLine(snapshot.Genesis);
 
         ProgressTitleText.Text = ProgressGenesisFormatter.FormatProgressHeadline(snapshot.Progress);
         ProgressStatusText.Text = snapshot.Progress.Status;
@@ -159,7 +226,7 @@ public sealed partial class ProgressWidgetView : UserControl, IDisposable
         GenesisBar.Value = snapshot.Genesis.Percent;
         GenesisPercentText.Text = ProgressGenesisFormatter.FormatGenesisPercentLine(snapshot.Genesis);
 
-        if (_configuration.ShowMilestones && snapshot.Genesis.Milestones.Count > 0)
+        if (_configuration.ShowMilestones && !_configuration.IsMinimal && snapshot.Genesis.Milestones.Count > 0)
         {
             var next = snapshot.Genesis.Milestones.FirstOrDefault(m => !m.IsComplete);
             MilestoneText.Text = next is null

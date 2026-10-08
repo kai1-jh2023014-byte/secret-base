@@ -22,132 +22,180 @@
             CornerRadius="18"
             BorderThickness="1"
             BorderBrush="#3DFFFFFF"
-            MinWidth="200"
-            MinHeight="160">
-            <Grid RowSpacing="12">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="*" />
-                    <RowDefinition Height="Auto" />
-                </Grid.RowDefinitions>
+            MinWidth="160"
+            MinHeight="72">
+            <Grid>
+                <!-- Full card -->
+                <Grid x:Name="FullPanel" RowSpacing="12">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
 
-                <Grid>
-                    <StackPanel Spacing="2">
-                        <TextBlock
-                            x:Name="HeaderText"
-                            Text="Progress"
-                            FontSize="15"
-                            FontWeight="SemiBold"
-                            CharacterSpacing="40" />
-                        <TextBlock
-                            x:Name="SubtitleText"
-                            Text="Progress + Genesis"
-                            FontSize="11"
-                            Opacity="0.75" />
-                    </StackPanel>
-                    <Button
-                        x:Name="RefreshButton"
-                        Content="↻"
-                        MinWidth="32"
-                        MinHeight="28"
-                        Padding="4,2"
-                        HorizontalAlignment="Right"
-                        VerticalAlignment="Top"
-                        Click="RefreshButton_Click"
-                        ToolTipService.ToolTip="Refresh Progress / Genesis" />
-                </Grid>
-
-                <StackPanel Grid.Row="1" Spacing="6">
                     <Grid>
-                        <TextBlock
-                            x:Name="ProgressTitleText"
-                            Text="Progress · 0%"
-                            FontSize="13"
-                            FontWeight="SemiBold"
-                            VerticalAlignment="Center" />
-                        <TextBlock
-                            x:Name="ProgressStatusText"
-                            Text=""
-                            FontSize="11"
-                            Opacity="0.8"
+                        <StackPanel Spacing="2">
+                            <TextBlock
+                                x:Name="HeaderText"
+                                Text="Progress"
+                                FontSize="15"
+                                FontWeight="SemiBold"
+                                CharacterSpacing="40" />
+                            <TextBlock
+                                x:Name="SubtitleText"
+                                Text="Progress + Genesis"
+                                FontSize="11"
+                                Opacity="0.75" />
+                        </StackPanel>
+                        <StackPanel
+                            Orientation="Horizontal"
+                            Spacing="4"
                             HorizontalAlignment="Right"
-                            VerticalAlignment="Center" />
+                            VerticalAlignment="Top">
+                            <Button
+                                x:Name="ModeButton"
+                                Content="◇"
+                                MinWidth="32"
+                                MinHeight="28"
+                                Padding="4,2"
+                                Click="ModeButton_Click"
+                                ToolTipService.ToolTip="Minimal transparent mode" />
+                            <Button
+                                x:Name="RefreshButton"
+                                Content="↻"
+                                MinWidth="32"
+                                MinHeight="28"
+                                Padding="4,2"
+                                Click="RefreshButton_Click"
+                                ToolTipService.ToolTip="Refresh Progress / Genesis" />
+                        </StackPanel>
                     </Grid>
-                    <ProgressBar
-                        x:Name="ProgressBar"
-                        Minimum="0"
-                        Maximum="100"
-                        Value="0"
-                        Height="4" />
-                    <TextBlock
-                        x:Name="ProgressDetailText"
-                        Text=""
-                        FontSize="12"
-                        Opacity="0.8"
-                        TextWrapping="WrapWholeWords" />
-                </StackPanel>
 
-                <Border
-                    x:Name="Divider"
-                    Grid.Row="2"
-                    Height="1"
-                    Opacity="0.25"
-                    Background="#FFFFFFFF"
-                    Margin="0,2,0,2" />
-
-                <StackPanel Grid.Row="3" Spacing="6">
-                    <Grid>
+                    <StackPanel Grid.Row="1" Spacing="6">
+                        <Grid>
+                            <TextBlock
+                                x:Name="ProgressTitleText"
+                                Text="Progress · 0%"
+                                FontSize="13"
+                                FontWeight="SemiBold"
+                                VerticalAlignment="Center" />
+                            <TextBlock
+                                x:Name="ProgressStatusText"
+                                Text=""
+                                FontSize="11"
+                                Opacity="0.8"
+                                HorizontalAlignment="Right"
+                                VerticalAlignment="Center" />
+                        </Grid>
+                        <ProgressBar
+                            x:Name="ProgressBar"
+                            Minimum="0"
+                            Maximum="100"
+                            Value="0"
+                            Height="4" />
                         <TextBlock
-                            x:Name="GenesisTitleText"
-                            Text="Genesis"
-                            FontSize="13"
-                            FontWeight="SemiBold"
-                            VerticalAlignment="Center"
+                            x:Name="ProgressDetailText"
+                            Text=""
+                            FontSize="12"
+                            Opacity="0.8"
                             TextWrapping="WrapWholeWords" />
-                        <TextBlock
-                            x:Name="GenesisStatusText"
-                            Text=""
-                            FontSize="11"
-                            Opacity="0.8"
-                            HorizontalAlignment="Right"
-                            VerticalAlignment="Top" />
-                    </Grid>
-                    <ProgressBar
-                        x:Name="GenesisBar"
-                        Minimum="0"
-                        Maximum="100"
-                        Value="0"
-                        Height="4" />
-                    <TextBlock
-                        x:Name="GenesisPercentText"
-                        Text="0%"
-                        FontSize="12"
-                        Opacity="0.85" />
-                    <TextBlock
-                        x:Name="MilestoneText"
-                        Text=""
-                        FontSize="12"
-                        Opacity="0.8"
-                        TextWrapping="WrapWholeWords" />
-                </StackPanel>
+                    </StackPanel>
 
-                <Grid Grid.Row="4">
-                    <TextBlock
-                        x:Name="UpdatedText"
-                        Text="Updated —"
-                        FontSize="11"
-                        Opacity="0.65"
-                        VerticalAlignment="Center" />
-                    <TextBlock
-                        x:Name="SourceText"
-                        Text="Source · local JSON"
-                        FontSize="11"
-                        Opacity="0.65"
-                        HorizontalAlignment="Right"
-                        VerticalAlignment="Center" />
+                    <Border
+                        x:Name="Divider"
+                        Grid.Row="2"
+                        Height="1"
+                        Opacity="0.25"
+                        Background="#FFFFFFFF"
+                        Margin="0,2,0,2" />
+
+                    <StackPanel Grid.Row="3" Spacing="6">
+                        <Grid>
+                            <TextBlock
+                                x:Name="GenesisTitleText"
+                                Text="Genesis"
+                                FontSize="13"
+                                FontWeight="SemiBold"
+                                VerticalAlignment="Center"
+                                TextWrapping="WrapWholeWords" />
+                            <TextBlock
+                                x:Name="GenesisStatusText"
+                                Text=""
+                                FontSize="11"
+                                Opacity="0.8"
+                                HorizontalAlignment="Right"
+                                VerticalAlignment="Top" />
+                        </Grid>
+                        <ProgressBar
+                            x:Name="GenesisBar"
+                            Minimum="0"
+                            Maximum="100"
+                            Value="0"
+                            Height="4" />
+                        <TextBlock
+                            x:Name="GenesisPercentText"
+                            Text="0%"
+                            FontSize="12"
+                            Opacity="0.85" />
+                        <TextBlock
+                            x:Name="MilestoneText"
+                            Text=""
+                            FontSize="12"
+                            Opacity="0.8"
+                            TextWrapping="WrapWholeWords" />
+                    </StackPanel>
+
+                    <Grid Grid.Row="4">
+                        <TextBlock
+                            x:Name="UpdatedText"
+                            Text="Updated —"
+                            FontSize="11"
+                            Opacity="0.65"
+                            VerticalAlignment="Center" />
+                        <TextBlock
+                            x:Name="SourceText"
+                            Text="Source · local JSON"
+                            FontSize="11"
+                            Opacity="0.65"
+                            HorizontalAlignment="Right"
+                            VerticalAlignment="Center" />
+                    </Grid>
                 </Grid>
+
+                <!-- Minimal transparent: two data lines only -->
+                <StackPanel
+                    x:Name="MinimalPanel"
+                    Spacing="4"
+                    Visibility="Collapsed"
+                    VerticalAlignment="Center">
+                    <Grid>
+                        <TextBlock
+                            x:Name="MinimalProgressText"
+                            Text="Progress  0%"
+                            FontSize="20"
+                            FontWeight="SemiBold"
+                            CharacterSpacing="20" />
+                        <Button
+                            x:Name="MinimalModeButton"
+                            Content="◆"
+                            MinWidth="28"
+                            MinHeight="24"
+                            Padding="2"
+                            HorizontalAlignment="Right"
+                            VerticalAlignment="Top"
+                            Opacity="0.55"
+                            Click="ModeButton_Click"
+                            ToolTipService.ToolTip="Full card mode" />
+                    </Grid>
+                    <TextBlock
+                        x:Name="MinimalGenesisText"
+                        Text="MusicLab  0%"
+                        FontSize="16"
+                        Opacity="0.88"
+                        CharacterSpacing="10" />
+                </StackPanel>
             </Grid>
         </Border>
     </Border>
