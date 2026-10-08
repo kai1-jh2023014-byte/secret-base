@@ -5,14 +5,16 @@ using SecretBase.Core.Progress;
 using SecretBase.Core.Themes;
 using SecretBase.Core.Time;
 using SecretBase.Core.Widgets.Progress;
+using SecretBase.Widgets.Hosting;
 using SecretBase.Widgets.Theming;
 
 namespace SecretBase.Widgets.Progress;
 
 /// <summary>Desktop surface for Progress + Genesis advancement.</summary>
-public sealed partial class ProgressWidgetView : UserControl, IDisposable
+public sealed partial class ProgressWidgetView : UserControl, IDisposable, IWidgetChromeAware
 {
     private IProgressGenesisProvider? _provider;
+    private IProgressGenesisHistoryStore? _history;
     private ProgressWidgetConfiguration _configuration = ProgressWidgetConfiguration.CreateDefault();
     private ITimeProvider _timeProvider = new SystemTimeProvider();
     private ThemeDefinition? _theme;
@@ -21,6 +23,7 @@ public sealed partial class ProgressWidgetView : UserControl, IDisposable
     private int _refreshGeneration;
     private bool _disposed;
     private bool _refreshInFlight;
+    private bool _chromeVisible;
     private Action? _onConfigurationChanged;
 
     public ProgressWidgetView()
@@ -34,15 +37,32 @@ public sealed partial class ProgressWidgetView : UserControl, IDisposable
         IProgressGenesisProvider provider,
         ProgressWidgetConfiguration? configuration = null,
         ITimeProvider? timeProvider = null,
-        Action? onConfigurationChanged = null)
+        Action? onConfigurationChanged = null,
+        IProgressGenesisHistoryStore? history = null)
     {
         _provider = provider ?? throw new ArgumentNullException(nameof(provider));
         _configuration = configuration ?? ProgressWidgetConfiguration.CreateDefault();
         _timeProvider = timeProvider ?? new SystemTimeProvider();
         _onConfigurationChanged = onConfigurationChanged;
+        _history = history;
         ApplyTimerInterval();
         ApplyDisplayMode();
+        ApplyChromeVisibility();
+
+        // Startup: restore previous latest from log, then refresh live sources.
+        var previous = _history?.LoadLatest();
+        if (previous is not null)
+        {
+            ApplySnapshot(previous);
+        }
+
         _ = RefreshAsync();
+    }
+
+    public void SetChromeVisible(bool visible)
+    {
+        _chromeVisible = visible;
+        ApplyChromeVisibility();
     }
 
     public void ApplyTheme(ThemeDefinition theme)
@@ -75,6 +95,7 @@ public sealed partial class ProgressWidgetView : UserControl, IDisposable
         ToolTipService.SetToolTip(
             ModeButton,
             _configuration.IsMinimal ? "Full card mode" : "Minimal transparent mode");
+        ApplyChromeVisibility();
     }
 
     private void ApplySurface(ThemeDefinition theme)
@@ -104,10 +125,27 @@ public sealed partial class ProgressWidgetView : UserControl, IDisposable
         var minimal = _configuration.IsMinimal;
         FullPanel.Visibility = minimal ? Visibility.Collapsed : Visibility.Visible;
         MinimalPanel.Visibility = minimal ? Visibility.Visible : Visibility.Collapsed;
+        ApplyChromeVisibility();
         if (_theme is not null)
         {
             ApplyTheme(_theme);
         }
+    }
+
+    private void ApplyChromeVisibility()
+    {
+        if (_configuration.IsMinimal)
+        {
+            // Transparent mode: hide mode toggle unless selected / hovered.
+            MinimalModeButton.Visibility = _chromeVisible ? Visibility.Visible : Visibility.Collapsed;
+            MinimalModeButton.Opacity = _chromeVisible ? 0.55 : 0;
+            ModeButton.Visibility = Visibility.Visible;
+            return;
+        }
+
+        MinimalModeButton.Visibility = Visibility.Collapsed;
+        ModeButton.Visibility = Visibility.Visible;
+        ModeButton.Opacity = 1;
     }
 
     private void OnLoaded(object sender, RoutedEventArgs e)
@@ -190,12 +228,25 @@ public sealed partial class ProgressWidgetView : UserControl, IDisposable
             }
 
             ApplySnapshot(snapshot);
+            _history?.AppendIfChanged(snapshot);
         }
         catch
         {
             if (_disposed || generation != _refreshGeneration)
             {
                 return;
+            }
+
+            // Keep previous log values on failure when we already showed them.
+            if (_lastSnapshot is null)
+            {
+                var fallback = _history?.LoadLatest();
+                if (fallback is not null)
+                {
+                    ApplySnapshot(fallback);
+                    UpdatedText.Text = "Using last saved progress";
+                    return;
+                }
             }
 
             UpdatedText.Text = "Refresh failed";

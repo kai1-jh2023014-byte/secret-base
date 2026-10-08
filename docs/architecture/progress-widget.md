@@ -11,6 +11,21 @@ Desktop widget that mirrors the personal **Progress** dashboard and **Genesis Mu
 
 If Progress shows `Professional Readiness 0% ・ 必須Skill 0/29`, the Secret Base widget must also show **0%** — never Arena/demo/guessed values.
 
+## Refresh + history log
+
+| When | Behavior |
+|------|----------|
+| **Startup** | Load the **latest entry** from `settings/progress-genesis-log.json` and paint it immediately, then probe live sources |
+| **Every 10 minutes** | Default `refreshSeconds` = **600**; live Progress API + Genesis status |
+| **When values change** | Append a new log entry (percent / status / phase / stage). Unchanged refreshes do not grow the log |
+
+Log path:
+
+- Windows: `%LocalAppData%\SecretBase\settings\progress-genesis-log.json`
+- macOS: `~/Library/Application Support/SecretBase/settings/progress-genesis-log.json`
+
+If the live probe fails, the widget keeps the last log values.
+
 ## Progress API probe order
 
 Base default: `http://127.0.0.1:8001`
@@ -86,6 +101,10 @@ Until then, `running` / `status` still update the Genesis line; percent stays **
 
 Toggle with the ◇ / ◆ button on the widget (persisted in layout JSON).
 
+### Minimal / transparent chrome
+
+In `minimal` mode, the widget frame **×** and the mode toggle (◆) stay **hidden until the widget is selected or hovered**. Gauges and percent numbers remain visible.
+
 ## Other sources
 
 | `Source` | Notes |
@@ -99,11 +118,12 @@ Toggle with the ◇ / ◆ button on the widget (persisted in layout JSON).
 
 ```json
 {
-  "schemaVersion": 3,
+  "schemaVersion": 5,
   "source": "personal-systems",
+  "displayMode": "full",
   "progressApiBase": "http://127.0.0.1:8001",
   "genesisRoot": null,
   "genesisStatusUrl": null,
-  "refreshSeconds": 60
+  "refreshSeconds": 600
 }
 ```

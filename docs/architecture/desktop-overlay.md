@@ -12,7 +12,7 @@ Desktop
   ├── Secret Base Overlay           ← HWND shaped to widgets + FABs (SetWindowRgn)
   │     ├── Widgets (Clock, Text, Web, Calendar, Music, Creative, AI, …)
   │     ├── Blocks
-  │     └── FABs (+ Add Widget, Blk, Aa, Grid) + taskbar shelf (focus, next, AI)
+  │     └── FABs (+ Add Widget, Blk, Aa, ⚙) + taskbar shelf (focus, next, AI)
   └── Other application windows / Taskbar / Windows Search (unchanged)
 ```
 
@@ -70,14 +70,14 @@ Investigation notes: [overlay-input-and-edges.md](overlay-input-and-edges.md).
 | **Blk** Add Block | Always visible | Debug chrome **Add Block**, **Ctrl+Shift+B** |
 | Per-type shortcuts | W/C/M/E/A still add Web/Cal/Music/Creative/AI | See [keyboard-shortcuts.md](../guides/keyboard-shortcuts.md) |
 | **Aa** Theme | Always visible | Debug chrome **Theme**, **Ctrl+Shift+T** |
-| **Grid** Arrange | Always visible | Debug chrome **Arrange** |
+| **⚙** Setup | Always visible | Start Menu / Desktop shortcut / Start at login |
 | Host status | Ephemeral message above FABs | Also mirrored in debug chrome |
-| **Taskbar shelf** | Stretches along the bottom of the work area (focus, next item, AI field). Clock/time stays on the Clock widget. Starts to the right of the FABs so it does not cover them | **Ctrl+Shift+K** focuses the AI field. Does **not** replace the Windows taskbar or Windows Search |
+| **Taskbar shelf** | Centered bottom shelf (focus, next item, AI field). Keeps clear of the left FAB strip. Clock/time stays on the Clock widget | **Ctrl+Shift+K** focuses the AI field. Does **not** replace the Windows taskbar or Windows Search |
 | Status / widget count | Hidden | **Ctrl+Shift+D** shows debug chrome |
 | Exit button | Hidden | Debug chrome **Exit**, or **Ctrl+Shift+Q** |
-| `WidgetFrame` | Grip + resize + **×** remove | Same |
+| `WidgetFrame` | Grip + resize + **×** remove (Progress minimal: hidden until selected) | Same |
 
-Arrange uses Core `DesktopWidgetLayout` / `DesktopBlockLayout` (compact equal-gap grid from top-left; Blocks sit below the widget band) and persists via the layout store.
+Desktop-wide Grid Arrange FAB was removed. Per-Block icon Arrange (inside a Block header) remains.
 
 ## Explicitly out of scope / forbidden
 

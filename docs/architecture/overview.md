@@ -28,9 +28,9 @@ Highest principle:
 ## v0.1 surface
 
 - ✅ Desktop Overlay (chromeless work-area; widgets-only click-through)
-- ✅ Widgets: Clock, Text, Web, Calendar, Music, Creative (Projects + Dashboard), AI Workspace, Progress / Genesis
-- ✅ Blocks (launch tiles)
-- ✅ Theme + Arrange
+- ✅ Widgets: Clock, Text, Web, Calendar, Music, Creative (Projects + Dashboard), AI Workspace, Progress / Genesis, My Apps, Pomodoro
+- ✅ Blocks (launch tiles; per-Block icon Arrange remains)
+- ✅ Theme editor + Setup (Start Menu / Desktop shortcut / Start at login)
 - ✅ Projects → Dashboard → Cursor / ChatGPT / resources / notes
 - ✅ Persistence under `%LocalAppData%\SecretBase`
 

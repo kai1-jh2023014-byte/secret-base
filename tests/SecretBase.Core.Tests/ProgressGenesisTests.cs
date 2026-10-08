@@ -161,6 +161,26 @@ public class ProgressWidgetConfigurationTests
     }
 
     [Fact]
+    public void DefaultRefreshSeconds_IsTenMinutes()
+    {
+        Assert.Equal(600, ProgressWidgetConfiguration.CreateDefault().RefreshSeconds);
+        Assert.Equal(5, ProgressWidgetConfiguration.CurrentSchemaVersion);
+    }
+
+    [Fact]
+    public void FromDictionary_MigratesOldSixtySecondDefaultToTenMinutes()
+    {
+        var dict = new Dictionary<string, JsonElement>(StringComparer.Ordinal)
+        {
+            [nameof(ProgressWidgetConfiguration.SchemaVersion)] = JsonSerializer.SerializeToElement(4),
+            [nameof(ProgressWidgetConfiguration.RefreshSeconds)] = JsonSerializer.SerializeToElement(60)
+        };
+        var config = ProgressWidgetConfiguration.FromDictionary(dict);
+        Assert.Equal(600, config.RefreshSeconds);
+        Assert.Equal(5, config.SchemaVersion);
+    }
+
+    [Fact]
     public void FromDictionary_IgnoresEmptyRemoteUrl()
     {
         var dict = new Dictionary<string, JsonElement>(StringComparer.Ordinal)

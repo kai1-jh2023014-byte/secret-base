@@ -9,7 +9,7 @@ namespace SecretBase.Core.Widgets.Progress;
 /// </summary>
 public sealed class ProgressWidgetConfiguration
 {
-    public const int CurrentSchemaVersion = 4;
+    public const int CurrentSchemaVersion = 5;
 
     public const string DisplayFull = "full";
     public const string DisplayMinimal = "minimal";
@@ -22,7 +22,7 @@ public sealed class ProgressWidgetConfiguration
     public string Source { get; set; } = ProgressGenesisSources.PersonalSystems;
 
     /// <summary>
-    /// <see cref="DisplayFull"/> (card) or <see cref="DisplayMinimal"/> (transparent, two-line).
+    /// <see cref="DisplayFull"/> (card) or <see cref="DisplayMinimal"/> (transparent gauges + %).
     /// </summary>
     public string DisplayMode { get; set; } = DisplayFull;
 
@@ -57,8 +57,8 @@ public sealed class ProgressWidgetConfiguration
     /// <summary>Optional Agent Arena API root override.</summary>
     public string? ArenaApiBase { get; set; }
 
-    /// <summary>Auto-refresh interval in seconds (15–600). Default 60.</summary>
-    public int RefreshSeconds { get; set; } = 60;
+    /// <summary>Auto-refresh interval in seconds (15–600). Default 600 (10 minutes).</summary>
+    public int RefreshSeconds { get; set; } = 600;
 
     /// <summary>Show Genesis milestones list (first incomplete + completed count). Ignored in minimal mode.</summary>
     public bool ShowMilestones { get; set; } = true;
@@ -169,10 +169,12 @@ public sealed class ProgressWidgetConfiguration
             result.ArenaApiBase = string.IsNullOrWhiteSpace(raw) ? null : raw;
         }
 
+        var hadRefresh = false;
         if (configuration.TryGetValue(nameof(RefreshSeconds), out var refresh)
             && refresh.ValueKind == JsonValueKind.Number
             && refresh.TryGetInt32(out var seconds))
         {
+            hadRefresh = true;
             result.RefreshSeconds = ClampRefreshSeconds(seconds);
         }
 
@@ -182,6 +184,13 @@ public sealed class ProgressWidgetConfiguration
             result.ShowMilestones = milestones.GetBoolean();
         }
 
+        // schemaVersion < 5 used a 60s default; product refresh is startup + every 10 minutes.
+        if (result.SchemaVersion < 5 && (!hadRefresh || result.RefreshSeconds <= 60))
+        {
+            result.RefreshSeconds = 600;
+        }
+
+        result.SchemaVersion = CurrentSchemaVersion;
         result.Source = ProgressGenesisSources.Normalize(result.Source);
         result.DisplayMode = NormalizeDisplayMode(result.DisplayMode);
         return result;

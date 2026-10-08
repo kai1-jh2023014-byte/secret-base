@@ -103,6 +103,8 @@ public sealed partial class DesktopPage : Page
     private ITodoStore? _todoStore;
     private FocusSessionStore? _focus;
     private IProgressGenesisStore? _progressStore;
+    private IProgressGenesisHistoryStore? _progressHistory;
+    private WidgetFrame? _selectedWidgetFrame;
     private IBaseExperienceServices? _baseExperience;
     private IReadOnlyList<CalendarEvent> _upcomingEvents = [];
     private IReadOnlyList<TodoItem> _shelfTodos = [];
@@ -236,6 +238,7 @@ public sealed partial class DesktopPage : Page
         _todoStore = new JsonTodoStore();
         _focus = new FocusSessionStore();
         _progressStore = new JsonProgressGenesisStore();
+        _progressHistory = new JsonProgressGenesisHistoryStore();
         var layoutExisted = _layoutStore.Exists(RoomId.DefaultRoomId);
         _baseSettingsStore = new JsonBaseSettingsStore();
         var baseSettings = _baseSettingsStore.LoadOrCreate(layoutExisted);
@@ -355,7 +358,7 @@ public sealed partial class DesktopPage : Page
                 theme.WidgetBackground,
                 Math.Clamp(ThemePainter.SoftSurfaceOpacity(theme), 0.16, 0.42));
             ControlStripShell.BorderBrush = ThemePainter.Brush(theme.Border, 0.22);
-            ControlStripShell.CornerRadius = new CornerRadius(22);
+            ControlStripShell.CornerRadius = new CornerRadius(20);
         }
 
         StyleStripIcon(AddWidgetFab, accent: true);
@@ -783,7 +786,14 @@ public sealed partial class DesktopPage : Page
                 _theme,
                 onLayoutCommitted: CommitUserGeometryEdit,
                 onBoundsChanged: SyncInteractiveInputRegions,
-                onRemoveRequested: RemoveWidget);
+                onRemoveRequested: RemoveWidget,
+                onSelectionRequested: SelectWidgetFrame);
+            if (instance.Type == WidgetTypes.Progress
+                && ProgressWidgetConfiguration.FromDictionary(instance.Configuration).IsMinimal)
+            {
+                frame.QuietChrome = true;
+            }
+
             Canvas.SetLeft(frame, instance.Position.X);
             Canvas.SetTop(frame, instance.Position.Y);
             frame.Loaded += (_, _) => SyncInteractiveInputRegions();
@@ -1754,8 +1764,10 @@ public sealed partial class DesktopPage : Page
                         ApplyWidgetPreferredSize(instance.Id, width: 280, height: 240);
                     }
 
+                    SetProgressQuietChrome(instance.Id, config.IsMinimal);
                     PersistLayoutNow();
-                });
+                },
+                history: _progressHistory);
             if (_theme is not null)
             {
                 view.ApplyTheme(_theme);
@@ -1771,6 +1783,35 @@ public sealed partial class DesktopPage : Page
         }
 
         return null;
+    }
+
+    private void SelectWidgetFrame(WidgetFrame frame)
+    {
+        if (_selectedWidgetFrame == frame)
+        {
+            frame.SetSelected(true);
+            return;
+        }
+
+        if (_selectedWidgetFrame is not null)
+        {
+            _selectedWidgetFrame.SetSelected(false);
+        }
+
+        _selectedWidgetFrame = frame;
+        frame.SetSelected(true);
+    }
+
+    private void SetProgressQuietChrome(Guid widgetId, bool quiet)
+    {
+        foreach (var frame in WidgetCanvas.Children.OfType<WidgetFrame>())
+        {
+            if (frame.WidgetId == widgetId)
+            {
+                frame.QuietChrome = quiet;
+                return;
+            }
+        }
     }
 
     private void ApplyWidgetPreferredSize(Guid widgetId, double width, double height)
