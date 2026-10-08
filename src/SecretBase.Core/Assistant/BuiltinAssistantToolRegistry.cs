@@ -43,21 +43,24 @@ public sealed class BuiltinAssistantToolRegistry : IAiToolRegistry
         {
             Name = AssistantToolNames.CalendarAddEvent,
             Description =
-                "Add a calendar event for today (title + time) to Google Calendar. Requires Google to be connected in the Calendar widget. Requires confirmation.",
+                "Add one or more events to today's Secret Base calendar (the Today widget). "
+                + "Default destination is local. Use destination=google only when the user asks for Google Calendar. "
+                + "For a full day plan, pass events:[{title,hour,minute,duration_minutes},...] in one call. "
+                + "Do NOT use calendar_remember_usual for a one-off day plan. Requires confirmation.",
             Parameters =
             [
                 new AssistantToolParameter
                 {
                     Name = "title",
                     Type = "string",
-                    Description = "Event title. Not a file path.",
-                    Required = true
+                    Description = "Single event title when not using events[]. Not a file path.",
+                    Required = false
                 },
                 new AssistantToolParameter
                 {
                     Name = "hour",
                     Type = "integer",
-                    Description = "Start hour 0-23. Default is the current hour.",
+                    Description = "Start hour 0-23 for a single event. Default is the current hour.",
                     Required = false
                 },
                 new AssistantToolParameter
@@ -73,6 +76,21 @@ public sealed class BuiltinAssistantToolRegistry : IAiToolRegistry
                     Type = "integer",
                     Description = "Length in minutes, 15-480. Default 60.",
                     Required = false
+                },
+                new AssistantToolParameter
+                {
+                    Name = "destination",
+                    Type = "string",
+                    Description = "local (default, Today widget) or google (requires Connect).",
+                    Required = false
+                },
+                new AssistantToolParameter
+                {
+                    Name = "events",
+                    Type = "array",
+                    Description =
+                        "Optional list of {title,hour,minute?,duration_minutes?} for multiple today's events in one confirmation.",
+                    Required = false
                 }
             ],
             RiskLevel = ActionPrivilege.SafeAction,
@@ -82,7 +100,8 @@ public sealed class BuiltinAssistantToolRegistry : IAiToolRegistry
         {
             Name = AssistantToolNames.CalendarRememberUsual,
             Description =
-                "Remember a usual local schedule slot (title + time) for later apply. Requires confirmation.",
+                "Remember a recurring usual local schedule slot for later apply with calendar_apply_usual. "
+                + "Only when the user says 「いつも」/usual — not for a one-off day plan. Requires confirmation.",
             Parameters =
             [
                 new AssistantToolParameter

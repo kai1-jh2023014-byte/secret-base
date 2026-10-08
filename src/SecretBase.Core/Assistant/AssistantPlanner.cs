@@ -476,15 +476,33 @@ public static class AssistantPlanner
         text.Contains("いつも", StringComparison.Ordinal)
         || text.Contains("usual", StringComparison.OrdinalIgnoreCase);
 
-    private static bool LooksLikeAddSchedule(string text) =>
-        (text.Contains("予定", StringComparison.Ordinal)
-         || text.Contains("schedule", StringComparison.OrdinalIgnoreCase)
-         || text.Contains("event", StringComparison.OrdinalIgnoreCase))
-        && (text.Contains("入れて", StringComparison.Ordinal)
-            || text.Contains("いれて", StringComparison.Ordinal)
-            || text.Contains("追加", StringComparison.Ordinal)
-            || text.Contains("add", StringComparison.OrdinalIgnoreCase))
-        && !LooksLikeUsualSchedule(text);
+    private static bool LooksLikeAddSchedule(string text)
+    {
+        if (LooksLikeUsualSchedule(text))
+        {
+            return false;
+        }
+
+        var wantsWrite = text.Contains("入れて", StringComparison.Ordinal)
+                         || text.Contains("いれて", StringComparison.Ordinal)
+                         || text.Contains("追加", StringComparison.Ordinal)
+                         || text.Contains("反映", StringComparison.Ordinal)
+                         || text.Contains("add", StringComparison.OrdinalIgnoreCase);
+        if (!wantsWrite)
+        {
+            return false;
+        }
+
+        return text.Contains("予定", StringComparison.Ordinal)
+               || text.Contains("スケジュール", StringComparison.Ordinal)
+               || text.Contains("カレンダー", StringComparison.Ordinal)
+               || text.Contains("ウィジェット", StringComparison.Ordinal)
+               || text.Contains("schedule", StringComparison.OrdinalIgnoreCase)
+               || text.Contains("calendar", StringComparison.OrdinalIgnoreCase)
+               || text.Contains("widget", StringComparison.OrdinalIgnoreCase)
+               || text.Contains("event", StringComparison.OrdinalIgnoreCase)
+               || text.Contains("ローカル", StringComparison.Ordinal);
+    }
 
     private static bool LooksLikeOpenNamed(string text) =>
         (text.Contains("ファイル", StringComparison.Ordinal)

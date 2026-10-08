@@ -18,7 +18,7 @@ namespace SecretBase.Widgets.Calendar;
 /// Today agenda widget. Uses <see cref="CalendarService"/> (provider-agnostic).
 /// Does not own Overlay / HWND logic — hosted inside WidgetFrame only.
 /// </summary>
-public sealed partial class CalendarWidgetView : UserControl
+public sealed partial class CalendarWidgetView : UserControl, IDisposable
 {
     private CalendarWidgetConfiguration _configuration = CalendarWidgetConfiguration.CreateDefault();
     private ITimeProvider _timeProvider = new SystemTimeProvider();
@@ -30,11 +30,14 @@ public sealed partial class CalendarWidgetView : UserControl
     private ThemeDefinition? _theme;
     private int _refreshGate;
     private int _connectGate;
+    private DispatcherTimer? _pollTimer;
+    private bool _disposed;
 
     public CalendarWidgetView()
     {
         InitializeComponent();
-        Loaded += (_, _) => _ = RefreshAgendaAsync();
+        Loaded += OnLoaded;
+        Unloaded += OnUnloaded;
     }
 
     public void Initialize(
@@ -53,10 +56,14 @@ public sealed partial class CalendarWidgetView : UserControl
         _onConfigurationChanged = onConfigurationChanged;
         _cache = cache;
         _integrations = integrations;
+        PrefillAddTime();
         UpdateProviderLabel();
         UpdateConnectVisibility();
         _ = RefreshAgendaAsync();
     }
+
+    /// <summary>Reload today's agenda (e.g. after Base AI writes local events).</summary>
+    public void RequestRefresh() => _ = RefreshAgendaAsync();
 
     public void ApplyTheme(ThemeDefinition theme)
     {
@@ -69,11 +76,87 @@ public sealed partial class CalendarWidgetView : UserControl
         WidgetSurfaceStyle.ApplyGhostButton(RefreshButton, theme);
         WidgetSurfaceStyle.ApplyGhostButton(OpenCalendarButton, theme);
         WidgetSurfaceStyle.ApplyGhostButton(AddEventButton, theme);
+        WidgetSurfaceStyle.ApplyGhostButton(TimeMinusButton, theme);
+        WidgetSurfaceStyle.ApplyGhostButton(TimePlusButton, theme);
         WidgetSurfaceStyle.ApplyActionButton(ConnectButton, theme, accent: true);
         RestyleAgendaItems();
     }
 
+    private void OnLoaded(object sender, RoutedEventArgs e)
+    {
+        PrefillAddTime();
+        EnsurePollTimer();
+        _ = RefreshAgendaAsync();
+    }
+
+    private void OnUnloaded(object sender, RoutedEventArgs e) => StopPollTimer();
+
+    private void EnsurePollTimer()
+    {
+        _pollTimer ??= new DispatcherTimer { Interval = TimeSpan.FromSeconds(20) };
+        _pollTimer.Tick -= PollTimer_Tick;
+        _pollTimer.Tick += PollTimer_Tick;
+        if (!_pollTimer.IsEnabled)
+        {
+            _pollTimer.Start();
+        }
+    }
+
+    private void StopPollTimer()
+    {
+        if (_pollTimer is null)
+        {
+            return;
+        }
+
+        _pollTimer.Stop();
+        _pollTimer.Tick -= PollTimer_Tick;
+    }
+
+    private void PollTimer_Tick(object? sender, object e) => _ = RefreshAgendaAsync();
+
+    private void PrefillAddTime()
+    {
+        if (!string.IsNullOrWhiteSpace(AddTimeBox.Text))
+        {
+            return;
+        }
+
+        var now = _timeProvider.GetLocalNow();
+        AddTimeBox.Text = string.Create(CultureInfo.InvariantCulture, $"{now.Hour:00}:00");
+    }
+
     private void RefreshButton_Click(object sender, RoutedEventArgs e) => _ = RefreshAgendaAsync();
+
+    private void TimeMinusButton_Click(object sender, RoutedEventArgs e) => NudgeAddTime(minutes: -15);
+
+    private void TimePlusButton_Click(object sender, RoutedEventArgs e) => NudgeAddTime(minutes: 15);
+
+    private void NudgeAddTime(int minutes)
+    {
+        var now = _timeProvider.GetLocalNow();
+        var current = ResolveAddTime(now) ?? new TimeOnly(now.Hour, 0);
+        var nudged = current.AddMinutes(minutes);
+        AddTimeBox.Text = string.Create(CultureInfo.InvariantCulture, $"{nudged.Hour:00}:{nudged.Minute:00}");
+        AddTimeBox.Focus(FocusState.Programmatic);
+    }
+
+    private TimeOnly? ResolveAddTime(DateTimeOffset now)
+    {
+        var timeText = AddTimeBox.Text?.Trim() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(timeText))
+        {
+            return new TimeOnly(now.Hour, 0);
+        }
+
+        if (TimeOnly.TryParse(timeText, CultureInfo.InvariantCulture, out var parsed)
+            || TimeOnly.TryParse(timeText, CultureInfo.CurrentCulture, out parsed))
+        {
+            return parsed;
+        }
+
+        return null;
+    }
 
     private void AddEventButton_Click(object sender, RoutedEventArgs e)
     {
@@ -95,29 +178,49 @@ public sealed partial class CalendarWidgetView : UserControl
 
         var now = _timeProvider.GetLocalNow();
         var day = DateOnly.FromDateTime(now.DateTime);
-        var timeText = AddTimeBox.Text?.Trim() ?? string.Empty;
-        DateTimeOffset start;
-        if (string.IsNullOrWhiteSpace(timeText))
-        {
-            start = new DateTimeOffset(day.ToDateTime(new TimeOnly(now.Hour, 0)), now.Offset);
-        }
-        else if (TimeOnly.TryParse(timeText, CultureInfo.InvariantCulture, out var parsed)
-                 || TimeOnly.TryParse(timeText, CultureInfo.CurrentCulture, out parsed))
-        {
-            start = new DateTimeOffset(day.ToDateTime(parsed), now.Offset);
-        }
-        else
+        var time = ResolveAddTime(now);
+        if (time is null)
         {
             StatusLabel.Visibility = Visibility.Visible;
-            StatusLabel.Text = "Use time like 14:00.";
+            StatusLabel.Text = "Use time like 16:00 (or − / +).";
             return;
         }
 
+        var start = new DateTimeOffset(day.ToDateTime(time.Value), now.Offset);
         local.AddEvent(title, start, start.AddHours(1));
         AddTitleBox.Text = string.Empty;
-        AddTimeBox.Text = string.Empty;
+        // Keep the time field editable and advanced by one hour for the next add.
+        var next = time.Value.AddHours(1);
+        AddTimeBox.Text = string.Create(CultureInfo.InvariantCulture, $"{next.Hour:00}:{next.Minute:00}");
         StatusLabel.Visibility = Visibility.Visible;
         StatusLabel.Text = "Added to Secret Base (local). Not pushed to Google.";
+        _ = RefreshAgendaAsync();
+    }
+
+    private void DeleteLocalEvent_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: string eventId } || string.IsNullOrWhiteSpace(eventId))
+        {
+            return;
+        }
+
+        var local = _service?.Providers.OfType<LocalCalendarProvider>().FirstOrDefault();
+        if (local is null)
+        {
+            StatusLabel.Visibility = Visibility.Visible;
+            StatusLabel.Text = "Local calendar is unavailable.";
+            return;
+        }
+
+        if (!local.TryRemoveEvent(eventId, out var removed) || removed is null)
+        {
+            StatusLabel.Visibility = Visibility.Visible;
+            StatusLabel.Text = "Could not remove that local event.";
+            return;
+        }
+
+        StatusLabel.Visibility = Visibility.Visible;
+        StatusLabel.Text = $"Removed local: {removed.Title}";
         _ = RefreshAgendaAsync();
     }
 
@@ -182,7 +285,7 @@ public sealed partial class CalendarWidgetView : UserControl
 
     private async Task RefreshAgendaAsync()
     {
-        if (_service is null)
+        if (_service is null || _disposed)
         {
             return;
         }
@@ -206,7 +309,6 @@ public sealed partial class CalendarWidgetView : UserControl
             }
             catch (Exception ex)
             {
-                // Should be rare — CalendarService already isolates providers.
                 AgendaList.Children.Clear();
                 AgendaList.Children.Add(CreateMutedLine($"Could not load agenda: {ex.Message}"));
                 StatusLabel.Visibility = Visibility.Visible;
@@ -276,7 +378,9 @@ public sealed partial class CalendarWidgetView : UserControl
             else if (!StatusLabel.Text.StartsWith("Showing cached", StringComparison.Ordinal)
                      && !StatusLabel.Text.StartsWith("Connecting", StringComparison.Ordinal)
                      && !StatusLabel.Text.Contains("connected", StringComparison.OrdinalIgnoreCase)
-                     && !StatusLabel.Text.StartsWith("Connect failed", StringComparison.Ordinal))
+                     && !StatusLabel.Text.StartsWith("Connect failed", StringComparison.Ordinal)
+                     && !StatusLabel.Text.StartsWith("Added to Secret Base", StringComparison.Ordinal)
+                     && !StatusLabel.Text.StartsWith("Removed local", StringComparison.Ordinal))
             {
                 StatusLabel.Visibility = Visibility.Collapsed;
                 StatusLabel.Text = string.Empty;
@@ -328,7 +432,6 @@ public sealed partial class CalendarWidgetView : UserControl
             ToolTipService.SetToolTip(OpenCalendarButton, "Open calendar in the browser");
         }
 
-        // Show Connect only when OAuth client is present but disconnected/error.
         ConnectButton.Visibility = needsAuth && !missingClient
             ? Visibility.Visible
             : Visibility.Collapsed;
@@ -424,9 +527,10 @@ public sealed partial class CalendarWidgetView : UserControl
             textPanel.Children.Add(loc);
         }
 
-        var row = new Grid { ColumnSpacing = 10 };
+        var row = new Grid { ColumnSpacing = 8 };
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
         var dot = new Ellipse
         {
@@ -442,6 +546,30 @@ public sealed partial class CalendarWidgetView : UserControl
         Grid.SetColumn(textPanel, 1);
         row.Children.Add(dot);
         row.Children.Add(textPanel);
+
+        var isLocal = string.Equals(ev.Provider, CalendarProviderIds.Local, StringComparison.OrdinalIgnoreCase);
+        if (isLocal)
+        {
+            var delete = new Button
+            {
+                Content = "×",
+                MinWidth = 28,
+                MinHeight = 28,
+                Padding = new Thickness(0),
+                Tag = ev.Id,
+                VerticalAlignment = VerticalAlignment.Top
+            };
+            delete.Click += DeleteLocalEvent_Click;
+            ToolTipService.SetToolTip(delete, "Remove local event (not Google / not disk files)");
+            if (_theme is not null)
+            {
+                WidgetSurfaceStyle.ApplyGhostButton(delete, _theme);
+            }
+
+            Grid.SetColumn(delete, 2);
+            row.Children.Add(delete);
+        }
+
         return row;
     }
 
@@ -502,5 +630,18 @@ public sealed partial class CalendarWidgetView : UserControl
         }
 
         return null;
+    }
+
+    public void Dispose()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _disposed = true;
+        Loaded -= OnLoaded;
+        Unloaded -= OnUnloaded;
+        StopPollTimer();
     }
 }

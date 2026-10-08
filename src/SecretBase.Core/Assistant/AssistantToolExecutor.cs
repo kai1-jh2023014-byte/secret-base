@@ -218,42 +218,112 @@ public sealed class AssistantToolExecutor : IAiToolExecutor
                 activityDomain: AssistantActivityDomains.Calendar);
         }
 
-        if (!AssistantToolArgumentValidator.TryGetString(root, "title", required: true, out var title, out var error))
+        AssistantToolArgumentValidator.TryGetString(root, "destination", required: false, out var destinationRaw, out _);
+        var destination = CalendarEventDestinations.Normalize(destinationRaw);
+
+        var drafts = new List<(string Title, int Hour, int Minute, int Duration)>();
+        if (root.TryGetProperty("events", out var eventsEl) && eventsEl.ValueKind == JsonValueKind.Array)
         {
-            return AssistantToolResult.Fail(error, activityDomain: AssistantActivityDomains.Calendar);
+            foreach (var item in eventsEl.EnumerateArray())
+            {
+                if (item.ValueKind != JsonValueKind.Object)
+                {
+                    continue;
+                }
+
+                if (!AssistantToolArgumentValidator.TryGetString(item, "title", required: true, out var eventTitle, out var eventError)
+                    || string.IsNullOrWhiteSpace(eventTitle))
+                {
+                    return AssistantToolResult.Fail(
+                        eventError.Length > 0 ? eventError : "Each events[] item needs a title.",
+                        activityDomain: AssistantActivityDomains.Calendar);
+                }
+
+                if (!AssistantToolArgumentValidator.TryGetInt(item, "hour", -1, -1, 23, out var eventHour, out eventError))
+                {
+                    return AssistantToolResult.Fail(eventError, activityDomain: AssistantActivityDomains.Calendar);
+                }
+
+                if (!AssistantToolArgumentValidator.TryGetInt(item, "minute", 0, 0, 59, out var eventMinute, out eventError))
+                {
+                    return AssistantToolResult.Fail(eventError, activityDomain: AssistantActivityDomains.Calendar);
+                }
+
+                if (!AssistantToolArgumentValidator.TryGetInt(item, "duration_minutes", 60, 15, 480, out var eventDuration, out eventError))
+                {
+                    return AssistantToolResult.Fail(eventError, activityDomain: AssistantActivityDomains.Calendar);
+                }
+
+                drafts.Add((eventTitle, eventHour, eventMinute, eventDuration));
+            }
         }
 
-        if (!AssistantToolArgumentValidator.TryGetInt(root, "hour", -1, -1, 23, out var hour, out error))
+        if (drafts.Count == 0)
         {
-            return AssistantToolResult.Fail(error, activityDomain: AssistantActivityDomains.Calendar);
+            if (!AssistantToolArgumentValidator.TryGetString(root, "title", required: true, out var title, out var error)
+                || string.IsNullOrWhiteSpace(title))
+            {
+                return AssistantToolResult.Fail(
+                    error.Length > 0 ? error : "Provide title or events[].",
+                    activityDomain: AssistantActivityDomains.Calendar);
+            }
+
+            if (!AssistantToolArgumentValidator.TryGetInt(root, "hour", -1, -1, 23, out var hour, out error))
+            {
+                return AssistantToolResult.Fail(error, activityDomain: AssistantActivityDomains.Calendar);
+            }
+
+            if (!AssistantToolArgumentValidator.TryGetInt(root, "minute", 0, 0, 59, out var minute, out error))
+            {
+                return AssistantToolResult.Fail(error, activityDomain: AssistantActivityDomains.Calendar);
+            }
+
+            if (!AssistantToolArgumentValidator.TryGetInt(root, "duration_minutes", 60, 15, 480, out var duration, out error))
+            {
+                return AssistantToolResult.Fail(error, activityDomain: AssistantActivityDomains.Calendar);
+            }
+
+            drafts.Add((title, hour, minute, duration));
         }
 
-        if (!AssistantToolArgumentValidator.TryGetInt(root, "minute", 0, 0, 59, out var minute, out error))
-        {
-            return AssistantToolResult.Fail(error, activityDomain: AssistantActivityDomains.Calendar);
-        }
-
-        if (!AssistantToolArgumentValidator.TryGetInt(root, "duration_minutes", 60, 15, 480, out var duration, out error))
-        {
-            return AssistantToolResult.Fail(error, activityDomain: AssistantActivityDomains.Calendar);
-        }
-
-        var result = await _calendar
-            .ExecuteAsync(CalendarCommand.AddEvent(title, hour, minute, duration), cancellationToken)
-            .ConfigureAwait(false);
-        if (!result.Succeeded)
+        if (drafts.Count > 12)
         {
             return AssistantToolResult.Fail(
-                result.ErrorMessage ?? AssistantUserMessages.CalendarFailed,
+                "Too many events in one request (max 12).",
                 activityDomain: AssistantActivityDomains.Calendar);
         }
 
-        var created = result.Events.FirstOrDefault();
-        var when = created is null
-            ? title
-            : $"{created.Start:HH:mm} {created.Title}";
+        var created = new List<CalendarEvent>();
+        foreach (var draft in drafts)
+        {
+            var result = await _calendar
+                .ExecuteAsync(
+                    CalendarCommand.AddEvent(
+                        draft.Title,
+                        draft.Hour,
+                        draft.Minute,
+                        draft.Duration,
+                        destination: destination),
+                    cancellationToken)
+                .ConfigureAwait(false);
+            if (!result.Succeeded)
+            {
+                return AssistantToolResult.Fail(
+                    result.ErrorMessage ?? AssistantUserMessages.CalendarFailed,
+                    activityDomain: AssistantActivityDomains.Calendar);
+            }
+
+            created.AddRange(result.Events);
+        }
+
+        var where = destination == CalendarEventDestinations.Google
+            ? "Google Calendar"
+            : "Secret Base local calendar (Today widget)";
+        var summary = created.Count == 0
+            ? drafts[0].Title
+            : string.Join(", ", created.Select(e => $"{e.Start:HH:mm} {e.Title}"));
         return AssistantToolResult.Ok(
-            $"Added to Google Calendar: {when}.",
+            $"Added {created.Count} event(s) to {where}: {summary}.",
             activity: "Calendar ✓",
             activityDomain: AssistantActivityDomains.Calendar);
     }

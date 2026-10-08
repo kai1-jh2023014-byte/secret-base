@@ -6,8 +6,9 @@ namespace SecretBase.Core.Calendar;
 
 /// <summary>
 /// Thin Command boundary over <see cref="CalendarService"/>. Does not replace the Calendar Widget.
-/// AI add-event writes go to Google when a connected writer exists; local create/delete stay in
-/// Secret Base storage. Never OS files, never invented credentials.
+/// AI add-event defaults to the local Today agenda (widget). Google writes require
+/// <see cref="CalendarEventDestinations.Google"/> and a connected writer.
+/// Never OS files, never invented credentials.
 /// </summary>
 public sealed class CalendarCommandService
 {
@@ -126,6 +127,21 @@ public sealed class CalendarCommandService
         {
             start = new DateTimeOffset(day.ToDateTime(new TimeOnly(hour, minute)), now.Offset);
             end = start.AddMinutes(duration);
+        }
+
+        var destination = CalendarEventDestinations.Normalize(command.Destination);
+        if (destination == CalendarEventDestinations.Local)
+        {
+            var local = Local;
+            if (local is null)
+            {
+                return CalendarCommandResult.Fail(
+                    CalendarCommandKind.AddEvent,
+                    "Local calendar is unavailable.");
+            }
+
+            var createdLocal = local.AddEvent(title, start, end, command.IsAllDay);
+            return CalendarCommandResult.Ok(CalendarCommandKind.AddEvent, [createdLocal]);
         }
 
         var google = GoogleWriteProvider;

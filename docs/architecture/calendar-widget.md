@@ -41,7 +41,18 @@ Provider-specific DTOs never enter Core. Core never references Google SDKs.
 ## Google
 
 1. **ICS (zero OAuth):** paste secret iCal URL into Add Calendar dialog.
-2. **API read (OAuth):** place `%LocalAppData%\SecretBase\credentials\google-oauth-client.json`, then **Connect** in the widget. Refresh token → Windows Credential Manager (`SecretBase/Calendar/Google/RefreshToken`). Scope: `calendar.readonly`.
+2. **API read/write (OAuth):** place `%LocalAppData%\SecretBase\credentials\google-oauth-client.json`, then **Connect** in the widget. Refresh token → Windows Credential Manager (`SecretBase/Calendar/Google/RefreshToken`). Scope: `calendar.events`.
+
+## Local Today widget UX
+
+- **Add** writes to Secret Base local storage only (not Google).
+- Time field is editable (`HH:mm`); use **− / +** to nudge by 15 minutes.
+- Local events show **×** to remove (registration only — never deletes Google or disk files).
+- Agenda auto-refreshes about every 20s so Base AI local writes appear without a manual Refresh.
+
+## Base AI → Today widget
+
+`calendar_add_event` defaults to **local** (Today widget). Pass `events:[{title,hour,...}]` for a full day plan in one confirmation. Use `destination=google` only when asking for Google. `calendar_remember_usual` is only for 「いつも」 recurring slots.
 
 ## Security
 

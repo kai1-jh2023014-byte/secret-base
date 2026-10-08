@@ -78,7 +78,9 @@
             <Grid Grid.Row="4" ColumnSpacing="6" Margin="0,4,0,0">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="72" />
+                    <ColumnDefinition Width="88" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <TextBox
@@ -86,17 +88,37 @@
                     Grid.Column="0"
                     PlaceholderText="Add event…"
                     FontSize="12"
-                    MinHeight="32" />
+                    MinHeight="32"
+                    IsReadOnly="False" />
                 <TextBox
                     x:Name="AddTimeBox"
                     Grid.Column="1"
-                    PlaceholderText="14:00"
+                    PlaceholderText="HH:mm"
                     FontSize="12"
                     MinHeight="32"
-                    Margin="0,0,0,0" />
+                    IsReadOnly="False"
+                    ToolTipService.ToolTip="Start time — type like 16:00 or use − / +" />
+                <Button
+                    x:Name="TimeMinusButton"
+                    Grid.Column="2"
+                    Content="−"
+                    MinWidth="32"
+                    MinHeight="32"
+                    Padding="0"
+                    Click="TimeMinusButton_Click"
+                    ToolTipService.ToolTip="15 minutes earlier" />
+                <Button
+                    x:Name="TimePlusButton"
+                    Grid.Column="3"
+                    Content="+"
+                    MinWidth="32"
+                    MinHeight="32"
+                    Padding="0"
+                    Click="TimePlusButton_Click"
+                    ToolTipService.ToolTip="15 minutes later" />
                 <Button
                     x:Name="AddEventButton"
-                    Grid.Column="2"
+                    Grid.Column="4"
                     Content="Add"
                     MinWidth="56"
                     Click="AddEventButton_Click"

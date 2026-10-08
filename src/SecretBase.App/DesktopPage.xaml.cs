@@ -1538,6 +1538,7 @@ public sealed partial class DesktopPage : Page
                 view.ApplyTheme(_theme);
             }
 
+            _widgetDisposables.Add(view);
             return view;
         }
 

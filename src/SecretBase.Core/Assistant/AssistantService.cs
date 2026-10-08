@@ -45,6 +45,10 @@ public sealed class AssistantService : IAssistantService
         + "the Spotify track/album/artist/search page instead. "
         + "Tell the user that page was opened. Do not claim the track is playing inside Secret Base. "
         + "Once Google Calendar is connected, use the Calendar widget; do not send the user to the browser as the primary path. "
+        + "When the user asks to put a schedule into the local calendar / Today widget / 「ウィジェットに反映」, "
+        + "call calendar_add_event with destination=local (default). For a full day plan, pass events[] in one call. "
+        + "Do not use calendar_remember_usual unless the user says 「いつも」 or usual. "
+        + "Use destination=google only when they explicitly ask for Google Calendar. "
         + "Classroom has no API — remember that it opens in the existing Web Widget. "
         + "If a remote AI key is missing, Local AI may still be used. If a tool fails, say so honestly.";
 
