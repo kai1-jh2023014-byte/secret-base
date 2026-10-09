@@ -108,7 +108,9 @@ Session-only (in-memory), capped (`MaxVisibleMessages = 20`). Secrets rejected/s
 |------|------|
 | No API key | `AI API key is not configured.` `Open AI Settings.` (OpenAI and Gemini keys are stored in separate Credential Manager / Keychain slots.) |
 | Provider stub / down | `AI provider is unavailable.` |
-| Timeout | `AI response timed out.` |
+| Timeout | `AI response timed out. Provider: … (id), model: …. No … within 60s. Check network / API key…` (includes provider, model, phase, next steps) |
+| Network | `Could not connect… Provider: …` + connectivity hint |
+| Unavailable | `AI provider is unavailable. Provider: …` + detail when known |
 | Calendar/tool failure | Honest domain message |
 | Cursor launch failed | `Cursor could not be opened.` |
 | Max steps | `Stopped after the maximum number of steps.` |

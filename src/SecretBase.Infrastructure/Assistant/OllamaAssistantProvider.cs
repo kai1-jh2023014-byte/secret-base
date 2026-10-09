@@ -52,18 +52,33 @@ public sealed class OllamaAssistantProvider : IAiProvider
         {
             response = await _http.SendAsync(request, cancellationToken).ConfigureAwait(false);
         }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return AiProviderResponse.Unavailable(
+                AssistantErrorDetail.Timeout(
+                    DisplayName,
+                    ProviderId,
+                    resolvedModel,
+                    AssistantErrorDetail.DefaultHttpTimeoutSeconds,
+                    "HTTP request to local Ollama"));
+        }
         catch (OperationCanceledException)
         {
             throw;
         }
-        catch (HttpRequestException)
+        catch (HttpRequestException ex)
         {
             return AiProviderResponse.Unavailable(
-                "Local AI is not running. Start Ollama or check the endpoint in AI Settings.");
+                AssistantErrorDetail.Network(
+                    DisplayName,
+                    ProviderId,
+                    "Local AI is not running or unreachable. " + ex.Message
+                    + " Start Ollama or check the endpoint in AI Settings."));
         }
-        catch (Exception)
+        catch (Exception ex)
         {
-            return AiProviderResponse.Unavailable(AssistantUserMessages.Unavailable);
+            return AiProviderResponse.Unavailable(
+                AssistantErrorDetail.Unavailable(DisplayName, ProviderId, ex.GetType().Name + ": " + ex.Message));
         }
 
         var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);

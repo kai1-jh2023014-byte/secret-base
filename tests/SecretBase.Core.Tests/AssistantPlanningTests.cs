@@ -69,6 +69,18 @@ public class AssistantPlannerTests
     }
 
     [Fact]
+    public void LooksLikeFocus_AcceptsPomodoroTypos()
+    {
+        var plan = AssistantPlanner.TryBuildFromIntent(
+            AssistantIntentKind.ActionRequest,
+            "ぽもどーとタイマーをつけて",
+            snapshot: null,
+            maxSteps: 5);
+        Assert.NotNull(plan);
+        Assert.Contains(plan!.Steps, s => s.ToolName == AssistantToolNames.FocusStart);
+    }
+
+    [Fact]
     public void BuildsAddSchedulePlan_ForLocalWidgetPhrases()
     {
         var local = AssistantPlanner.TryBuildFromIntent(

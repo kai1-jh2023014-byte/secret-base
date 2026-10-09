@@ -54,7 +54,7 @@ Provider-specific DTOs never enter Core. Core never references Google SDKs.
 
 `calendar_add_event` defaults to **local** (Today widget). Pass `events:[{title,hour,...}]` for a full day plan in one confirmation. Use `destination=google` only when asking for Google. `calendar_remember_usual` is only for 「いつも」 recurring slots.
 
-Japanese timed lists such as `19時勉強、20時食事、22時半ギターをいれて` are parsed **locally** (no remote model round) and go straight to Confirm → Run, so they do not hit `AI response timed out.` when Gemini/OpenAI is slow.
+Japanese timed lists such as `19時勉強、20時食事、22時半ギターをいれて` and colon ranges `22:00から23:00まで英語` are parsed **locally** (no remote model round) and go straight to Confirm → Run. Pomodoro phrases (including typos like `ぽもどーとタイマー`) start the timer locally too. When a remote model still fails, the error names the provider, model, timeout seconds, and what to check.
 
 ## Security
 

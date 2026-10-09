@@ -46,6 +46,23 @@ public class LocalScheduleParserTests
     }
 
     [Fact]
+    public void ParsesColonRangeWithKaraMade()
+    {
+        Assert.True(LocalScheduleParser.TryParse(
+            "22:00から23:00まで、英語 23:30から24:00まで顔トレの予定をローカルカレンダーにいれてください",
+            out var events));
+        Assert.Equal(2, events.Count);
+        Assert.Equal("英語", events[0].Title);
+        Assert.Equal(22, events[0].Hour);
+        Assert.Equal(0, events[0].Minute);
+        Assert.Equal(60, events[0].DurationMinutes);
+        Assert.Equal("顔トレ", events[1].Title);
+        Assert.Equal(23, events[1].Hour);
+        Assert.Equal(30, events[1].Minute);
+        Assert.Equal(30, events[1].DurationMinutes);
+    }
+
+    [Fact]
     public void Planner_MatchesTimedListWithoutYotei()
     {
         var plan = AssistantPlanner.TryBuildFromIntent(

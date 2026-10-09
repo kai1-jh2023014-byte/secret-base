@@ -177,7 +177,7 @@ public sealed class AssistantService : IAssistantService
         _history.Add(new AiMessage { Role = AiMessageRole.User, Content = text });
         TrimHistory();
 
-        // Timed Japanese schedules: confirm locally — do not wait on a remote model (timeout).
+        // Timed schedules: confirm locally — do not wait on a remote model (timeout).
         if (LocalScheduleParser.TryParse(text, out var scheduleEvents)
             && scheduleEvents.Count > 0
             && LocalScheduleParser.LooksLikeScheduleWrite(text))
@@ -185,8 +185,81 @@ public sealed class AssistantService : IAssistantService
             return QueueLocalScheduleConfirmation(scheduleEvents);
         }
 
+        // Pomodoro / focus timer: Safe Auto — run without a remote model round.
+        if (_turnPlan?.Steps.Any(s =>
+                string.Equals(s.ToolName, AssistantToolNames.FocusStart, StringComparison.Ordinal)) == true
+            || AssistantPlannerLooksLikeFocus(text))
+        {
+            return await ExecuteLocalFocusStartAsync(cancellationToken).ConfigureAwait(false);
+        }
+
         await ConsultJevAsync(text, snapshot, cancellationToken).ConfigureAwait(false);
         return await ContinueModelAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    private static bool AssistantPlannerLooksLikeFocus(string text) =>
+        // Keep in sync with AssistantPlanner.LooksLikeFocus via the built plan when possible.
+        text.Contains("ポモ", StringComparison.Ordinal)
+        || text.Contains("ぽも", StringComparison.Ordinal)
+        || text.Contains("pomodoro", StringComparison.OrdinalIgnoreCase)
+        || ((text.Contains("タイマー", StringComparison.Ordinal) || text.Contains("timer", StringComparison.OrdinalIgnoreCase))
+            && (text.Contains("つけて", StringComparison.Ordinal)
+                || text.Contains("付けて", StringComparison.Ordinal)
+                || text.Contains("開始", StringComparison.Ordinal)));
+
+    private async Task<AssistantTurnResult> ExecuteLocalFocusStartAsync(CancellationToken cancellationToken)
+    {
+        _turnPlan ??= new AssistantPlan
+        {
+            Summary = "Pomodoro を開いて開始します。",
+            Steps =
+            [
+                new AssistantPlanStep
+                {
+                    Index = 1,
+                    Title = "Open Pomodoro and start",
+                    Kind = AssistantPlanStepKind.Read,
+                    ToolName = AssistantToolNames.FocusStart
+                }
+            ]
+        };
+
+        var executed = await ExecuteAndRecordAsync(
+                "local-focus-" + Guid.NewGuid().ToString("N")[..12],
+                AssistantToolNames.FocusStart,
+                "{}",
+                cancellationToken)
+            .ConfigureAwait(false);
+        _actionResults.Add(new AssistantActionResult
+        {
+            ToolName = AssistantToolNames.FocusStart,
+            Label = "Start Pomodoro",
+            Succeeded = executed.Succeeded,
+            CanRetry = !executed.Succeeded,
+            Reason = executed.ErrorMessage,
+            Message = executed.Succeeded
+                ? (executed.ContentForModel.Length > 200
+                    ? executed.ContentForModel[..200]
+                    : executed.ContentForModel)
+                : (executed.ErrorMessage ?? AssistantUserMessages.ToolUnavailable)
+        });
+
+        if (!executed.Succeeded)
+        {
+            return Finish(AssistantTurnResult.Fail(
+                executed.ErrorMessage
+                ?? "Could not start Pomodoro. Add the Pomodoro widget (+ catalog) and try again.",
+                intent: _turnIntent,
+                plan: _turnPlan,
+                canRetry: true,
+                retryUserText: LatestUserText()));
+        }
+
+        return FinishFromToolNotes(
+            string.IsNullOrWhiteSpace(executed.ContentForModel)
+                ? "Pomodoro started."
+                : executed.ContentForModel,
+            canRetry: false);
     }
 
     private AssistantTurnResult QueueLocalScheduleConfirmation(IReadOnlyList<LocalScheduleEvent> events)
@@ -397,19 +470,21 @@ public sealed class AssistantService : IAssistantService
 
         var settings = AssistantSettingsMigrator.MigrateToCurrent(_settings());
         var provider = _provider();
-        var model = AssistantProviderSelection.ForRuntime(
+        var runtime = AssistantProviderSelection.ForRuntime(
             settings,
             hasOpenAiKey: string.Equals(provider.ProviderId, AssistantProviderIds.OpenAi, StringComparison.OrdinalIgnoreCase),
-            hasGeminiKey: string.Equals(provider.ProviderId, AssistantProviderIds.Gemini, StringComparison.OrdinalIgnoreCase)).Model;
+            hasGeminiKey: string.Equals(provider.ProviderId, AssistantProviderIds.Gemini, StringComparison.OrdinalIgnoreCase));
+        var model = runtime.Model;
         var maxRounds = Math.Min(MaxToolRounds, Math.Max(1, settings.MaxSteps));
 
         for (var round = 0; round < maxRounds; round++)
         {
             AiProviderResponse response;
+            var followUp = round > 0 && _turnToolNotes.Count > 0;
             try
             {
                 using var modelCall = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-                if (round > 0 && _turnToolNotes.Count > 0)
+                if (followUp)
                 {
                     modelCall.CancelAfter(FollowUpAfterTools);
                 }
@@ -422,12 +497,23 @@ public sealed class AssistantService : IAssistantService
             }
             catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
             {
-                return FinishFromToolNotes(AssistantUserMessages.Timeout, canRetry: true);
+                var timeoutDetail = AssistantErrorDetail.Timeout(
+                    provider.DisplayName,
+                    provider.ProviderId,
+                    model,
+                    followUp ? AssistantErrorDetail.FollowUpTimeoutSeconds : AssistantErrorDetail.DefaultHttpTimeoutSeconds,
+                    followUp ? "follow-up after tools" : "first reply");
+                return FinishFromToolNotes(timeoutDetail, canRetry: true);
             }
             catch (OperationCanceledException)
             {
                 return Finish(AssistantTurnResult.Fail(
-                    AssistantUserMessages.Timeout,
+                    AssistantErrorDetail.Timeout(
+                        provider.DisplayName,
+                        provider.ProviderId,
+                        model,
+                        AssistantErrorDetail.DefaultHttpTimeoutSeconds,
+                        "request cancelled"),
                     intent: _turnIntent,
                     plan: _turnPlan,
                     canRetry: true,
@@ -437,7 +523,7 @@ public sealed class AssistantService : IAssistantService
             if (response.Status == AiProviderStatus.NotConfigured)
             {
                 return Finish(AssistantTurnResult.Fail(
-                    AssistantUserMessages.NotConfigured + " " + AssistantUserMessages.OpenSettings,
+                    AssistantErrorDetail.NotConfigured(provider.DisplayName, provider.ProviderId),
                     needsConfiguration: true,
                     intent: _turnIntent,
                     plan: _turnPlan,
@@ -447,16 +533,35 @@ public sealed class AssistantService : IAssistantService
             if (response.Status is AiProviderStatus.Unavailable or AiProviderStatus.Failed)
             {
                 var detail = string.IsNullOrWhiteSpace(response.ErrorMessage)
-                    ? AssistantUserMessages.Unavailable
+                    ? AssistantErrorDetail.Unavailable(provider.DisplayName, provider.ProviderId)
                     : response.ErrorMessage!;
-                if (detail.Contains("timeout", StringComparison.OrdinalIgnoreCase)
-                    || detail.Contains("timed out", StringComparison.OrdinalIgnoreCase))
+                if (AssistantErrorDetail.IsTimeoutMessage(detail)
+                    && !detail.StartsWith(AssistantUserMessages.Timeout + " Provider:", StringComparison.Ordinal))
                 {
-                    detail = AssistantUserMessages.Timeout;
+                    detail = AssistantErrorDetail.Timeout(
+                        provider.DisplayName,
+                        provider.ProviderId,
+                        model,
+                        followUp
+                            ? AssistantErrorDetail.FollowUpTimeoutSeconds
+                            : AssistantErrorDetail.DefaultHttpTimeoutSeconds,
+                        followUp ? "follow-up after tools" : "first reply");
+                }
+                else if (detail == AssistantUserMessages.NetworkError
+                         || detail.StartsWith(AssistantUserMessages.NetworkError, StringComparison.Ordinal))
+                {
+                    detail = AssistantErrorDetail.Network(provider.DisplayName, provider.ProviderId, detail);
+                }
+                else if (detail == AssistantUserMessages.Unavailable
+                         || (!detail.Contains("Provider:", StringComparison.Ordinal)
+                             && detail.StartsWith(AssistantUserMessages.Unavailable, StringComparison.Ordinal)))
+                {
+                    detail = AssistantErrorDetail.Unavailable(provider.DisplayName, provider.ProviderId, detail);
                 }
 
-                var showSettings = detail == AssistantUserMessages.AuthenticationFailed
-                                   || detail.StartsWith(AssistantUserMessages.NotConfigured, StringComparison.Ordinal);
+                var showSettings = detail.Contains(AssistantUserMessages.AuthenticationFailed, StringComparison.Ordinal)
+                                   || detail.Contains(AssistantUserMessages.NotConfigured, StringComparison.Ordinal)
+                                   || detail.Contains(AssistantUserMessages.OpenSettings, StringComparison.Ordinal);
                 if (_turnToolNotes.Count > 0)
                 {
                     return FinishFromToolNotes(detail, canRetry: true);
@@ -466,10 +571,10 @@ public sealed class AssistantService : IAssistantService
                     detail,
                     intent: _turnIntent,
                     plan: _turnPlan,
-                    canRetry: detail is AssistantUserMessages.Timeout
-                        or AssistantUserMessages.NetworkError
-                        or AssistantUserMessages.Unavailable
-                        or AssistantUserMessages.RateLimitReached,
+                    canRetry: AssistantErrorDetail.IsTimeoutMessage(detail)
+                        || detail.Contains(AssistantUserMessages.NetworkError, StringComparison.Ordinal)
+                        || detail.Contains(AssistantUserMessages.Unavailable, StringComparison.Ordinal)
+                        || detail.Contains(AssistantUserMessages.RateLimitReached, StringComparison.Ordinal),
                     retryUserText: LatestUserText(),
                     showOpenSettingsAction: showSettings));
             }

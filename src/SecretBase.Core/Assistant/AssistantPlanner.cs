@@ -538,24 +538,48 @@ public static class AssistantPlanner
         || (text.Contains("開発", StringComparison.Ordinal)
             && (text.Contains("したい", StringComparison.Ordinal) || text.Contains("続け", StringComparison.Ordinal)));
 
-    private static bool LooksLikeFocus(string text) =>
-        text.Contains("ポモドーロ", StringComparison.Ordinal)
-        || text.Contains("ぽもどーろ", StringComparison.Ordinal)
-        || text.Contains("pomodoro", StringComparison.OrdinalIgnoreCase)
-        || text.Contains("ポモドロ", StringComparison.Ordinal)
-        || ((text.Contains("タイマー", StringComparison.Ordinal) || text.Contains("timer", StringComparison.OrdinalIgnoreCase))
-            && (text.Contains("集中", StringComparison.Ordinal)
-                || text.Contains("focus", StringComparison.OrdinalIgnoreCase)
-                || text.Contains("ポモ", StringComparison.Ordinal)))
-        || ((text.Contains("focus", StringComparison.OrdinalIgnoreCase)
-             || text.Contains("集中", StringComparison.Ordinal))
-            && (text.Contains("開始", StringComparison.Ordinal)
-                || text.Contains("start", StringComparison.OrdinalIgnoreCase)
-                || text.Contains("始めて", StringComparison.Ordinal)
-                || text.Contains("したい", StringComparison.Ordinal)
-                || text.Contains("やりたい", StringComparison.Ordinal)
-                || text.Contains("now", StringComparison.OrdinalIgnoreCase)
-                || text.Contains("今", StringComparison.Ordinal)));
+    private static bool LooksLikeFocus(string text)
+    {
+        // Normalize common hiragana / typo forms (ぽもどーと etc.).
+        var folded = text
+            .Replace("ぽもどーと", "ポモドーロ", StringComparison.Ordinal)
+            .Replace("ぽもどーろ", "ポモドーロ", StringComparison.Ordinal)
+            .Replace("ぽもドーロ", "ポモドーロ", StringComparison.Ordinal)
+            .Replace("ポモドーと", "ポモドーロ", StringComparison.Ordinal)
+            .Replace("ポモドロ", "ポモドーロ", StringComparison.Ordinal);
+
+        if (folded.Contains("ポモドーロ", StringComparison.Ordinal)
+            || folded.Contains("pomodoro", StringComparison.OrdinalIgnoreCase)
+            || folded.Contains("ポモ", StringComparison.Ordinal)
+            || folded.Contains("ぽも", StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        var wantsTimer = folded.Contains("タイマー", StringComparison.Ordinal)
+                         || folded.Contains("timer", StringComparison.OrdinalIgnoreCase);
+        if (wantsTimer
+            && (folded.Contains("つけて", StringComparison.Ordinal)
+                || folded.Contains("付けて", StringComparison.Ordinal)
+                || folded.Contains("開始", StringComparison.Ordinal)
+                || folded.Contains("start", StringComparison.OrdinalIgnoreCase)
+                || folded.Contains("on", StringComparison.OrdinalIgnoreCase)
+                || folded.Contains("集中", StringComparison.Ordinal)
+                || folded.Contains("focus", StringComparison.OrdinalIgnoreCase)))
+        {
+            return true;
+        }
+
+        return (folded.Contains("focus", StringComparison.OrdinalIgnoreCase)
+                || folded.Contains("集中", StringComparison.Ordinal))
+               && (folded.Contains("開始", StringComparison.Ordinal)
+                   || folded.Contains("start", StringComparison.OrdinalIgnoreCase)
+                   || folded.Contains("始めて", StringComparison.Ordinal)
+                   || folded.Contains("したい", StringComparison.Ordinal)
+                   || folded.Contains("やりたい", StringComparison.Ordinal)
+                   || folded.Contains("now", StringComparison.OrdinalIgnoreCase)
+                   || folded.Contains("今", StringComparison.Ordinal));
+    }
 
     private static bool LooksLikeCleanup(string text) =>
         text.Contains("cleanup", StringComparison.OrdinalIgnoreCase)

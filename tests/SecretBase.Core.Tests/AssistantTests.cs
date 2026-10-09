@@ -536,7 +536,9 @@ public class AssistantServiceTests
 
         var result = await service.SendAsync("hello");
         Assert.False(result.Succeeded);
-        Assert.Equal(AssistantUserMessages.Unavailable, result.ErrorMessage);
+        Assert.StartsWith(AssistantUserMessages.Unavailable, result.ErrorMessage);
+        Assert.Contains("Provider:", result.ErrorMessage, StringComparison.Ordinal);
+        Assert.Contains("Gemini", result.ErrorMessage, StringComparison.Ordinal);
         Assert.True(result.CanRetry);
     }
 
@@ -821,7 +823,10 @@ public class AssistantServiceTests
 
         var result = await service.SendAsync("hello");
         Assert.False(result.Succeeded);
-        Assert.Equal(AssistantUserMessages.Timeout, result.ErrorMessage);
+        Assert.StartsWith(AssistantUserMessages.Timeout, result.ErrorMessage);
+        Assert.Contains("Provider:", result.ErrorMessage, StringComparison.Ordinal);
+        Assert.Contains("Gemini", result.ErrorMessage, StringComparison.Ordinal);
+        Assert.Contains("AI Settings", result.ErrorMessage, StringComparison.Ordinal);
         Assert.True(result.CanRetry);
     }
 }

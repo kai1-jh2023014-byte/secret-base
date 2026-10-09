@@ -111,6 +111,15 @@ internal sealed class FallbackAiProvider : IAiProvider
             return primary;
         }
 
+        // Do not stack another full HTTP wait after a remote timeout — surface the
+        // detailed timeout immediately (Local fallback still runs for NotConfigured / other Unavailable).
+        if (AssistantErrorDetail.IsTimeoutMessage(primary.ErrorMessage))
+        {
+            ProviderId = _preferredId;
+            DisplayName = _primary.DisplayName;
+            return primary;
+        }
+
         var local = _factory.CreateForProviderId(AssistantProviderIds.Local, _settings);
         var fallback = await local.ChatAsync(messages, tools, ResolveLocalModel(), cancellationToken)
             .ConfigureAwait(false);
