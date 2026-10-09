@@ -61,6 +61,9 @@ public sealed partial class WidgetFrame : UserControl
 
     public string WidgetType => _instance.Type;
 
+    /// <summary>Hosted widget content (e.g. WebWidgetView). Used for selective dispose.</summary>
+    public UIElement? HostedContent => ContentHost.Child;
+
     /// <summary>
     /// When true, × / drag / resize stay fully hidden until the widget is selected or hovered.
     /// Used by Progress minimal (transparent) mode.
