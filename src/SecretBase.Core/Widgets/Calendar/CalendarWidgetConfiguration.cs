@@ -32,6 +32,12 @@ public sealed class CalendarWidgetConfiguration
     /// <summary>Optional override for OAuth client JSON path (default: AppData credentials file).</summary>
     public string? GoogleOAuthClientConfigPath { get; set; }
 
+    /// <summary>When true, surface a notice when a timed event starts.</summary>
+    public bool NotifyOnEventStart { get; set; } = true;
+
+    /// <summary>Minutes before start to notify (0 = at start). Clamped 0–60 in the UI.</summary>
+    public int NotifyLeadMinutes { get; set; }
+
     public List<CalendarEvent> Events { get; set; } = [];
 
     public static CalendarWidgetConfiguration CreateDefault() => new();
@@ -82,6 +88,19 @@ public sealed class CalendarWidgetConfiguration
             result.GoogleOAuthClientConfigPath = string.IsNullOrWhiteSpace(path) ? null : path.Trim();
         }
 
+        if (configuration.TryGetValue(nameof(NotifyOnEventStart), out var notify) &&
+            (notify.ValueKind is JsonValueKind.True or JsonValueKind.False))
+        {
+            result.NotifyOnEventStart = notify.GetBoolean();
+        }
+
+        if (configuration.TryGetValue(nameof(NotifyLeadMinutes), out var lead) &&
+            lead.ValueKind == JsonValueKind.Number &&
+            lead.TryGetInt32(out var leadMinutes))
+        {
+            result.NotifyLeadMinutes = Math.Clamp(leadMinutes, 0, 60);
+        }
+
         if (configuration.TryGetValue(nameof(Events), out var events) &&
             events.ValueKind == JsonValueKind.Array)
         {
@@ -107,6 +126,8 @@ public sealed class CalendarWidgetConfiguration
             [nameof(IncludeMockProvider)] = JsonSerializer.SerializeToElement(IncludeMockProvider),
             [nameof(EnableGoogleApiProvider)] = JsonSerializer.SerializeToElement(EnableGoogleApiProvider),
             [nameof(GoogleOAuthClientConfigPath)] = JsonSerializer.SerializeToElement(GoogleOAuthClientConfigPath),
+            [nameof(NotifyOnEventStart)] = JsonSerializer.SerializeToElement(NotifyOnEventStart),
+            [nameof(NotifyLeadMinutes)] = JsonSerializer.SerializeToElement(Math.Clamp(NotifyLeadMinutes, 0, 60)),
             [nameof(Events)] = JsonSerializer.SerializeToElement(
                 Events.Select(SerializeEvent).ToList())
         };

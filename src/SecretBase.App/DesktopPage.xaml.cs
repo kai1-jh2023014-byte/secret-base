@@ -1605,7 +1605,8 @@ public sealed partial class DesktopPage : Page
                     PersistLayoutNow();
                 },
                 cache: _calendarCache,
-                integrations: _integrationMemory);
+                integrations: _integrationMemory,
+                onReminder: notice => ShowHostStatus(notice));
             if (_theme is not null)
             {
                 view.ApplyTheme(_theme);
@@ -2531,6 +2532,14 @@ public sealed partial class DesktopPage : Page
             {
                 _upcomingEvents = result.Events.ToList();
                 RefreshTaskbarShelf(forceTodos: false);
+                // Keep open Calendar widgets in sync when AI / other paths write events.
+                foreach (var frame in WidgetCanvas.Children.OfType<WidgetFrame>())
+                {
+                    if (frame.HostedContent is CalendarWidgetView calendar)
+                    {
+                        calendar.RequestRefresh();
+                    }
+                }
             }
         }
         catch (Exception ex)

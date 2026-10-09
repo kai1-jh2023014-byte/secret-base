@@ -143,7 +143,7 @@ public static class DefaultWidgetFactory
             Id = Guid.NewGuid(),
             Type = WidgetTypes.Calendar,
             Position = new WidgetPosition(x ?? 360, y ?? 48),
-            Size = new WidgetSize(width ?? 320, height ?? 360),
+            Size = new WidgetSize(width ?? 400, height ?? 520),
             RoomId = room,
             Configuration = config.ToDictionary()
         };
