@@ -772,32 +772,7 @@ public sealed partial class DesktopPage : Page
 
         foreach (var instance in _layout.Widgets)
         {
-            instance.Size.Clamp(_theme.WidgetMinWidth, _theme.WidgetMinHeight);
-            var content = CreateWidgetContent(instance);
-            if (content is null)
-            {
-                _logger?.Warn("widget", $"Unsupported widget type '{instance.Type}' — skipped.");
-                continue;
-            }
-
-            var frame = new WidgetFrame(
-                instance,
-                content,
-                _theme,
-                onLayoutCommitted: CommitUserGeometryEdit,
-                onBoundsChanged: SyncInteractiveInputRegions,
-                onRemoveRequested: RemoveWidget,
-                onSelectionRequested: SelectWidgetFrame);
-            if (instance.Type == WidgetTypes.Progress
-                && ProgressWidgetConfiguration.FromDictionary(instance.Configuration).IsMinimal)
-            {
-                frame.QuietChrome = true;
-            }
-
-            Canvas.SetLeft(frame, instance.Position.X);
-            Canvas.SetTop(frame, instance.Position.Y);
-            frame.Loaded += (_, _) => SyncInteractiveInputRegions();
-            WidgetCanvas.Children.Add(frame);
+            MountWidgetInstance(instance);
         }
     }
 
@@ -810,25 +785,123 @@ public sealed partial class DesktopPage : Page
 
         foreach (var block in _layout.Blocks)
         {
-            block.ClampSize();
-            var frame = new BlockFrame(
-                block,
-                _theme,
-                _launcher,
-                _icons,
-                _intake,
-                onLayoutCommitted: CommitUserGeometryEdit,
-                onDeleteRequested: DeleteBlock,
-                onBoundsChanged: SyncInteractiveInputRegions,
-                onStatus: ShowHostStatus,
-                customIcons: _customIcons,
-                pathPicker: _pathPicker,
-                dialogInput: _dialogInput);
-            Canvas.SetLeft(frame, block.Position.X);
-            Canvas.SetTop(frame, block.Position.Y);
-            frame.Loaded += (_, _) => SyncInteractiveInputRegions();
-            WidgetCanvas.Children.Add(frame);
+            MountBlockInstance(block);
         }
+    }
+
+    /// <summary>
+    /// Adds one widget frame without wiping the canvas — keeps existing WebView2 sessions alive.
+    /// </summary>
+    private bool MountWidgetInstance(WidgetInstance instance)
+    {
+        if (_theme is null)
+        {
+            return false;
+        }
+
+        if (WidgetCanvas.Children.OfType<WidgetFrame>().Any(f => f.WidgetId == instance.Id))
+        {
+            return false;
+        }
+
+        instance.Size.Clamp(_theme.WidgetMinWidth, _theme.WidgetMinHeight);
+        var content = CreateWidgetContent(instance);
+        if (content is null)
+        {
+            _logger?.Warn("widget", $"Unsupported widget type '{instance.Type}' — skipped.");
+            return false;
+        }
+
+        var frame = new WidgetFrame(
+            instance,
+            content,
+            _theme,
+            onLayoutCommitted: CommitUserGeometryEdit,
+            onBoundsChanged: SyncInteractiveInputRegions,
+            onRemoveRequested: RemoveWidget,
+            onSelectionRequested: SelectWidgetFrame);
+        if (instance.Type == WidgetTypes.Progress
+            && ProgressWidgetConfiguration.FromDictionary(instance.Configuration).IsMinimal)
+        {
+            frame.QuietChrome = true;
+        }
+
+        Canvas.SetLeft(frame, instance.Position.X);
+        Canvas.SetTop(frame, instance.Position.Y);
+        frame.Loaded += (_, _) => SyncInteractiveInputRegions();
+        WidgetCanvas.Children.Add(frame);
+        return true;
+    }
+
+    /// <summary>Removes one widget frame and disposes only its content (e.g. WebView2).</summary>
+    private bool UnmountWidgetInstance(Guid widgetId)
+    {
+        var frame = WidgetCanvas.Children.OfType<WidgetFrame>()
+            .FirstOrDefault(f => f.WidgetId == widgetId);
+        if (frame is null)
+        {
+            return false;
+        }
+
+        if (_selectedWidgetFrame == frame)
+        {
+            _selectedWidgetFrame = null;
+        }
+
+        if (frame.HostedContent is IDisposable disposable)
+        {
+            disposable.Dispose();
+            _widgetDisposables.Remove(disposable);
+        }
+
+        WidgetCanvas.Children.Remove(frame);
+        return true;
+    }
+
+    private bool MountBlockInstance(Block block)
+    {
+        if (_theme is null || _launcher is null || _icons is null || _intake is null)
+        {
+            return false;
+        }
+
+        if (WidgetCanvas.Children.OfType<BlockFrame>().Any(f => f.BlockId == block.Id))
+        {
+            return false;
+        }
+
+        block.ClampSize();
+        var frame = new BlockFrame(
+            block,
+            _theme,
+            _launcher,
+            _icons,
+            _intake,
+            onLayoutCommitted: CommitUserGeometryEdit,
+            onDeleteRequested: DeleteBlock,
+            onBoundsChanged: SyncInteractiveInputRegions,
+            onStatus: ShowHostStatus,
+            customIcons: _customIcons,
+            pathPicker: _pathPicker,
+            dialogInput: _dialogInput);
+        Canvas.SetLeft(frame, block.Position.X);
+        Canvas.SetTop(frame, block.Position.Y);
+        frame.Loaded += (_, _) => SyncInteractiveInputRegions();
+        WidgetCanvas.Children.Add(frame);
+        return true;
+    }
+
+    private bool UnmountBlockInstance(Guid blockId)
+    {
+        var frame = WidgetCanvas.Children.OfType<BlockFrame>()
+            .FirstOrDefault(f => f.BlockId == blockId);
+        if (frame is null)
+        {
+            return false;
+        }
+
+        WidgetCanvas.Children.Remove(frame);
+        return true;
     }
 
     private void SyncInteractiveInputRegions()
@@ -2276,7 +2349,8 @@ public sealed partial class DesktopPage : Page
             y: 96 + cascade);
         _layout.Widgets.Add(widget);
         PersistLayoutNow();
-        RenderDesktopObjects();
+        MountWidgetInstance(widget);
+        BringWidgetTypeToFront(WidgetTypes.Web);
         ShowHostStatus($"Added {label}.");
         SyncInteractiveInputRegions();
         RefreshDebugStatus();
@@ -2331,7 +2405,8 @@ public sealed partial class DesktopPage : Page
 
         _layout.Widgets.Add(widget);
         PersistLayoutNow();
-        RenderDesktopObjects();
+        // Incremental mount — do not RenderDesktopObjects (would reload every WebView2).
+        MountWidgetInstance(widget);
         BringWidgetTypeToFront(type);
         ShowHostStatus($"Added {type} widget.");
         SyncInteractiveInputRegions();
@@ -2349,8 +2424,11 @@ public sealed partial class DesktopPage : Page
 
         _layout.Widgets.RemoveAll(w => w.Id == instance.Id);
         PersistLayoutNow();
-        RenderDesktopObjects();
+        // Incremental unmount — surviving Web widgets keep their session.
+        UnmountWidgetInstance(instance.Id);
         ShowHostStatus($"Removed widget ({instance.Type}).");
+        SyncInteractiveInputRegions();
+        RefreshDebugStatus();
         _logger?.Info("widget", $"Removed widget {instance.Type} ({instance.Id}).");
     }
 
@@ -2697,7 +2775,8 @@ public sealed partial class DesktopPage : Page
 
         _layout.Blocks.Add(block);
         PersistLayoutNow();
-        RenderDesktopObjects();
+        MountBlockInstance(block);
+        SyncInteractiveInputRegions();
         RefreshDebugStatus();
         _logger?.Info("block", $"Created Block '{block.Name}' ({block.Id}).");
     }
@@ -3119,7 +3198,11 @@ public sealed partial class DesktopPage : Page
             if (failed > 0)
             {
                 PersistLayoutNow();
-                RenderDesktopObjects();
+                // Block kept — refresh only this frame if needed via full rebuild of blocks only
+                // would still kill WebViews; leave canvas as-is and re-mount this block.
+                UnmountBlockInstance(block.Id);
+                MountBlockInstance(block);
+                SyncInteractiveInputRegions();
                 RefreshDebugStatus();
                 ShowHostStatus("Some items could not be returned to the Desktop. The Block was kept.");
                 return;
@@ -3140,7 +3223,8 @@ public sealed partial class DesktopPage : Page
 
         _layout.Blocks.RemoveAll(b => b.Id == block.Id);
         PersistLayoutNow();
-        RenderDesktopObjects();
+        UnmountBlockInstance(block.Id);
+        SyncInteractiveInputRegions();
         RefreshDebugStatus();
         _logger?.Info("block", $"Deleted Block '{block.Name}' ({block.Id}).");
     }

@@ -58,7 +58,7 @@ Do not merge these widgets. Humans and the assistant share the same Command serv
 
 - First-run seeds Clock + Text only (more via **Add Widget** catalog / shortcuts)
 - `schemaVersion` **2** (Blocks); widget types additive; Creative items in `creative/workspace.json`; Projects in `creative/projects.json`; My Apps in `apps/apps.json`
-- WidgetFrame: move / resize / **remove (×)**; WebView2 disposed on unload/re-render
+- WidgetFrame: move / resize / **remove (×)**; WebView2 disposed on unload; add/remove uses incremental canvas mount so other Web widgets do not reload
 - Classroom catalog item is a **Web preset**, not a new widget type
 
 ## Security
