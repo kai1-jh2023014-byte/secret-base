@@ -7,6 +7,7 @@ using SecretBase.Core.Widgets.Clock;
 using SecretBase.Core.Widgets.Creative;
 using SecretBase.Core.Widgets.Music;
 using SecretBase.Core.Widgets.Pomodoro;
+using SecretBase.Core.Widgets.Progress;
 using SecretBase.Core.Widgets.Text;
 using SecretBase.Core.Widgets.Web;
 using SecretBase.Core.Widgets.Workspace;
@@ -142,7 +143,7 @@ public static class DefaultWidgetFactory
             Id = Guid.NewGuid(),
             Type = WidgetTypes.Calendar,
             Position = new WidgetPosition(x ?? 360, y ?? 48),
-            Size = new WidgetSize(width ?? 320, height ?? 360),
+            Size = new WidgetSize(width ?? 400, height ?? 520),
             RoomId = room,
             Configuration = config.ToDictionary()
         };
@@ -307,6 +308,30 @@ public static class DefaultWidgetFactory
             Type = WidgetTypes.Pomodoro,
             Position = new WidgetPosition(x ?? 420, y ?? 120),
             Size = new WidgetSize(width ?? 300, height ?? 320),
+            RoomId = room,
+            Configuration = config.ToDictionary()
+        };
+    }
+
+    /// <summary>
+    /// Creates a Progress / Genesis widget. Not seeded into default layout — add via catalog.
+    /// </summary>
+    public static WidgetInstance CreateProgress(
+        RoomId? roomId = null,
+        double? x = null,
+        double? y = null,
+        double? width = null,
+        double? height = null,
+        ProgressWidgetConfiguration? configuration = null)
+    {
+        var room = roomId ?? RoomId.DefaultRoomId;
+        var config = configuration ?? ProgressWidgetConfiguration.CreateDefault();
+        return new WidgetInstance
+        {
+            Id = Guid.NewGuid(),
+            Type = WidgetTypes.Progress,
+            Position = new WidgetPosition(x ?? 460, y ?? 160),
+            Size = new WidgetSize(width ?? 320, height ?? 300),
             RoomId = room,
             Configuration = config.ToDictionary()
         };

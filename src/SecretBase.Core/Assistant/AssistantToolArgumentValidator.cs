@@ -5,7 +5,7 @@ namespace SecretBase.Core.Assistant;
 /// <summary>Validates tool JSON arguments. Rejects paths, schemes, and unknown tools.</summary>
 public static class AssistantToolArgumentValidator
 {
-    public const int MaxJsonLength = 2000;
+    public const int MaxJsonLength = 4000;
     public const int MaxStringLength = 200;
 
     public static bool TryParseObject(string? json, out JsonElement root, out string error)

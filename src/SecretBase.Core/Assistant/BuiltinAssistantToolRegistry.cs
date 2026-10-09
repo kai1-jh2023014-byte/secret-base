@@ -43,21 +43,24 @@ public sealed class BuiltinAssistantToolRegistry : IAiToolRegistry
         {
             Name = AssistantToolNames.CalendarAddEvent,
             Description =
-                "Add a calendar event for today (title + time) to Google Calendar. Requires Google to be connected in the Calendar widget. Requires confirmation.",
+                "Add one or more events to today's Secret Base calendar (the Today widget). "
+                + "Default destination is local. Use destination=google only when the user asks for Google Calendar. "
+                + "For a full day plan, pass events:[{title,hour,minute,duration_minutes},...] in one call. "
+                + "Do NOT use calendar_remember_usual for a one-off day plan. Requires confirmation.",
             Parameters =
             [
                 new AssistantToolParameter
                 {
                     Name = "title",
                     Type = "string",
-                    Description = "Event title. Not a file path.",
-                    Required = true
+                    Description = "Single event title when not using events[]. Not a file path.",
+                    Required = false
                 },
                 new AssistantToolParameter
                 {
                     Name = "hour",
                     Type = "integer",
-                    Description = "Start hour 0-23. Default is the current hour.",
+                    Description = "Start hour 0-23 for a single event. Default is the current hour.",
                     Required = false
                 },
                 new AssistantToolParameter
@@ -73,6 +76,21 @@ public sealed class BuiltinAssistantToolRegistry : IAiToolRegistry
                     Type = "integer",
                     Description = "Length in minutes, 15-480. Default 60.",
                     Required = false
+                },
+                new AssistantToolParameter
+                {
+                    Name = "destination",
+                    Type = "string",
+                    Description = "local (default, Today widget) or google (requires Connect).",
+                    Required = false
+                },
+                new AssistantToolParameter
+                {
+                    Name = "events",
+                    Type = "array",
+                    Description =
+                        "Optional list of {title,hour,minute?,duration_minutes?} for multiple today's events in one confirmation.",
+                    Required = false
                 }
             ],
             RiskLevel = ActionPrivilege.SafeAction,
@@ -82,7 +100,8 @@ public sealed class BuiltinAssistantToolRegistry : IAiToolRegistry
         {
             Name = AssistantToolNames.CalendarRememberUsual,
             Description =
-                "Remember a usual local schedule slot (title + time) for later apply. Requires confirmation.",
+                "Remember a recurring usual local schedule slot for later apply with calendar_apply_usual. "
+                + "Only when the user says 「いつも」/usual — not for a one-off day plan. Requires confirmation.",
             Parameters =
             [
                 new AssistantToolParameter
@@ -249,15 +268,23 @@ public sealed class BuiltinAssistantToolRegistry : IAiToolRegistry
         {
             Name = AssistantToolNames.AppsOpen,
             Description =
-                "Launch a registered My App by app_id from apps_list. Never runs free-form commands. Requires confirmation.",
+                "Launch a registered My App / allowlisted Block / known target. Pass app_id from apps_list, "
+                + "or name when the user says open 「〇〇のアプリ」. Never runs free-form shell. Requires confirmation.",
             Parameters =
             [
                 new AssistantToolParameter
                 {
                     Name = "app_id",
                     Type = "string",
-                    Description = "Registered My Apps id.",
-                    Required = true
+                    Description = "Registered My Apps id. Optional when name is set.",
+                    Required = false
+                },
+                new AssistantToolParameter
+                {
+                    Name = "name",
+                    Type = "string",
+                    Description = "Display name of a My App, Block item, or known registered target (not a path).",
+                    Required = false
                 }
             ],
             RiskLevel = ActionPrivilege.SafeAction,
@@ -293,7 +320,8 @@ public sealed class BuiltinAssistantToolRegistry : IAiToolRegistry
         {
             Name = AssistantToolNames.MusicPlay,
             Description =
-                "Play or change the current song. Pass query (song or artist) or track_id from music_search. If Spotify's catalog API cannot play it, this opens the Spotify search page. Requires confirmation.",
+                "Play or open music. Pass query (song, artist, album, or 「〇〇の音楽」) or track_id from music_search. "
+                + "If Spotify Premium playback APIs fail or are unavailable, opens the track/album/artist/search page in Spotify instead. Requires confirmation.",
             Parameters =
             [
                 new AssistantToolParameter
@@ -456,6 +484,41 @@ public sealed class BuiltinAssistantToolRegistry : IAiToolRegistry
                     Name = "label",
                     Type = "string",
                     Description = "Optional label such as Pomodoro.",
+                    Required = false
+                }
+            ],
+            RiskLevel = ActionPrivilege.Observation,
+            Capability = AssistantToolCapability.SafeAuto
+        },
+        new()
+        {
+            Name = AssistantToolNames.CodingEnvironmentSetup,
+            Description =
+                "Composite Safe Auto for a programming / coding environment: prepare Workspace, "
+                + "start Pomodoro, surface Creative Projects + Pomodoro + Workspace widgets, and arrange the desktop. "
+                + "Use when the user asks to open a coding / programming / development environment "
+                + "(プログラミング環境・開発環境・coding environment). Does not launch OS apps.",
+            Parameters =
+            [
+                new AssistantToolParameter
+                {
+                    Name = "intent",
+                    Type = "string",
+                    Description = "Optional focus such as Secret Base development. Not a file path.",
+                    Required = false
+                },
+                new AssistantToolParameter
+                {
+                    Name = "minutes",
+                    Type = "integer",
+                    Description = "Pomodoro focus minutes 5-120. Default 25.",
+                    Required = false
+                },
+                new AssistantToolParameter
+                {
+                    Name = "break_minutes",
+                    Type = "integer",
+                    Description = "Short break minutes 1-60. Default 5.",
                     Required = false
                 }
             ],

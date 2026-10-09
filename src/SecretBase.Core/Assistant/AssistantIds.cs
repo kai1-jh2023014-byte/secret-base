@@ -45,6 +45,7 @@ public static class AssistantToolNames
     public const string TodoList = "todo_list";
     public const string TodoAdd = "todo_add";
     public const string FocusStart = "focus_start";
+    public const string CodingEnvironmentSetup = "coding_environment_setup";
     public const string FilesSuggestCleanup = "files_suggest_cleanup";
 }
 

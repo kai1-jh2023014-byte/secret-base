@@ -10,7 +10,7 @@
 
     <!--
       Widgets + Blocks desktop layer.
-      + Add Widget · Block · Theme · Arrange · Setup (white silhouette icons).
+      + Add Widget · Block · Theme · Setup (white silhouette icons).
       Debug chrome: Ctrl+Shift+D. Safe Exit: Ctrl+Shift+Q.
     -->
     <Grid x:Name="RootGrid" Background="Transparent">
@@ -78,11 +78,12 @@
                 TextWrapping="WrapWholeWords"
                 MaxWidth="360"
                 Visibility="Collapsed" />
-            <!-- Floating glass control strip — white silhouette icons, no text labels. -->
+            <!-- Floating glass control strip — hugs the four FABs (no Arrange). -->
             <Border
                 x:Name="ControlStripShell"
-                Padding="10,6"
-                CornerRadius="22"
+                HorizontalAlignment="Left"
+                Padding="8,5"
+                CornerRadius="20"
                 BorderThickness="1"
                 BorderBrush="#33FFFFFF"
                 Background="#66151A24">
@@ -116,16 +117,6 @@
                         Click="ThemeButton_Click"
                         ToolTipService.ToolTip="Theme (Ctrl+Shift+T)">
                         <SymbolIcon Symbol="Font" />
-                    </Button>
-                    <Button
-                        x:Name="ArrangeFab"
-                        Width="34"
-                        Height="34"
-                        Padding="0"
-                        CornerRadius="17"
-                        Click="ArrangeButton_Click"
-                        ToolTipService.ToolTip="Arrange widgets &amp; blocks evenly">
-                        <SymbolIcon Symbol="ViewAll" />
                     </Button>
                     <Button
                         x:Name="SetupFab"
@@ -164,12 +155,6 @@
                     Click="ThemeButton_Click"
                     Padding="12,4"
                     ToolTipService.ToolTip="Edit colors &amp; design" />
-                <Button
-                    x:Name="ArrangeButton"
-                    Content="Arrange"
-                    Click="ArrangeButton_Click"
-                    Padding="12,4"
-                    ToolTipService.ToolTip="Arrange widgets &amp; blocks evenly" />
                 <Button
                     x:Name="AddWidgetButton"
                     Content="Add Widget"

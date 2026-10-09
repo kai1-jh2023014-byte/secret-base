@@ -2,12 +2,16 @@ namespace SecretBase.Platform.Abstractions;
 
 /// <summary>
 /// Intakes a user-dropped file into a Block. Prefer <b>moving</b> Desktop files
-/// (shortcuts and Desktop .exe) into Secret Base storage so the Desktop original is hidden.
-/// Program Files / Applications stay as path references (never relocated). Restore returns hidden items.
+/// into that Block's folder under Secret Base storage (original names kept).
+/// Program Files / Applications stay as path references (never relocated).
 /// </summary>
 public interface IBlockItemIntakeService
 {
-    BlockItemIntakeResult TryIntake(string sourceAbsolutePath, Guid blockId, Guid itemId);
+    BlockItemIntakeResult TryIntake(
+        string sourceAbsolutePath,
+        Guid blockId,
+        Guid itemId,
+        string? blockDisplayName = null);
 
     /// <summary>
     /// Returns a previously hidden Desktop item. Never deletes the file if restore fails.
@@ -17,6 +21,9 @@ public interface IBlockItemIntakeService
         string? desktopOriginPath,
         out string restoredPath,
         out string? errorMessage);
+
+    /// <summary>Absolute path of the per-Block storage folder (created if needed).</summary>
+    string EnsureBlockFolder(Guid blockId, string? blockDisplayName);
 }
 
 public sealed record BlockItemIntakeResult(

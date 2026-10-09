@@ -9,8 +9,8 @@ public readonly record struct DesktopRelocationResult(
     string? DesktopOriginPath = null);
 
 /// <summary>
-/// Moves Desktop items into Secret Base storage and back. Uses <see cref="File.Move"/> only —
-/// never deletes user files, never touches Program Files / Applications.
+/// Moves Desktop items into a per-Block folder under Secret Base storage and back.
+/// Uses <see cref="File.Move"/> only — never deletes user files, never touches Program Files / Applications.
 /// </summary>
 public static class DesktopItemRelocator
 {
@@ -20,8 +20,10 @@ public static class DesktopItemRelocator
         Guid itemId,
         string storageRoot,
         IReadOnlyList<string> desktopRoots,
-        IReadOnlyList<string> protectedRoots)
+        IReadOnlyList<string> protectedRoots,
+        string? blockDisplayName = null)
     {
+        _ = itemId; // retained for API stability / logging callers
         if (string.IsNullOrWhiteSpace(sourceAbsolutePath) || !HostPath.IsAbsolute(sourceAbsolutePath))
         {
             return new DesktopRelocationResult(false, string.Empty, false, "Source path is invalid.");
@@ -47,17 +49,14 @@ public static class DesktopItemRelocator
 
         try
         {
-            Directory.CreateDirectory(storageRoot);
-            var destDir = Path.Combine(storageRoot, blockId.ToString("N"));
-            Directory.CreateDirectory(destDir);
-            var ext = HostPath.GetExtension(source);
-            var destName = itemId.ToString("N") + (string.IsNullOrEmpty(ext) ? string.Empty : ext);
-            var dest = Path.Combine(destDir, destName);
-            if (File.Exists(dest))
+            var destDir = BlockItemStorage.EnsureBlockDirectory(storageRoot, blockId, blockDisplayName);
+            var originalName = Path.GetFileName(source);
+            if (string.IsNullOrWhiteSpace(originalName))
             {
-                File.Delete(dest);
+                originalName = blockId.ToString("N");
             }
 
+            var dest = UniqueDestination(Path.Combine(destDir, originalName));
             File.Move(source, dest);
             return new DesktopRelocationResult(
                 true,
@@ -120,7 +119,7 @@ public static class DesktopItemRelocator
         }
     }
 
-    private static string UniqueDestination(string dest)
+    public static string UniqueDestination(string dest)
     {
         if (!File.Exists(dest) && !Directory.Exists(dest))
         {

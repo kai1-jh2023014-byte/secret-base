@@ -68,9 +68,16 @@ public sealed class AssistantToolResult
 
     /// <summary>
     /// When set, the desktop host should ensure this widget type is on the layout
-    /// (add if missing). Safe Auto UI surfacing — never an OS launch.
+    /// (add if missing). Comma-separated types are allowed. Safe Auto UI surfacing —
+    /// never an OS launch.
     /// </summary>
     public string? EnsureWidgetType { get; init; }
+
+    /// <summary>
+    /// When true, the desktop host may run its even-arrange layout after ensuring widgets.
+    /// Safe Auto only — never launches OS processes.
+    /// </summary>
+    public bool ShouldArrangeDesktop { get; init; }
 
     public static AssistantToolResult Ok(
         string contentForModel,
@@ -81,7 +88,8 @@ public sealed class AssistantToolResult
         bool launchIsExternalLink = false,
         bool shouldOpenCursorAtFolder = false,
         string? cursorFolderPath = null,
-        string? ensureWidgetType = null) =>
+        string? ensureWidgetType = null,
+        bool shouldArrangeDesktop = false) =>
         new()
         {
             Succeeded = true,
@@ -93,7 +101,8 @@ public sealed class AssistantToolResult
             LaunchIsExternalLink = launchIsExternalLink,
             ShouldOpenCursorAtFolder = shouldOpenCursorAtFolder,
             CursorFolderPath = cursorFolderPath,
-            EnsureWidgetType = ensureWidgetType
+            EnsureWidgetType = ensureWidgetType,
+            ShouldArrangeDesktop = shouldArrangeDesktop
         };
 
     public static AssistantToolResult Fail(string error, string? activity = null, string? activityDomain = null) =>

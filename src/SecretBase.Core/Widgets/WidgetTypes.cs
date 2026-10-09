@@ -34,4 +34,7 @@ public static class WidgetTypes
 
     /// <summary>Pomodoro / focus timer. Reuses <c>FocusSessionStore</c>.</summary>
     public const string Pomodoro = "pomodoro";
+
+    /// <summary>Progress + Genesis advancement (local JSON / optional HTTP).</summary>
+    public const string Progress = "progress";
 }

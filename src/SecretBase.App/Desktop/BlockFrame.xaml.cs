@@ -43,9 +43,9 @@ public sealed partial class BlockFrame : UserControl
     private BlockItem? _activeItem;
     private FrameworkElement? _activeTile;
     private Button StyleButton = null!;
-    private bool _itemDragging;
+    private readonly BlockItemPointerGesture _itemGesture = new();
+    private readonly TargetLaunchCoalescer _launchCoalescer = new();
     private Point _itemLastPoint;
-    private Point _itemPressPoint;
     private BlockItemTileMetrics _tileMetrics = BlockItemTileMetrics.ForGrid(showLabels: true);
 
     public BlockFrame(
@@ -264,6 +264,15 @@ public sealed partial class BlockFrame : UserControl
             _tileMetrics = IsRail
                 ? BlockItemTileMetrics.ForRail()
                 : BlockItemTileMetrics.ForGrid(_block.ShowLabels);
+        }
+
+        // Clearing tiles raises PointerCaptureLost on any captured item. Cancel the
+        // gesture first so that teardown cannot be mistaken for a click-to-launch.
+        if (_itemGesture.IsActive)
+        {
+            _itemGesture.Cancel();
+            _activeTile = null;
+            _activeItem = null;
         }
 
         ItemCanvas.Children.Clear();
@@ -494,9 +503,9 @@ public sealed partial class BlockFrame : UserControl
 
         _activeTile = tile;
         _activeItem = item;
-        _itemDragging = false;
-        _itemPressPoint = e.GetCurrentPoint(ItemCanvas).Position;
-        _itemLastPoint = _itemPressPoint;
+        var press = e.GetCurrentPoint(ItemCanvas).Position;
+        _itemLastPoint = press;
+        _itemGesture.Begin(item.Id, press.X, press.Y);
         if (tile is Border border)
         {
             SetTileHighlight(border, active: true);
@@ -514,16 +523,10 @@ public sealed partial class BlockFrame : UserControl
         }
 
         var point = e.GetCurrentPoint(ItemCanvas).Position;
-        if (!_itemDragging)
+        _itemGesture.TryMarkDragging(point.X, point.Y);
+        if (!_itemGesture.IsDragging)
         {
-            var dx = point.X - _itemPressPoint.X;
-            var dy = point.Y - _itemPressPoint.Y;
-            if ((dx * dx) + (dy * dy) < 25)
-            {
-                return;
-            }
-
-            _itemDragging = true;
+            return;
         }
 
         var moveX = point.X - _itemLastPoint.X;
@@ -552,23 +555,33 @@ public sealed partial class BlockFrame : UserControl
         }
 
         var item = _activeItem;
-        var dragged = _itemDragging;
         var tile = _activeTile;
+
+        // Clear gesture state BEFORE ReleasePointerCapture so the synchronous
+        // PointerCaptureLost that follows is ignored. EndDrag/EndResize already
+        // do this; the old order launched once from CaptureLost and again from
+        // PointerReleased — .bat/.cmd looked like "pressed 4 times".
+        var end = _itemGesture.TryEnd();
+        _activeTile = null;
+        _activeItem = null;
+
         if (!captureLost && sender is UIElement el)
         {
             el.ReleasePointerCapture(e.Pointer);
         }
-
-        _activeTile = null;
-        _activeItem = null;
-        _itemDragging = false;
 
         if (tile is Border border)
         {
             SetTileHighlight(border, active: false);
         }
 
-        if (dragged)
+        if (end.Kind == BlockItemPointerEndKind.Ignored)
+        {
+            e.Handled = true;
+            return;
+        }
+
+        if (end.Kind == BlockItemPointerEndKind.CommitDrag)
         {
             _onLayoutCommitted();
             _onBoundsChanged?.Invoke();
@@ -583,6 +596,11 @@ public sealed partial class BlockFrame : UserControl
 
     private void LaunchItem(BlockItem item)
     {
+        if (!_launchCoalescer.TryAdmit(item.Target, DateTimeOffset.UtcNow))
+        {
+            return;
+        }
+
         var result = _launcher.TryLaunch(new TargetLaunchRequest(
             Target: item.Target,
             ItemType: item.Type.ToString(),
@@ -942,13 +960,31 @@ public sealed partial class BlockFrame : UserControl
         };
         labelsItem.Click += (_, _) => ApplyShowLabels(!_block.ShowLabels);
 
+        var openFolderItem = new MenuFlyoutItem { Text = "Open Block folder" };
+        openFolderItem.Click += (_, _) => OpenBlockFolder();
+
         flyout.Items.Add(colorItem);
         flyout.Items.Add(whiteItem);
         flyout.Items.Add(new MenuFlyoutSeparator());
         flyout.Items.Add(gridItem);
         flyout.Items.Add(railItem);
         flyout.Items.Add(labelsItem);
+        flyout.Items.Add(new MenuFlyoutSeparator());
+        flyout.Items.Add(openFolderItem);
         flyout.ShowAt(StyleButton);
+    }
+
+    private void OpenBlockFolder()
+    {
+        var folder = _intake.EnsureBlockFolder(_block.Id, _block.Name);
+        var result = _launcher.TryLaunch(new TargetLaunchRequest(
+            folder,
+            ItemType: "Folder",
+            DisplayName: _block.Name));
+        _onStatus?.Invoke(
+            result.Succeeded
+                ? $"Opened Block folder:\n{folder}"
+                : result.ErrorMessage ?? $"Could not open:\n{folder}");
     }
 
     private void ApplyShowLabels(bool show)
@@ -1281,7 +1317,7 @@ public sealed partial class BlockFrame : UserControl
             }
 
             var itemId = Guid.NewGuid();
-            var intake = _intake.TryIntake(normalized, _block.Id, itemId);
+            var intake = _intake.TryIntake(normalized, _block.Id, itemId, _block.Name);
             if (!intake.Succeeded || string.IsNullOrWhiteSpace(intake.TargetPath))
             {
                 _onStatus?.Invoke(intake.ErrorMessage ?? "Could not add item.");
@@ -1339,10 +1375,16 @@ public sealed partial class BlockFrame : UserControl
             RefreshItems(arrangeIfNeeded: true);
             _onLayoutCommitted();
             _onBoundsChanged?.Invoke();
-            var msg = moved > 0
-                ? $"Moved {moved} item(s) off the Desktop into '{_block.Name}'."
-                : $"Linked {added} item(s) into '{_block.Name}'.";
-            _onStatus?.Invoke(msg);
+            if (moved > 0)
+            {
+                var folder = _intake.EnsureBlockFolder(_block.Id, _block.Name);
+                _onStatus?.Invoke(
+                    $"Moved {moved} item(s) into Block folder:\n{folder}");
+            }
+            else
+            {
+                _onStatus?.Invoke($"Linked {added} item(s) into '{_block.Name}'.");
+            }
         }
     }
 

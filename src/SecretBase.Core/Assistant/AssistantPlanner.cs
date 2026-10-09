@@ -24,6 +24,11 @@ public static class AssistantPlanner
             return Clamp(BuildPlayMusicPlan(), maxSteps);
         }
 
+        if (LooksLikeCodingEnvironment(text))
+        {
+            return Clamp(BuildCodingEnvironmentPlan(), maxSteps);
+        }
+
         if (LooksLikeUsualSchedule(text))
         {
             return Clamp(BuildUsualSchedulePlan(), maxSteps);
@@ -32,6 +37,11 @@ public static class AssistantPlanner
         if (LooksLikeAddSchedule(text))
         {
             return Clamp(BuildAddSchedulePlan(), maxSteps);
+        }
+
+        if (LooksLikeOpenApp(text))
+        {
+            return Clamp(BuildOpenAppPlan(), maxSteps);
         }
 
         if (LooksLikeOpenNamed(text) && !LooksLikeProject(text))
@@ -234,7 +244,9 @@ public static class AssistantPlanner
     private static AssistantPlan BuildPlayMusicPlan() =>
         new()
         {
-            Summary = "曲を探して Music ウィジェットで再生します（確認が必要）。",
+            Summary =
+                "曲を探して Music ウィジェットで再生します。"
+                + " Premium 再生が使えない場合は Spotify のページを開きます（確認が必要）。",
             Steps =
             [
                 new AssistantPlanStep
@@ -247,9 +259,65 @@ public static class AssistantPlanner
                 new AssistantPlanStep
                 {
                     Index = 2,
-                    Title = "再生する（確認が必要）",
+                    Title = "再生 / Spotify で開く（確認が必要）",
                     Kind = AssistantPlanStepKind.ConfirmAction,
                     ToolName = AssistantToolNames.MusicPlay,
+                    RequiresConfirmation = true
+                }
+            ]
+        };
+
+    private static AssistantPlan BuildCodingEnvironmentPlan() =>
+        new()
+        {
+            Summary =
+                "プログラミング環境を整えます：Projects / Pomodoro / Workspace を出し、"
+                + "タイマーを開始し、デスクトップを並べます。",
+            Steps =
+            [
+                new AssistantPlanStep
+                {
+                    Index = 1,
+                    Title = "登録プロジェクトを確認",
+                    Kind = AssistantPlanStepKind.Read,
+                    ToolName = AssistantToolNames.CreativeListProjects
+                },
+                new AssistantPlanStep
+                {
+                    Index = 2,
+                    Title = "Todo を確認",
+                    Kind = AssistantPlanStepKind.Read,
+                    ToolName = AssistantToolNames.TodoList
+                },
+                new AssistantPlanStep
+                {
+                    Index = 3,
+                    Title = "コーディング環境をセットアップ",
+                    Kind = AssistantPlanStepKind.Read,
+                    ToolName = AssistantToolNames.CodingEnvironmentSetup
+                }
+            ]
+        };
+
+    private static AssistantPlan BuildOpenAppPlan() =>
+        new()
+        {
+            Summary = "登録済みの My Apps / Block / 既知アプリを名前で開きます（確認が必要）。",
+            Steps =
+            [
+                new AssistantPlanStep
+                {
+                    Index = 1,
+                    Title = "登録アプリを確認",
+                    Kind = AssistantPlanStepKind.Read,
+                    ToolName = AssistantToolNames.AppsList
+                },
+                new AssistantPlanStep
+                {
+                    Index = 2,
+                    Title = "アプリを開く（確認が必要）",
+                    Kind = AssistantPlanStepKind.ConfirmAction,
+                    ToolName = AssistantToolNames.AppsOpen,
                     RequiresConfirmation = true
                 }
             ]
@@ -357,27 +425,90 @@ public static class AssistantPlanner
     private static bool LooksLikePlayMusic(string text) =>
         text.Contains("かけて", StringComparison.Ordinal)
         || text.Contains("あの曲", StringComparison.Ordinal)
+        || text.Contains("の音楽", StringComparison.Ordinal)
         || ((text.Contains("再生", StringComparison.Ordinal)
-             || text.Contains("play", StringComparison.OrdinalIgnoreCase))
+             || text.Contains("play", StringComparison.OrdinalIgnoreCase)
+             || text.Contains("開いて", StringComparison.Ordinal)
+             || text.Contains("open", StringComparison.OrdinalIgnoreCase))
             && (text.Contains("曲", StringComparison.Ordinal)
                 || text.Contains("音楽", StringComparison.Ordinal)
                 || text.Contains("song", StringComparison.OrdinalIgnoreCase)
                 || text.Contains("music", StringComparison.OrdinalIgnoreCase)
-                || text.Contains("spotify", StringComparison.OrdinalIgnoreCase)));
+                || text.Contains("spotify", StringComparison.OrdinalIgnoreCase)
+                || text.Contains("アルバム", StringComparison.Ordinal)
+                || text.Contains("album", StringComparison.OrdinalIgnoreCase)
+                || text.Contains("アーティスト", StringComparison.Ordinal)
+                || text.Contains("artist", StringComparison.OrdinalIgnoreCase)));
+
+    private static bool LooksLikeCodingEnvironment(string text) =>
+        text.Contains("プログラミング環境", StringComparison.Ordinal)
+        || text.Contains("開発環境", StringComparison.Ordinal)
+        || text.Contains("コーディング環境", StringComparison.Ordinal)
+        || text.Contains("coding environment", StringComparison.OrdinalIgnoreCase)
+        || text.Contains("programming environment", StringComparison.OrdinalIgnoreCase)
+        || text.Contains("dev environment", StringComparison.OrdinalIgnoreCase)
+        || ((text.Contains("プログラミング", StringComparison.Ordinal)
+             || text.Contains("コーディング", StringComparison.Ordinal)
+             || text.Contains("coding", StringComparison.OrdinalIgnoreCase)
+             || text.Contains("programming", StringComparison.OrdinalIgnoreCase))
+            && (text.Contains("環境", StringComparison.Ordinal)
+                || text.Contains("environment", StringComparison.OrdinalIgnoreCase)
+                || text.Contains("workspace", StringComparison.OrdinalIgnoreCase)
+                || text.Contains("セットアップ", StringComparison.Ordinal)
+                || text.Contains("setup", StringComparison.OrdinalIgnoreCase)))
+        || (text.Contains("作業モード", StringComparison.Ordinal)
+            && (text.Contains("開発", StringComparison.Ordinal)
+                || text.Contains("コーディング", StringComparison.Ordinal)
+                || text.Contains("programming", StringComparison.OrdinalIgnoreCase)));
+
+    private static bool LooksLikeOpenApp(string text) =>
+        (text.Contains("アプリ", StringComparison.Ordinal)
+         || text.Contains(" application", StringComparison.OrdinalIgnoreCase)
+         || (text.Contains("app", StringComparison.OrdinalIgnoreCase)
+             && !text.Contains("happy", StringComparison.OrdinalIgnoreCase)))
+        && (text.Contains("開いて", StringComparison.Ordinal)
+            || text.Contains("起動", StringComparison.Ordinal)
+            || text.Contains("open", StringComparison.OrdinalIgnoreCase)
+            || text.Contains("launch", StringComparison.OrdinalIgnoreCase)
+            || text.Contains("start", StringComparison.OrdinalIgnoreCase));
 
     private static bool LooksLikeUsualSchedule(string text) =>
         text.Contains("いつも", StringComparison.Ordinal)
         || text.Contains("usual", StringComparison.OrdinalIgnoreCase);
 
-    private static bool LooksLikeAddSchedule(string text) =>
-        (text.Contains("予定", StringComparison.Ordinal)
-         || text.Contains("schedule", StringComparison.OrdinalIgnoreCase)
-         || text.Contains("event", StringComparison.OrdinalIgnoreCase))
-        && (text.Contains("入れて", StringComparison.Ordinal)
-            || text.Contains("いれて", StringComparison.Ordinal)
-            || text.Contains("追加", StringComparison.Ordinal)
-            || text.Contains("add", StringComparison.OrdinalIgnoreCase))
-        && !LooksLikeUsualSchedule(text);
+    private static bool LooksLikeAddSchedule(string text)
+    {
+        if (LooksLikeUsualSchedule(text))
+        {
+            return false;
+        }
+
+        // 「19時勉強、20時食事…をいれて」 — no 予定 word required when times parse.
+        if (LocalScheduleParser.LooksLikeScheduleWrite(text))
+        {
+            return true;
+        }
+
+        var wantsWrite = text.Contains("入れて", StringComparison.Ordinal)
+                         || text.Contains("いれて", StringComparison.Ordinal)
+                         || text.Contains("追加", StringComparison.Ordinal)
+                         || text.Contains("反映", StringComparison.Ordinal)
+                         || text.Contains("add", StringComparison.OrdinalIgnoreCase);
+        if (!wantsWrite)
+        {
+            return false;
+        }
+
+        return text.Contains("予定", StringComparison.Ordinal)
+               || text.Contains("スケジュール", StringComparison.Ordinal)
+               || text.Contains("カレンダー", StringComparison.Ordinal)
+               || text.Contains("ウィジェット", StringComparison.Ordinal)
+               || text.Contains("schedule", StringComparison.OrdinalIgnoreCase)
+               || text.Contains("calendar", StringComparison.OrdinalIgnoreCase)
+               || text.Contains("widget", StringComparison.OrdinalIgnoreCase)
+               || text.Contains("event", StringComparison.OrdinalIgnoreCase)
+               || text.Contains("ローカル", StringComparison.Ordinal);
+    }
 
     private static bool LooksLikeOpenNamed(string text) =>
         (text.Contains("ファイル", StringComparison.Ordinal)
@@ -407,24 +538,48 @@ public static class AssistantPlanner
         || (text.Contains("開発", StringComparison.Ordinal)
             && (text.Contains("したい", StringComparison.Ordinal) || text.Contains("続け", StringComparison.Ordinal)));
 
-    private static bool LooksLikeFocus(string text) =>
-        text.Contains("ポモドーロ", StringComparison.Ordinal)
-        || text.Contains("ぽもどーろ", StringComparison.Ordinal)
-        || text.Contains("pomodoro", StringComparison.OrdinalIgnoreCase)
-        || text.Contains("ポモドロ", StringComparison.Ordinal)
-        || ((text.Contains("タイマー", StringComparison.Ordinal) || text.Contains("timer", StringComparison.OrdinalIgnoreCase))
-            && (text.Contains("集中", StringComparison.Ordinal)
-                || text.Contains("focus", StringComparison.OrdinalIgnoreCase)
-                || text.Contains("ポモ", StringComparison.Ordinal)))
-        || ((text.Contains("focus", StringComparison.OrdinalIgnoreCase)
-             || text.Contains("集中", StringComparison.Ordinal))
-            && (text.Contains("開始", StringComparison.Ordinal)
-                || text.Contains("start", StringComparison.OrdinalIgnoreCase)
-                || text.Contains("始めて", StringComparison.Ordinal)
-                || text.Contains("したい", StringComparison.Ordinal)
-                || text.Contains("やりたい", StringComparison.Ordinal)
-                || text.Contains("now", StringComparison.OrdinalIgnoreCase)
-                || text.Contains("今", StringComparison.Ordinal)));
+    private static bool LooksLikeFocus(string text)
+    {
+        // Normalize common hiragana / typo forms (ぽもどーと etc.).
+        var folded = text
+            .Replace("ぽもどーと", "ポモドーロ", StringComparison.Ordinal)
+            .Replace("ぽもどーろ", "ポモドーロ", StringComparison.Ordinal)
+            .Replace("ぽもドーロ", "ポモドーロ", StringComparison.Ordinal)
+            .Replace("ポモドーと", "ポモドーロ", StringComparison.Ordinal)
+            .Replace("ポモドロ", "ポモドーロ", StringComparison.Ordinal);
+
+        if (folded.Contains("ポモドーロ", StringComparison.Ordinal)
+            || folded.Contains("pomodoro", StringComparison.OrdinalIgnoreCase)
+            || folded.Contains("ポモ", StringComparison.Ordinal)
+            || folded.Contains("ぽも", StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        var wantsTimer = folded.Contains("タイマー", StringComparison.Ordinal)
+                         || folded.Contains("timer", StringComparison.OrdinalIgnoreCase);
+        if (wantsTimer
+            && (folded.Contains("つけて", StringComparison.Ordinal)
+                || folded.Contains("付けて", StringComparison.Ordinal)
+                || folded.Contains("開始", StringComparison.Ordinal)
+                || folded.Contains("start", StringComparison.OrdinalIgnoreCase)
+                || folded.Contains("on", StringComparison.OrdinalIgnoreCase)
+                || folded.Contains("集中", StringComparison.Ordinal)
+                || folded.Contains("focus", StringComparison.OrdinalIgnoreCase)))
+        {
+            return true;
+        }
+
+        return (folded.Contains("focus", StringComparison.OrdinalIgnoreCase)
+                || folded.Contains("集中", StringComparison.Ordinal))
+               && (folded.Contains("開始", StringComparison.Ordinal)
+                   || folded.Contains("start", StringComparison.OrdinalIgnoreCase)
+                   || folded.Contains("始めて", StringComparison.Ordinal)
+                   || folded.Contains("したい", StringComparison.Ordinal)
+                   || folded.Contains("やりたい", StringComparison.Ordinal)
+                   || folded.Contains("now", StringComparison.OrdinalIgnoreCase)
+                   || folded.Contains("今", StringComparison.Ordinal));
+    }
 
     private static bool LooksLikeCleanup(string text) =>
         text.Contains("cleanup", StringComparison.OrdinalIgnoreCase)

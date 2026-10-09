@@ -209,6 +209,26 @@ public class CalendarCommandServiceTests
         Assert.Equal(2, upcoming.Events.Count);
         Assert.Contains(upcoming.Events, e => e.Title == "Studio");
     }
+
+    [Fact]
+    public async Task AddEvent_DefaultsToLocal_AndRemoveWorks()
+    {
+        var day = new DateOnly(2026, 10, 8);
+        var offset = TimeSpan.FromHours(9);
+        var local = new LocalCalendarProvider();
+        var time = new HubFixedTimeProvider(new DateTimeOffset(day.ToDateTime(new TimeOnly(15, 0)), offset));
+        var commands = new CalendarCommandService(new CalendarService([local]), time);
+
+        var added = await commands.ExecuteAsync(CalendarCommand.AddEvent("勉強", hour: 16, durationMinutes: 120));
+        Assert.True(added.Succeeded);
+        Assert.Single(added.Events);
+        Assert.Equal(CalendarProviderIds.Local, added.Events[0].Provider);
+        Assert.Equal(16, added.Events[0].Start.Hour);
+
+        var removed = await commands.ExecuteAsync(CalendarCommand.RemoveEvent(added.Events[0].Id));
+        Assert.True(removed.Succeeded);
+        Assert.Empty(local.ListAll());
+    }
 }
 
 public class IntegrationCatalogTests

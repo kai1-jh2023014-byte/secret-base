@@ -45,9 +45,11 @@ Registration is **not** admin, Shell, or plugin privilege.
 - Atomic write (`.tmp` → copy → delete)
 - Invalid targets dropped; missing files on disk are kept (host reports “not found” on launch)
 
+Full My Apps field reference, Japanese guide, and connection formats: [my-apps.md](my-apps.md).
+
 ## Add Widget groups
 
-Information (Clock, Text, Web, Calendar, Classroom) · Creative (Projects, Music) · AI (AI Workspace, Secret Base AI) · Apps (My Apps)
+Information (Clock, Text, Web, Calendar, Classroom, Progress) · Creative (Projects, Music) · AI (AI Workspace, Secret Base AI) · Apps (My Apps) · Focus (Pomodoro)
 
 ## Out of scope (Integration Hub slice)
 

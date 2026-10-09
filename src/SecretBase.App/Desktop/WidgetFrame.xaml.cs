@@ -6,6 +6,7 @@ using Microsoft.UI.Xaml.Media;
 using SecretBase.Core.Desktop;
 using SecretBase.Core.Themes;
 using SecretBase.Core.Widgets;
+using SecretBase.Widgets.Hosting;
 using SecretBase.Widgets.Theming;
 using Windows.Foundation;
 
@@ -22,10 +23,13 @@ public sealed partial class WidgetFrame : UserControl
     private readonly Action _onLayoutCommitted;
     private readonly Action? _onBoundsChanged;
     private readonly Action<WidgetInstance>? _onRemoveRequested;
+    private readonly Action<WidgetFrame>? _onSelectionRequested;
 
     private bool _dragging;
     private bool _resizing;
     private bool _pointerInside;
+    private bool _selected;
+    private bool _quietChrome;
     private Point _lastPoint;
 
     public WidgetFrame(
@@ -34,7 +38,8 @@ public sealed partial class WidgetFrame : UserControl
         ThemeDefinition theme,
         Action onLayoutCommitted,
         Action? onBoundsChanged = null,
-        Action<WidgetInstance>? onRemoveRequested = null)
+        Action<WidgetInstance>? onRemoveRequested = null,
+        Action<WidgetFrame>? onSelectionRequested = null)
     {
         InitializeComponent();
         _instance = instance;
@@ -42,17 +47,58 @@ public sealed partial class WidgetFrame : UserControl
         _onLayoutCommitted = onLayoutCommitted;
         _onBoundsChanged = onBoundsChanged;
         _onRemoveRequested = onRemoveRequested;
+        _onSelectionRequested = onSelectionRequested;
 
         ContentHost.Child = content;
         Width = instance.Size.Width;
         Height = instance.Size.Height;
         ApplyFloatingChrome(theme);
         SetChromeEmphasis(emphasized: false);
+        RootGrid.PointerPressed += RootGrid_PointerPressed;
     }
 
     public Guid WidgetId => _instance.Id;
 
     public string WidgetType => _instance.Type;
+
+    /// <summary>Hosted widget content (e.g. WebWidgetView). Used for selective dispose.</summary>
+    public UIElement? HostedContent => ContentHost.Child;
+
+    /// <summary>
+    /// When true, × / drag / resize stay fully hidden until the widget is selected or hovered.
+    /// Used by Progress minimal (transparent) mode.
+    /// </summary>
+    public bool QuietChrome
+    {
+        get => _quietChrome;
+        set
+        {
+            if (_quietChrome == value)
+            {
+                return;
+            }
+
+            _quietChrome = value;
+            SetChromeEmphasis(emphasized: _selected || _pointerInside || _dragging || _resizing);
+        }
+    }
+
+    public bool IsSelected => _selected;
+
+    public void SetSelected(bool selected)
+    {
+        if (_selected == selected)
+        {
+            return;
+        }
+
+        _selected = selected;
+        SetChromeEmphasis(emphasized: _selected || _pointerInside || _dragging || _resizing);
+        if (ContentHost.Child is IWidgetChromeAware chromeAware)
+        {
+            chromeAware.SetChromeVisible(_selected || _pointerInside);
+        }
+    }
 
     /// <summary>Apply a preferred size from a widget compact/expand toggle and persist via layout commit.</summary>
     public void ApplyPreferredSize(double width, double height, bool commit = true)
@@ -93,14 +139,49 @@ public sealed partial class WidgetFrame : UserControl
 
     private void SetChromeEmphasis(bool emphasized)
     {
-        var opacity = emphasized || _dragging || _resizing ? 0.96 : 0.28;
-        WidgetSurfaceStyle.FadeOpacity(DragBar, opacity, emphasized ? 140 : 220);
-        WidgetSurfaceStyle.FadeOpacity(ResizeHandle, opacity, emphasized ? 140 : 220);
-        WidgetSurfaceStyle.FadeOpacity(RemoveButton, opacity, emphasized ? 140 : 220);
+        var active = emphasized || _dragging || _resizing || _selected;
+        double opacity;
+        if (_quietChrome)
+        {
+            opacity = active ? 0.96 : 0;
+            var visibility = active ? Visibility.Visible : Visibility.Collapsed;
+            ChromeRow.Visibility = visibility;
+            DragBar.Visibility = visibility;
+            RemoveButton.Visibility = visibility;
+            ResizeHandle.Visibility = visibility;
+            // Collapse the 22px chrome row so minimal Progress sits flush.
+            RootGrid.RowDefinitions[0].Height = active ? new GridLength(22) : new GridLength(0);
+        }
+        else
+        {
+            opacity = active ? 0.96 : 0.28;
+            ChromeRow.Visibility = Visibility.Visible;
+            DragBar.Visibility = Visibility.Visible;
+            RemoveButton.Visibility = Visibility.Visible;
+            ResizeHandle.Visibility = Visibility.Visible;
+            RootGrid.RowDefinitions[0].Height = new GridLength(22);
+        }
+
+        WidgetSurfaceStyle.FadeOpacity(DragBar, opacity, active ? 140 : 220);
+        WidgetSurfaceStyle.FadeOpacity(ResizeHandle, opacity, active ? 140 : 220);
+        WidgetSurfaceStyle.FadeOpacity(RemoveButton, opacity, active ? 140 : 220);
+
+        if (ContentHost.Child is IWidgetChromeAware chromeAware)
+        {
+            chromeAware.SetChromeVisible(active || _pointerInside);
+        }
     }
 
     private void RemoveButton_Click(object sender, RoutedEventArgs e) =>
         _onRemoveRequested?.Invoke(_instance);
+
+    private void RootGrid_PointerPressed(object sender, PointerRoutedEventArgs e)
+    {
+        if (e.GetCurrentPoint(this).Properties.PointerUpdateKind is PointerUpdateKind.LeftButtonPressed)
+        {
+            _onSelectionRequested?.Invoke(this);
+        }
+    }
 
     private void RootGrid_PointerEntered(object sender, PointerRoutedEventArgs e)
     {
@@ -113,7 +194,7 @@ public sealed partial class WidgetFrame : UserControl
         _pointerInside = false;
         if (!_dragging && !_resizing)
         {
-            SetChromeEmphasis(emphasized: false);
+            SetChromeEmphasis(emphasized: _selected);
         }
     }
 
@@ -171,7 +252,7 @@ public sealed partial class WidgetFrame : UserControl
             ((UIElement)sender).ReleasePointerCapture(e.Pointer);
         }
 
-        SetChromeEmphasis(emphasized: _pointerInside);
+        SetChromeEmphasis(emphasized: _pointerInside || _selected);
         _onBoundsChanged?.Invoke();
         _onLayoutCommitted();
         e.Handled = true;
@@ -237,7 +318,7 @@ public sealed partial class WidgetFrame : UserControl
             ((UIElement)sender).ReleasePointerCapture(e.Pointer);
         }
 
-        SetChromeEmphasis(emphasized: _pointerInside);
+        SetChromeEmphasis(emphasized: _pointerInside || _selected);
         _onBoundsChanged?.Invoke();
         _onLayoutCommitted();
         e.Handled = true;

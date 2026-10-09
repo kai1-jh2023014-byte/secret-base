@@ -45,8 +45,8 @@ public sealed partial class TaskbarAiChatBar : UserControl
     /// <summary>Full shelf width while focused/selected; ~half when idle.</summary>
     public const double IdleWidthFraction = 0.5;
 
-    /// <summary>Keep clear of the bottom-left control strip (+ / Blk / Aa / Grid / ⚙).</summary>
-    public const double LeftChromeReserve = 248;
+    /// <summary>Keep clear of the bottom-left control strip (+ / Blk / Aa / ⚙).</summary>
+    public const double LeftChromeReserve = 196;
 
     /// <summary>Quiet right padding so the expanded pill is not edge-flush.</summary>
     public const double RightChromeReserve = 24;

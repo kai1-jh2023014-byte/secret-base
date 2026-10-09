@@ -141,15 +141,21 @@ public sealed class MusicCommandService
 
         if (track is null || string.IsNullOrWhiteSpace(track.Id) || string.IsNullOrWhiteSpace(track.Title))
         {
-            return MusicCommandResult.Fail(MusicCommandKind.PlayTrack, "Track is missing or invalid.");
+            SpotifyWebSearch.TryCreateOpenUrl(null, command.Query, out var missingUrl, out _);
+            return MusicCommandResult.Fail(
+                MusicCommandKind.PlayTrack,
+                "Track is missing or invalid.",
+                missingUrl);
         }
 
         var provider = ResolveProvider(command.ProviderId ?? track.ProviderId, MusicProviderCapabilities.Playback);
         if (provider is null)
         {
+            SpotifyWebSearch.TryCreateOpenUrl(track, command.Query, out var noPlaybackUrl, out _);
             return MusicCommandResult.Fail(
                 MusicCommandKind.PlayTrack,
-                "No music provider supports playback for this track.");
+                "No music provider supports playback for this track.",
+                noPlaybackUrl);
         }
 
         try
@@ -163,7 +169,9 @@ public sealed class MusicCommandService
         }
         catch (Exception ex)
         {
-            return MusicCommandResult.Fail(MusicCommandKind.PlayTrack, ex.Message);
+            // Free / non-Premium accounts often fail Web API playback (403 PREMIUM_REQUIRED).
+            SpotifyWebSearch.TryCreateOpenUrl(track, command.Query, out var openUrl, out _);
+            return MusicCommandResult.Fail(MusicCommandKind.PlayTrack, ex.Message, openUrl);
         }
     }
 

@@ -22,7 +22,7 @@ public class AssistantToolRegistryTests
     public void BuiltinRegistry_ListsMvpTools_WithConfirmationPolicy()
     {
         var registry = BuiltinAssistantToolRegistry.Instance;
-        Assert.Equal(28, registry.Tools.Count);
+        Assert.Equal(29, registry.Tools.Count);
         Assert.NotNull(registry.Find(AssistantToolNames.CalendarAddEvent));
         Assert.NotNull(registry.Find(AssistantToolNames.CalendarApplyUsual));
         Assert.NotNull(registry.Find(AssistantToolNames.WorkspaceOpenNamed));
@@ -352,7 +352,7 @@ public class AssistantToolExecutorTests
     }
 
     [Fact]
-    public async Task MusicPlay_FailsHonestly_WhenPlaybackCapabilityMissing()
+    public async Task MusicPlay_OpensSpotify_WhenPlaybackCapabilityMissing()
     {
         var music = new MusicCommandService(new MusicService([OpenWebMusicProvider.Instance]));
         var executor = new AssistantToolExecutor(
@@ -360,22 +360,22 @@ public class AssistantToolExecutorTests
             music: music);
         var search = await executor.ExecuteAsync(AssistantToolNames.MusicSearch, """{"query":"YOASOBI"}""");
         Assert.False(search.Succeeded);
-        var play = await executor.ExecuteAsync(AssistantToolNames.MusicPlay, """{"track_id":"demo-idol"}""");
-        Assert.False(play.Succeeded);
-        Assert.Contains("not available", play.ErrorMessage, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("Spotify", play.ErrorMessage, StringComparison.OrdinalIgnoreCase);
+        var play = await executor.ExecuteAsync(AssistantToolNames.MusicPlay, """{"query":"YOASOBI"}""");
+        Assert.True(play.Succeeded);
+        Assert.True(play.ShouldLaunch);
+        Assert.True(play.LaunchIsExternalLink);
+        Assert.StartsWith("https://open.spotify.com/", play.LaunchTarget, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Spotify", play.ContentForModel, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
-    public async Task AgentTools_AddEvent_RequiresGoogle_AndRefuseUnregisteredFileDelete()
+    public async Task AgentTools_AddEvent_WritesLocalByDefault_AndRefuseUnregisteredFileDelete()
     {
         var day = new DateOnly(2026, 9, 3);
         var offset = TimeSpan.FromHours(9);
+        var local = new LocalCalendarProvider();
         var calendar = new CalendarCommandService(
-            new CalendarService(
-            [
-                new LocalCalendarProvider()
-            ]),
+            new CalendarService([local]),
             new AgentToolTime(new DateTimeOffset(day.ToDateTime(new TimeOnly(8, 0)), offset)));
         var workspace = new WorkspaceCommandService(calendar: calendar);
         var executor = new AssistantToolExecutor(
@@ -386,8 +386,11 @@ public class AssistantToolExecutorTests
         var added = await executor.ExecuteAsync(
             AssistantToolNames.CalendarAddEvent,
             """{"title":"東進","hour":14,"minute":0}""");
-        Assert.False(added.Succeeded);
-        Assert.Contains("Google Calendar", added.ErrorMessage, StringComparison.OrdinalIgnoreCase);
+        Assert.True(added.Succeeded);
+        Assert.Contains("local calendar", added.ContentForModel, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("東進", added.ContentForModel, StringComparison.Ordinal);
+        Assert.Single(local.ListAll());
+        Assert.Equal("東進", local.ListAll()[0].Title);
 
         var deleted = await executor.ExecuteAsync(
             AssistantToolNames.FilesDelete,
@@ -397,24 +400,31 @@ public class AssistantToolExecutorTests
     }
 
     [Fact]
-    public async Task AgentTools_AddEvent_WritesThroughGoogleWriter()
+    public async Task AgentTools_AddEvent_BatchWritesLocal_AndGoogleWhenRequested()
     {
         var day = new DateOnly(2026, 9, 3);
         var offset = TimeSpan.FromHours(9);
+        var local = new LocalCalendarProvider();
         var google = new FakeGoogleCalendarWriter();
         var calendar = new CalendarCommandService(
-            new CalendarService([google]),
+            new CalendarService([local, google]),
             new AgentToolTime(new DateTimeOffset(day.ToDateTime(new TimeOnly(8, 0)), offset)));
         var executor = new AssistantToolExecutor(
             BuiltinAssistantToolRegistry.Instance,
             calendar: calendar);
 
-        var added = await executor.ExecuteAsync(
+        var batch = await executor.ExecuteAsync(
             AssistantToolNames.CalendarAddEvent,
-            """{"title":"東進","hour":14,"minute":0,"duration_minutes":60}""");
-        Assert.True(added.Succeeded);
-        Assert.Contains("Google Calendar", added.ContentForModel, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("東進", added.ContentForModel, StringComparison.Ordinal);
+            """{"events":[{"title":"勉強","hour":16,"duration_minutes":120},{"title":"筋トレ","hour":18,"duration_minutes":60}]}""");
+        Assert.True(batch.Succeeded);
+        Assert.Equal(2, local.ListAll().Count);
+        Assert.Contains("勉強", batch.ContentForModel, StringComparison.Ordinal);
+
+        var googleAdd = await executor.ExecuteAsync(
+            AssistantToolNames.CalendarAddEvent,
+            """{"title":"東進","hour":14,"minute":0,"duration_minutes":60,"destination":"google"}""");
+        Assert.True(googleAdd.Succeeded);
+        Assert.Contains("Google Calendar", googleAdd.ContentForModel, StringComparison.OrdinalIgnoreCase);
         Assert.Single(google.Created);
         Assert.Equal("東進", google.Created[0].Title);
         Assert.Equal(14, google.Created[0].Start.Hour);
@@ -526,7 +536,9 @@ public class AssistantServiceTests
 
         var result = await service.SendAsync("hello");
         Assert.False(result.Succeeded);
-        Assert.Equal(AssistantUserMessages.Unavailable, result.ErrorMessage);
+        Assert.StartsWith(AssistantUserMessages.Unavailable, result.ErrorMessage);
+        Assert.Contains("Provider:", result.ErrorMessage, StringComparison.Ordinal);
+        Assert.Contains("Gemini", result.ErrorMessage, StringComparison.Ordinal);
         Assert.True(result.CanRetry);
     }
 
@@ -811,7 +823,10 @@ public class AssistantServiceTests
 
         var result = await service.SendAsync("hello");
         Assert.False(result.Succeeded);
-        Assert.Equal(AssistantUserMessages.Timeout, result.ErrorMessage);
+        Assert.StartsWith(AssistantUserMessages.Timeout, result.ErrorMessage);
+        Assert.Contains("Provider:", result.ErrorMessage, StringComparison.Ordinal);
+        Assert.Contains("Gemini", result.ErrorMessage, StringComparison.Ordinal);
+        Assert.Contains("AI Settings", result.ErrorMessage, StringComparison.Ordinal);
         Assert.True(result.CanRetry);
     }
 }

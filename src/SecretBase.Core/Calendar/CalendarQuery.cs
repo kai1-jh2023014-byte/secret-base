@@ -16,6 +16,14 @@ public readonly record struct CalendarQuery(DateOnly FromInclusive, DateOnly ToI
         return new CalendarQuery(start, start.AddDays(span));
     }
 
+    /// <summary>Full local calendar month containing <paramref name="anyDayInMonth"/>.</summary>
+    public static CalendarQuery ForMonth(DateOnly anyDayInMonth)
+    {
+        var first = new DateOnly(anyDayInMonth.Year, anyDayInMonth.Month, 1);
+        var last = first.AddMonths(1).AddDays(-1);
+        return new CalendarQuery(first, last);
+    }
+
     /// <summary>Calendar date in <paramref name="instant"/>'s own offset (not machine local TZ).</summary>
     internal static DateOnly ToCalendarDate(DateTimeOffset instant) =>
         new(instant.Year, instant.Month, instant.Day);

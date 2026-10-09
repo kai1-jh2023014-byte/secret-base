@@ -23,7 +23,10 @@ public sealed class MusicCommandResult
 
     public MusicAuthStatus AuthStatus { get; init; } = MusicAuthStatus.NotConfigured;
 
-    /// <summary>Validated https Spotify search page when the catalog API cannot answer.</summary>
+    /// <summary>
+    /// Validated https Spotify page (search / track / album / artist) when in-app
+    /// catalog or Premium playback cannot complete the request.
+    /// </summary>
     public string? WebSearchUrl { get; init; }
 
     public static MusicCommandResult Ok(

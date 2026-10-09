@@ -69,6 +69,47 @@ public class AssistantPlannerTests
     }
 
     [Fact]
+    public void LooksLikeFocus_AcceptsPomodoroTypos()
+    {
+        var plan = AssistantPlanner.TryBuildFromIntent(
+            AssistantIntentKind.ActionRequest,
+            "ぽもどーとタイマーをつけて",
+            snapshot: null,
+            maxSteps: 5);
+        Assert.NotNull(plan);
+        Assert.Contains(plan!.Steps, s => s.ToolName == AssistantToolNames.FocusStart);
+    }
+
+    [Fact]
+    public void BuildsAddSchedulePlan_ForLocalWidgetPhrases()
+    {
+        var local = AssistantPlanner.TryBuildFromIntent(
+            AssistantIntentKind.ActionRequest,
+            "ローカルカレンダーに予定をいれて",
+            snapshot: null,
+            maxSteps: 5);
+        Assert.NotNull(local);
+        Assert.Contains(local!.Steps, s => s.ToolName == AssistantToolNames.CalendarAddEvent && s.RequiresConfirmation);
+
+        var widget = AssistantPlanner.TryBuildFromIntent(
+            AssistantIntentKind.ActionRequest,
+            "今日の予定をウィジェットに反映して",
+            snapshot: null,
+            maxSteps: 5);
+        Assert.NotNull(widget);
+        Assert.Contains(widget!.Steps, s => s.ToolName == AssistantToolNames.CalendarAddEvent);
+
+        var usual = AssistantPlanner.TryBuildFromIntent(
+            AssistantIntentKind.ActionRequest,
+            "いつもの予定をいれて",
+            snapshot: null,
+            maxSteps: 5);
+        Assert.NotNull(usual);
+        Assert.Contains(usual!.Steps, s => s.ToolName == AssistantToolNames.CalendarApplyUsual);
+        Assert.DoesNotContain(usual.Steps, s => s.ToolName == AssistantToolNames.CalendarAddEvent);
+    }
+
+    [Fact]
     public void BuildsAgentPlans_ForMusicScheduleOpenAndDelete()
     {
         var play = AssistantPlanner.TryBuildFromIntent(

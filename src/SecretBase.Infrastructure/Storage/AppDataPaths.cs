@@ -37,6 +37,10 @@ public static class AppDataPaths
     /// <summary>User-chosen and design-preset Block icons (PNG). Not the shell extract cache.</summary>
     public static string CustomIconsDirectory => Ensure(Path.Combine("icons", "custom"));
 
+    /// <summary>
+    /// Per-Block folders for Desktop intake:
+    /// <c>block-items/{BlockName} ({id8})/{original-file-name}</c>.
+    /// </summary>
     public static string BlockItemsDirectory => Ensure("block-items");
     public static string CreativeDirectory => Ensure("creative");
     public static string AppsDirectory => Ensure("apps");

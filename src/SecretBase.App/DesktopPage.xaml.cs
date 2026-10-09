@@ -55,10 +55,14 @@ using SecretBase.Widgets.Creative;
 using SecretBase.Widgets.Hosting;
 using SecretBase.Widgets.Music;
 using SecretBase.Widgets.Pomodoro;
+using SecretBase.Widgets.Progress;
 using SecretBase.Widgets.Text;
 using SecretBase.Widgets.Theming;
 using SecretBase.Widgets.Web;
 using SecretBase.Widgets.Workspace;
+using SecretBase.Infrastructure.Progress;
+using SecretBase.Core.Progress;
+using SecretBase.Core.Widgets.Progress;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.Foundation;
 
@@ -98,6 +102,9 @@ public sealed partial class DesktopPage : Page
     private BaseSettings? _baseSettings;
     private ITodoStore? _todoStore;
     private FocusSessionStore? _focus;
+    private IProgressGenesisStore? _progressStore;
+    private IProgressGenesisHistoryStore? _progressHistory;
+    private WidgetFrame? _selectedWidgetFrame;
     private IBaseExperienceServices? _baseExperience;
     private IReadOnlyList<CalendarEvent> _upcomingEvents = [];
     private IReadOnlyList<TodoItem> _shelfTodos = [];
@@ -230,6 +237,8 @@ public sealed partial class DesktopPage : Page
         _assistantSettings = assistantSettings;
         _todoStore = new JsonTodoStore();
         _focus = new FocusSessionStore();
+        _progressStore = new JsonProgressGenesisStore();
+        _progressHistory = new JsonProgressGenesisHistoryStore();
         var layoutExisted = _layoutStore.Exists(RoomId.DefaultRoomId);
         _baseSettingsStore = new JsonBaseSettingsStore();
         var baseSettings = _baseSettingsStore.LoadOrCreate(layoutExisted);
@@ -316,7 +325,6 @@ public sealed partial class DesktopPage : Page
         _logger.Info("assistant", "Taskbar shelf ready (focus, next, AI). Ctrl+Shift+K focuses the field. Does not replace the Windows taskbar.");
         _logger.Info("block", "Block host ready (use Blk button to add; drop + drag icons inside a Block).");
         _logger.Info("theme", "Theme editor ready (Aa button) — colors apply to all widgets and Blocks.");
-        _logger.Info("layout", "Arrange ready (Grid button) — even placement for widgets and blocks.");
         _logger.Info("widget", "Add Widget (+) — grouped catalog (Information / Creative / AI / Apps). Classroom opens the existing Web Widget.");
     }
 
@@ -350,18 +358,16 @@ public sealed partial class DesktopPage : Page
                 theme.WidgetBackground,
                 Math.Clamp(ThemePainter.SoftSurfaceOpacity(theme), 0.16, 0.42));
             ControlStripShell.BorderBrush = ThemePainter.Brush(theme.Border, 0.22);
-            ControlStripShell.CornerRadius = new CornerRadius(22);
+            ControlStripShell.CornerRadius = new CornerRadius(20);
         }
 
         StyleStripIcon(AddWidgetFab, accent: true);
         StyleStripIcon(AddBlockFab);
         StyleStripIcon(ThemeFab);
-        StyleStripIcon(ArrangeFab);
         StyleStripIcon(SetupFab);
         TintStripIcon(AddWidgetFab, theme, accent: true);
         TintStripIcon(AddBlockFab, theme);
         TintStripIcon(ThemeFab, theme);
-        TintStripIcon(ArrangeFab, theme);
         TintStripIcon(SetupFab, theme);
         TaskbarAiChat.ApplyTheme(theme);
 
@@ -766,25 +772,7 @@ public sealed partial class DesktopPage : Page
 
         foreach (var instance in _layout.Widgets)
         {
-            instance.Size.Clamp(_theme.WidgetMinWidth, _theme.WidgetMinHeight);
-            var content = CreateWidgetContent(instance);
-            if (content is null)
-            {
-                _logger?.Warn("widget", $"Unsupported widget type '{instance.Type}' — skipped.");
-                continue;
-            }
-
-            var frame = new WidgetFrame(
-                instance,
-                content,
-                _theme,
-                onLayoutCommitted: CommitUserGeometryEdit,
-                onBoundsChanged: SyncInteractiveInputRegions,
-                onRemoveRequested: RemoveWidget);
-            Canvas.SetLeft(frame, instance.Position.X);
-            Canvas.SetTop(frame, instance.Position.Y);
-            frame.Loaded += (_, _) => SyncInteractiveInputRegions();
-            WidgetCanvas.Children.Add(frame);
+            MountWidgetInstance(instance);
         }
     }
 
@@ -797,25 +785,123 @@ public sealed partial class DesktopPage : Page
 
         foreach (var block in _layout.Blocks)
         {
-            block.ClampSize();
-            var frame = new BlockFrame(
-                block,
-                _theme,
-                _launcher,
-                _icons,
-                _intake,
-                onLayoutCommitted: CommitUserGeometryEdit,
-                onDeleteRequested: DeleteBlock,
-                onBoundsChanged: SyncInteractiveInputRegions,
-                onStatus: ShowHostStatus,
-                customIcons: _customIcons,
-                pathPicker: _pathPicker,
-                dialogInput: _dialogInput);
-            Canvas.SetLeft(frame, block.Position.X);
-            Canvas.SetTop(frame, block.Position.Y);
-            frame.Loaded += (_, _) => SyncInteractiveInputRegions();
-            WidgetCanvas.Children.Add(frame);
+            MountBlockInstance(block);
         }
+    }
+
+    /// <summary>
+    /// Adds one widget frame without wiping the canvas — keeps existing WebView2 sessions alive.
+    /// </summary>
+    private bool MountWidgetInstance(WidgetInstance instance)
+    {
+        if (_theme is null)
+        {
+            return false;
+        }
+
+        if (WidgetCanvas.Children.OfType<WidgetFrame>().Any(f => f.WidgetId == instance.Id))
+        {
+            return false;
+        }
+
+        instance.Size.Clamp(_theme.WidgetMinWidth, _theme.WidgetMinHeight);
+        var content = CreateWidgetContent(instance);
+        if (content is null)
+        {
+            _logger?.Warn("widget", $"Unsupported widget type '{instance.Type}' — skipped.");
+            return false;
+        }
+
+        var frame = new WidgetFrame(
+            instance,
+            content,
+            _theme,
+            onLayoutCommitted: CommitUserGeometryEdit,
+            onBoundsChanged: SyncInteractiveInputRegions,
+            onRemoveRequested: RemoveWidget,
+            onSelectionRequested: SelectWidgetFrame);
+        if (instance.Type == WidgetTypes.Progress
+            && ProgressWidgetConfiguration.FromDictionary(instance.Configuration).IsMinimal)
+        {
+            frame.QuietChrome = true;
+        }
+
+        Canvas.SetLeft(frame, instance.Position.X);
+        Canvas.SetTop(frame, instance.Position.Y);
+        frame.Loaded += (_, _) => SyncInteractiveInputRegions();
+        WidgetCanvas.Children.Add(frame);
+        return true;
+    }
+
+    /// <summary>Removes one widget frame and disposes only its content (e.g. WebView2).</summary>
+    private bool UnmountWidgetInstance(Guid widgetId)
+    {
+        var frame = WidgetCanvas.Children.OfType<WidgetFrame>()
+            .FirstOrDefault(f => f.WidgetId == widgetId);
+        if (frame is null)
+        {
+            return false;
+        }
+
+        if (_selectedWidgetFrame == frame)
+        {
+            _selectedWidgetFrame = null;
+        }
+
+        if (frame.HostedContent is IDisposable disposable)
+        {
+            disposable.Dispose();
+            _widgetDisposables.Remove(disposable);
+        }
+
+        WidgetCanvas.Children.Remove(frame);
+        return true;
+    }
+
+    private bool MountBlockInstance(Block block)
+    {
+        if (_theme is null || _launcher is null || _icons is null || _intake is null)
+        {
+            return false;
+        }
+
+        if (WidgetCanvas.Children.OfType<BlockFrame>().Any(f => f.BlockId == block.Id))
+        {
+            return false;
+        }
+
+        block.ClampSize();
+        var frame = new BlockFrame(
+            block,
+            _theme,
+            _launcher,
+            _icons,
+            _intake,
+            onLayoutCommitted: CommitUserGeometryEdit,
+            onDeleteRequested: DeleteBlock,
+            onBoundsChanged: SyncInteractiveInputRegions,
+            onStatus: ShowHostStatus,
+            customIcons: _customIcons,
+            pathPicker: _pathPicker,
+            dialogInput: _dialogInput);
+        Canvas.SetLeft(frame, block.Position.X);
+        Canvas.SetTop(frame, block.Position.Y);
+        frame.Loaded += (_, _) => SyncInteractiveInputRegions();
+        WidgetCanvas.Children.Add(frame);
+        return true;
+    }
+
+    private bool UnmountBlockInstance(Guid blockId)
+    {
+        var frame = WidgetCanvas.Children.OfType<BlockFrame>()
+            .FirstOrDefault(f => f.BlockId == blockId);
+        if (frame is null)
+        {
+            return false;
+        }
+
+        WidgetCanvas.Children.Remove(frame);
+        return true;
     }
 
     private void SyncInteractiveInputRegions()
@@ -869,11 +955,6 @@ public sealed partial class DesktopPage : Page
             if (TryCreateClientRect(ThemeFab, scale, out var themeFabRect))
             {
                 rects.Add(themeFabRect);
-            }
-
-            if (TryCreateClientRect(ArrangeFab, scale, out var arrangeFabRect))
-            {
-                rects.Add(arrangeFabRect);
             }
 
             if (TryCreateClientRect(SetupFab, scale, out var setupFabRect))
@@ -1325,7 +1406,8 @@ public sealed partial class DesktopPage : Page
         foreach (var widget in _layout.Widgets)
         {
             if (widget.Type is not (WidgetTypes.Pomodoro or WidgetTypes.Music or WidgetTypes.Clock
-                or WidgetTypes.Calendar or WidgetTypes.Assistant or WidgetTypes.Workspace))
+                or WidgetTypes.Calendar or WidgetTypes.Assistant or WidgetTypes.Workspace
+                or WidgetTypes.Progress))
             {
                 continue;
             }
@@ -1523,12 +1605,14 @@ public sealed partial class DesktopPage : Page
                     PersistLayoutNow();
                 },
                 cache: _calendarCache,
-                integrations: _integrationMemory);
+                integrations: _integrationMemory,
+                onReminder: notice => ShowHostStatus(notice));
             if (_theme is not null)
             {
                 view.ApplyTheme(_theme);
             }
 
+            _widgetDisposables.Add(view);
             return view;
         }
 
@@ -1733,7 +1817,76 @@ public sealed partial class DesktopPage : Page
             return view;
         }
 
+        if (instance.Type == WidgetTypes.Progress)
+        {
+            var config = ProgressWidgetConfiguration.FromDictionary(instance.Configuration);
+            instance.Configuration = config.ToDictionary();
+            var provider = ProgressGenesisProviderFactory.Create(config, _progressStore);
+            var view = new ProgressWidgetView();
+            view.Initialize(
+                provider,
+                config,
+                timeProvider: _timeProvider,
+                onConfigurationChanged: () =>
+                {
+                    instance.Configuration = config.ToDictionary();
+                    if (config.IsMinimal)
+                    {
+                        ApplyWidgetPreferredSize(instance.Id, width: 220, height: 110);
+                    }
+                    else
+                    {
+                        ApplyWidgetPreferredSize(instance.Id, width: 280, height: 240);
+                    }
+
+                    SetProgressQuietChrome(instance.Id, config.IsMinimal);
+                    PersistLayoutNow();
+                },
+                history: _progressHistory);
+            if (_theme is not null)
+            {
+                view.ApplyTheme(_theme);
+            }
+
+            if (config.IsMinimal)
+            {
+                ApplyWidgetPreferredSize(instance.Id, width: 220, height: 110);
+            }
+
+            _widgetDisposables.Add(view);
+            return view;
+        }
+
         return null;
+    }
+
+    private void SelectWidgetFrame(WidgetFrame frame)
+    {
+        if (_selectedWidgetFrame == frame)
+        {
+            frame.SetSelected(true);
+            return;
+        }
+
+        if (_selectedWidgetFrame is not null)
+        {
+            _selectedWidgetFrame.SetSelected(false);
+        }
+
+        _selectedWidgetFrame = frame;
+        frame.SetSelected(true);
+    }
+
+    private void SetProgressQuietChrome(Guid widgetId, bool quiet)
+    {
+        foreach (var frame in WidgetCanvas.Children.OfType<WidgetFrame>())
+        {
+            if (frame.WidgetId == widgetId)
+            {
+                frame.QuietChrome = quiet;
+                return;
+            }
+        }
     }
 
     private void ApplyWidgetPreferredSize(Guid widgetId, double width, double height)
@@ -1909,8 +2062,15 @@ public sealed partial class DesktopPage : Page
     {
         if (!string.IsNullOrWhiteSpace(result.EnsureWidgetType))
         {
-            _ = EnsureWidgetAsync(result.EnsureWidgetType!);
+            foreach (var type in result.EnsureWidgetType!.Split(
+                         ',',
+                         StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            {
+                _ = EnsureWidgetAsync(type);
+            }
         }
+
+        // Arrange-widgets UI removed; AI desktop-arrange requests are ignored.
 
         if (result.ShouldOpenCursorAtFolder && !string.IsNullOrWhiteSpace(result.CursorFolderPath))
         {
@@ -1999,44 +2159,6 @@ public sealed partial class DesktopPage : Page
 
     private async void ThemeButton_Click(object sender, RoutedEventArgs e) =>
         await ShowThemeEditorDialogAsync();
-
-    private void ArrangeButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (_layout is null)
-        {
-            return;
-        }
-
-        var areaWidth = Math.Max(WidgetCanvas.ActualWidth, ActualWidth);
-        var areaHeight = Math.Max(WidgetCanvas.ActualHeight, ActualHeight);
-        areaWidth = Math.Max(320, areaWidth);
-        areaHeight = Math.Max(240, areaHeight);
-        const double margin = 24;
-        const double gap = 24;
-
-        DesktopWidgetLayout.ArrangeEvenly(_layout.Widgets, areaWidth, areaHeight, margin, gap);
-
-        var widgetBottom = _layout.Widgets.Count == 0
-            ? margin
-            : _layout.Widgets.Max(w => w.Position.Y + w.Size.Height) + gap;
-
-        DesktopBlockLayout.ArrangeEvenlyBelow(
-            _layout.Blocks,
-            areaWidth,
-            areaHeight,
-            topOffset: widgetBottom,
-            margin: margin,
-            gap: gap);
-
-        PersistLayoutNow();
-        RenderDesktopObjects();
-        RefreshDebugStatus();
-        _logger?.Info("layout", "Arranged widgets and blocks evenly.");
-        if (_debugChromeVisible)
-        {
-            StatusText.Text = "Arranged widgets & blocks evenly.";
-        }
-    }
 
     private async void ThemeAccelerator_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
     {
@@ -2228,7 +2350,8 @@ public sealed partial class DesktopPage : Page
             y: 96 + cascade);
         _layout.Widgets.Add(widget);
         PersistLayoutNow();
-        RenderDesktopObjects();
+        MountWidgetInstance(widget);
+        BringWidgetTypeToFront(WidgetTypes.Web);
         ShowHostStatus($"Added {label}.");
         SyncInteractiveInputRegions();
         RefreshDebugStatus();
@@ -2270,6 +2393,8 @@ public sealed partial class DesktopPage : Page
                 _layout.RoomId, 360 + cascade, 80 + cascade),
             WidgetTypes.Pomodoro => DefaultWidgetFactory.CreatePomodoro(
                 _layout.RoomId, 420 + cascade, 120 + cascade),
+            WidgetTypes.Progress => DefaultWidgetFactory.CreateProgress(
+                _layout.RoomId, 460 + cascade, 160 + cascade),
             _ => null
         };
 
@@ -2281,7 +2406,8 @@ public sealed partial class DesktopPage : Page
 
         _layout.Widgets.Add(widget);
         PersistLayoutNow();
-        RenderDesktopObjects();
+        // Incremental mount — do not RenderDesktopObjects (would reload every WebView2).
+        MountWidgetInstance(widget);
         BringWidgetTypeToFront(type);
         ShowHostStatus($"Added {type} widget.");
         SyncInteractiveInputRegions();
@@ -2299,8 +2425,11 @@ public sealed partial class DesktopPage : Page
 
         _layout.Widgets.RemoveAll(w => w.Id == instance.Id);
         PersistLayoutNow();
-        RenderDesktopObjects();
+        // Incremental unmount — surviving Web widgets keep their session.
+        UnmountWidgetInstance(instance.Id);
         ShowHostStatus($"Removed widget ({instance.Type}).");
+        SyncInteractiveInputRegions();
+        RefreshDebugStatus();
         _logger?.Info("widget", $"Removed widget {instance.Type} ({instance.Id}).");
     }
 
@@ -2403,6 +2532,14 @@ public sealed partial class DesktopPage : Page
             {
                 _upcomingEvents = result.Events.ToList();
                 RefreshTaskbarShelf(forceTodos: false);
+                // Keep open Calendar widgets in sync when AI / other paths write events.
+                foreach (var frame in WidgetCanvas.Children.OfType<WidgetFrame>())
+                {
+                    if (frame.HostedContent is CalendarWidgetView calendar)
+                    {
+                        calendar.RequestRefresh();
+                    }
+                }
             }
         }
         catch (Exception ex)
@@ -2647,7 +2784,8 @@ public sealed partial class DesktopPage : Page
 
         _layout.Blocks.Add(block);
         PersistLayoutNow();
-        RenderDesktopObjects();
+        MountBlockInstance(block);
+        SyncInteractiveInputRegions();
         RefreshDebugStatus();
         _logger?.Info("block", $"Created Block '{block.Name}' ({block.Id}).");
     }
@@ -3069,7 +3207,11 @@ public sealed partial class DesktopPage : Page
             if (failed > 0)
             {
                 PersistLayoutNow();
-                RenderDesktopObjects();
+                // Block kept — refresh only this frame if needed via full rebuild of blocks only
+                // would still kill WebViews; leave canvas as-is and re-mount this block.
+                UnmountBlockInstance(block.Id);
+                MountBlockInstance(block);
+                SyncInteractiveInputRegions();
                 RefreshDebugStatus();
                 ShowHostStatus("Some items could not be returned to the Desktop. The Block was kept.");
                 return;
@@ -3090,7 +3232,8 @@ public sealed partial class DesktopPage : Page
 
         _layout.Blocks.RemoveAll(b => b.Id == block.Id);
         PersistLayoutNow();
-        RenderDesktopObjects();
+        UnmountBlockInstance(block.Id);
+        SyncInteractiveInputRegions();
         RefreshDebugStatus();
         _logger?.Info("block", $"Deleted Block '{block.Name}' ({block.Id}).");
     }

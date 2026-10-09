@@ -13,6 +13,18 @@ public enum CalendarCommandKind
     RemoveEvent = 7
 }
 
+/// <summary>Where <see cref="CalendarCommandKind.AddEvent"/> should write.</summary>
+public static class CalendarEventDestinations
+{
+    public const string Local = "local";
+    public const string Google = "google";
+
+    public static string Normalize(string? value) =>
+        string.Equals(value?.Trim(), Google, StringComparison.OrdinalIgnoreCase)
+            ? Google
+            : Local;
+}
+
 /// <summary>Validated calendar intent. Never talks to Google APIs without CalendarService.</summary>
 public sealed class CalendarCommand
 {
@@ -34,6 +46,12 @@ public sealed class CalendarCommand
 
     public string? EventId { get; init; }
 
+    /// <summary>
+    /// <see cref="CalendarEventDestinations.Local"/> (default — Today widget) or
+    /// <see cref="CalendarEventDestinations.Google"/>.
+    /// </summary>
+    public string Destination { get; init; } = CalendarEventDestinations.Local;
+
     public static CalendarCommand GetTodayEvents() =>
         new() { Kind = CalendarCommandKind.GetTodayEvents };
 
@@ -51,7 +69,8 @@ public sealed class CalendarCommand
         int hour = -1,
         int minute = 0,
         int durationMinutes = 60,
-        bool isAllDay = false) =>
+        bool isAllDay = false,
+        string? destination = null) =>
         new()
         {
             Kind = CalendarCommandKind.AddEvent,
@@ -59,7 +78,8 @@ public sealed class CalendarCommand
             Hour = hour,
             Minute = minute,
             DurationMinutes = durationMinutes,
-            IsAllDay = isAllDay
+            IsAllDay = isAllDay,
+            Destination = CalendarEventDestinations.Normalize(destination)
         };
 
     public static CalendarCommand RememberUsual(
