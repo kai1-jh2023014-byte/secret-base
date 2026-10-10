@@ -22,7 +22,7 @@ public class AssistantToolRegistryTests
     public void BuiltinRegistry_ListsMvpTools_WithConfirmationPolicy()
     {
         var registry = BuiltinAssistantToolRegistry.Instance;
-        Assert.Equal(29, registry.Tools.Count);
+        Assert.Equal(30, registry.Tools.Count);
         Assert.NotNull(registry.Find(AssistantToolNames.CalendarAddEvent));
         Assert.NotNull(registry.Find(AssistantToolNames.CalendarApplyUsual));
         Assert.NotNull(registry.Find(AssistantToolNames.WorkspaceOpenNamed));
@@ -518,7 +518,8 @@ public class AssistantServiceTests
             new AssistantToolExecutor(BuiltinAssistantToolRegistry.Instance),
             () => new UnconfiguredAiProvider(AssistantProviderIds.OpenAi, "OpenAI"));
 
-        var result = await service.SendAsync("今日の予定は？");
+        // Needs the conversation model (not Local Fast Path agenda).
+        var result = await service.SendAsync("今日の優先事項をAIに相談したい");
         Assert.False(result.Succeeded);
         Assert.True(result.NeedsConfiguration);
         Assert.True(result.ShowOpenSettingsAction);
@@ -805,7 +806,8 @@ public class AssistantServiceTests
             new AssistantToolExecutor(BuiltinAssistantToolRegistry.Instance, calendar: calendar),
             () => provider);
 
-        var result = await service.SendAsync("今日の予定は？");
+        // Phrase that still requires the model tool loop (not Local Fast Path).
+        var result = await service.SendAsync("calendar_get_today で予定を確認して要約して");
         Assert.True(result.Succeeded);
         Assert.Equal(2, provider.Calls);
         Assert.Contains("DTM", result.AssistantText, StringComparison.Ordinal);

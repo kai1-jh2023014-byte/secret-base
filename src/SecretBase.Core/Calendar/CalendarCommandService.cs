@@ -112,7 +112,7 @@ public sealed class CalendarCommandService
         }
 
         var now = _time.GetLocalNow();
-        var day = DateOnly.FromDateTime(now.DateTime);
+        var day = DateOnly.FromDateTime(now.DateTime).AddDays(Math.Clamp(command.DayOffset, 0, 14));
         var hour = command.Hour is >= 0 and <= 23 ? command.Hour : now.Hour;
         var minute = Math.Clamp(command.Minute, 0, 59);
         var duration = command.DurationMinutes <= 0 ? 60 : Math.Clamp(command.DurationMinutes, 15, 480);

@@ -1,3 +1,5 @@
+using System.Diagnostics;
+using SecretBase.Core.Automation;
 using SecretBase.Core.Jev;
 
 namespace SecretBase.Core.Assistant;
@@ -73,6 +75,9 @@ public sealed class AssistantService : IAssistantService
     private int _stepsUsed;
     private readonly List<string> _turnToolNotes = [];
     private JevSafetyVerdict? _jevVerdict;
+    private JevNextStep? _jevNextStep;
+    private AssistantRouteTrace _routeTrace = new();
+    private readonly Stopwatch _turnClock = new();
 
     public AssistantService(
         IAiToolRegistry registry,
@@ -131,6 +136,9 @@ public sealed class AssistantService : IAssistantService
         _stepsUsed = 0;
         _turnToolNotes.Clear();
         _jevVerdict = null;
+        _jevNextStep = null;
+        _routeTrace = new AssistantRouteTrace();
+        _turnClock.Restart();
 
         var text = userText?.Trim() ?? string.Empty;
         if (string.IsNullOrWhiteSpace(text))
@@ -190,10 +198,100 @@ public sealed class AssistantService : IAssistantService
                 string.Equals(s.ToolName, AssistantToolNames.FocusStart, StringComparison.Ordinal)) == true
             || AssistantPlannerLooksLikeFocus(text))
         {
+            _routeTrace = new AssistantRouteTrace
+            {
+                RouteId = "focus_start",
+                FastPathKind = LocalFastPathKind.RunTools,
+                CompletedLocally = true
+            };
             return await ExecuteLocalFocusStartAsync(cancellationToken).ConfigureAwait(false);
         }
 
-        await ConsultJevAsync(text, snapshot, cancellationToken).ConfigureAwait(false);
+        // Local Fast Path: clear reads / safe ops / clarifies — skip Jev and conversation models.
+        var fast = LocalFastPathRouter.TryMatch(text, _turnIntent, snapshot);
+        _routeTrace = new AssistantRouteTrace
+        {
+            RouteId = fast.RouteId,
+            FastPathKind = fast.Kind
+        };
+
+        if (fast.Kind == LocalFastPathKind.Clarify)
+        {
+            _routeTrace = FinalizeTrace(completedLocally: true, succeeded: true);
+            _turnActivities.Add(new AssistantActivity
+            {
+                Text = "Local clarify (no Jev / no model)",
+                Domain = "Route",
+                Status = AssistantActivityStatus.Done
+            });
+            var question = fast.ClarifyQuestion ?? "Could you clarify?";
+            _history.Add(new AiMessage { Role = AiMessageRole.Assistant, Content = question });
+            return Finish(AssistantTurnResult.Ok(
+                question,
+                SnapshotActivities(),
+                AssistantResponseKind.Answer,
+                _turnIntent,
+                _turnPlan,
+                routeTrace: _routeTrace));
+        }
+
+        if (fast.Kind == LocalFastPathKind.RunTools)
+        {
+            return await ExecuteLocalFastPathAsync(fast, requiresConfirmation: false, cancellationToken)
+                .ConfigureAwait(false);
+        }
+
+        if (fast.Kind == LocalFastPathKind.ConfirmTools)
+        {
+            return await ExecuteLocalFastPathAsync(fast, requiresConfirmation: true, cancellationToken)
+                .ConfigureAwait(false);
+        }
+
+        // Judgment: situational phrases → Jev (and maybe a local next_step).
+        if (LocalFastPathRouter.NeedsJev(fast, _turnIntent, text))
+        {
+            await ConsultJevAsync(text, snapshot, cancellationToken).ConfigureAwait(false);
+            var localJev = await TryExecuteJevNextStepLocallyAsync(cancellationToken).ConfigureAwait(false);
+            if (localJev is not null)
+            {
+                return localJev;
+            }
+
+            if (fast.Kind == LocalFastPathKind.NeedsJudgment
+                && (_jevNextStep is null || _jevNextStep == JevNextStep.None)
+                && !LocalFastPathRouter.NeedsConversationModel(fast))
+            {
+                _routeTrace = FinalizeTrace(
+                    completedLocally: true,
+                    succeeded: true,
+                    fallbackReason: "Jev had no actionable next_step");
+                var msg =
+                    "I need a clearer next step (for example: show today's agenda, start Pomodoro, or prepare workspace).";
+                _history.Add(new AiMessage { Role = AiMessageRole.Assistant, Content = msg });
+                return Finish(AssistantTurnResult.Ok(
+                    msg,
+                    SnapshotActivities(),
+                    AssistantResponseKind.Answer,
+                    _turnIntent,
+                    _turnPlan,
+                    routeTrace: _routeTrace));
+            }
+        }
+
+        // Conversation model path: gate Action/Suggestion with Jev when not already consulted.
+        if (LocalFastPathRouter.NeedsConversationModel(fast)
+            && !_routeTrace.CalledJev
+            && _turnIntent is AssistantIntentKind.ActionRequest or AssistantIntentKind.Suggestion
+            && _jev is not null)
+        {
+            await ConsultJevAsync(text, snapshot, cancellationToken).ConfigureAwait(false);
+            var gated = await TryExecuteJevNextStepLocallyAsync(cancellationToken).ConfigureAwait(false);
+            if (gated is not null)
+            {
+                return gated;
+            }
+        }
+
         return await ContinueModelAsync(cancellationToken).ConfigureAwait(false);
     }
 
@@ -279,9 +377,12 @@ public sealed class AssistantService : IAssistantService
             Actions = [action],
             HasRiskyAction = false
         };
+        var dayOffset = events.Count > 0 ? events[0].DayOffset : 0;
         _turnPlan ??= new AssistantPlan
         {
-            Summary = "今日のローカルカレンダーに予定を追加します（確認が必要）。",
+            Summary = dayOffset > 0
+                ? "ローカルカレンダーに予定を追加します（確認が必要）。"
+                : "今日のローカルカレンダーに予定を追加します（確認が必要）。",
             Steps =
             [
                 new AssistantPlanStep
@@ -305,7 +406,256 @@ public sealed class AssistantService : IAssistantService
             Role = AiMessageRole.Assistant,
             Content = label + " Confirm to write to the Today widget."
         });
-        return Finish(AssistantTurnResult.Confirm(_pending, SnapshotActivities(), _turnPlan, _turnIntent));
+        _routeTrace = new AssistantRouteTrace
+        {
+            RouteId = "local_schedule",
+            FastPathKind = LocalFastPathKind.ConfirmTools,
+            CompletedLocally = true,
+            ConfirmationReason = "calendar_add_event requires confirmation",
+            ElapsedMilliseconds = _turnClock.ElapsedMilliseconds,
+            Succeeded = true
+        };
+        return Finish(AssistantTurnResult.Confirm(
+            _pending,
+            SnapshotActivities(),
+            _turnPlan,
+            _turnIntent,
+            routeTrace: _routeTrace));
+    }
+
+    private async Task<AssistantTurnResult> ExecuteLocalFastPathAsync(
+        LocalFastPathMatch match,
+        bool requiresConfirmation,
+        CancellationToken cancellationToken)
+    {
+        _turnActivities.Add(new AssistantActivity
+        {
+            Text = requiresConfirmation
+                ? $"Local fast path confirm ({match.RouteId})"
+                : $"Local fast path ({match.RouteId})",
+            Domain = "Route",
+            Status = AssistantActivityStatus.Done
+        });
+
+        if (requiresConfirmation)
+        {
+            var actions = match.Steps.Select(s => new AssistantPendingAction
+            {
+                ToolCallId = "local-" + Guid.NewGuid().ToString("N")[..12],
+                ToolName = s.ToolName,
+                ArgumentsJson = string.IsNullOrWhiteSpace(s.ArgumentsJson) ? "{}" : s.ArgumentsJson,
+                Label = string.IsNullOrWhiteSpace(s.Label) ? s.ToolName : s.Label
+            }).ToList();
+            _pending = new AssistantPendingConfirmation
+            {
+                Prompt = AssistantConfirmationPolicy.PromptForActions(actions),
+                Actions = actions,
+                HasRiskyAction = actions.Any(a =>
+                    string.Equals(a.ToolName, AssistantToolNames.FilesDelete, StringComparison.Ordinal)
+                    || string.Equals(a.ToolName, AssistantToolNames.WorkspaceRemove, StringComparison.Ordinal)
+                    || string.Equals(a.ToolName, AssistantToolNames.CursorOpenProject, StringComparison.Ordinal))
+            };
+            _routeTrace = FinalizeTrace(
+                completedLocally: true,
+                succeeded: true,
+                confirmationReason: match.RouteId);
+            _history.Add(new AiMessage
+            {
+                Role = AiMessageRole.Assistant,
+                Content = _pending.Prompt
+            });
+            return Finish(AssistantTurnResult.Confirm(
+                _pending,
+                SnapshotActivities(),
+                _turnPlan,
+                _turnIntent,
+                routeTrace: _routeTrace));
+        }
+
+        foreach (var step in match.Steps)
+        {
+            var tool = _registry.Find(step.ToolName);
+            if (tool is null)
+            {
+                _routeTrace = FinalizeTrace(
+                    completedLocally: true,
+                    succeeded: false,
+                    fallbackReason: "Unknown local tool " + step.ToolName);
+                return Finish(AssistantTurnResult.Fail(
+                    AssistantUserMessages.ToolUnavailable,
+                    intent: _turnIntent,
+                    plan: _turnPlan,
+                    routeTrace: _routeTrace));
+            }
+
+            if (!AssistantConfirmationPolicy.CanAutoExecute(tool)
+                || !AutomationSafety.CanRunWithoutPrompt(tool))
+            {
+                // Safety gate refused auto-run — do not bypass via fast path.
+                _routeTrace = FinalizeTrace(
+                    completedLocally: true,
+                    succeeded: false,
+                    fallbackReason: "Safety refused auto-run for " + step.ToolName);
+                return Finish(AssistantTurnResult.Fail(
+                    AssistantUserMessages.ToolUnavailable,
+                    intent: _turnIntent,
+                    plan: _turnPlan,
+                    routeTrace: _routeTrace));
+            }
+
+            var executed = await ExecuteAndRecordAsync(
+                    "local-" + Guid.NewGuid().ToString("N")[..12],
+                    step.ToolName,
+                    string.IsNullOrWhiteSpace(step.ArgumentsJson) ? "{}" : step.ArgumentsJson,
+                    cancellationToken)
+                .ConfigureAwait(false);
+            _actionResults.Add(new AssistantActionResult
+            {
+                ToolName = step.ToolName,
+                Label = step.Label,
+                Succeeded = executed.Succeeded,
+                CanRetry = !executed.Succeeded,
+                Reason = executed.ErrorMessage,
+                Message = executed.Succeeded
+                    ? Truncate(executed.ContentForModel, 200)
+                    : (executed.ErrorMessage ?? AssistantUserMessages.ToolUnavailable)
+            });
+            if (!executed.Succeeded)
+            {
+                _routeTrace = FinalizeTrace(
+                    completedLocally: true,
+                    succeeded: false,
+                    fallbackReason: executed.ErrorMessage);
+                return Finish(AssistantTurnResult.Fail(
+                    executed.ErrorMessage ?? AssistantUserMessages.ToolUnavailable,
+                    intent: _turnIntent,
+                    plan: _turnPlan,
+                    canRetry: true,
+                    retryUserText: LatestUserText(),
+                    routeTrace: _routeTrace));
+            }
+        }
+
+        _routeTrace = FinalizeTrace(completedLocally: true, succeeded: true);
+        return FinishFromToolNotes(
+            string.Join("\n", _turnToolNotes.Where(n => !string.IsNullOrWhiteSpace(n))),
+            canRetry: false);
+    }
+
+    private async Task<AssistantTurnResult?> TryExecuteJevNextStepLocallyAsync(CancellationToken cancellationToken)
+    {
+        if (_jevNextStep is null || _jevVerdict?.Kind == JevSafetyKind.Deny)
+        {
+            return null;
+        }
+
+        // Only map high-confidence Allow into Safe Auto tools. Confirm/SuggestOnly stay for the model or Confirm UI.
+        var allowAuto = _jevVerdict?.Kind == JevSafetyKind.Allow;
+
+        switch (_jevNextStep)
+        {
+            case JevNextStep.StartFocus when allowAuto:
+                _routeTrace = new AssistantRouteTrace
+                {
+                    RouteId = "jev_start_focus",
+                    FastPathKind = LocalFastPathKind.NeedsJudgment,
+                    CalledJev = true,
+                    CompletedLocally = true
+                };
+                return await ExecuteLocalFocusStartAsync(cancellationToken).ConfigureAwait(false);
+
+            case JevNextStep.PrepareWorkspace when allowAuto:
+            {
+                var match = LocalFastPathMatch.Run(
+                    "jev_prepare_workspace",
+                    new LocalFastPathStep
+                    {
+                        ToolName = AssistantToolNames.WorkspacePrepare,
+                        ArgumentsJson = """{"intent":"continue"}""",
+                        Label = "Prepare workspace"
+                    });
+                _routeTrace = new AssistantRouteTrace
+                {
+                    RouteId = match.RouteId,
+                    FastPathKind = LocalFastPathKind.NeedsJudgment,
+                    CalledJev = true
+                };
+                return await ExecuteLocalFastPathAsync(match, requiresConfirmation: false, cancellationToken)
+                    .ConfigureAwait(false);
+            }
+
+            case JevNextStep.ContinueWorkspace:
+            {
+                var match = LocalFastPathMatch.Confirm(
+                    "jev_continue_workspace",
+                    new LocalFastPathStep
+                    {
+                        ToolName = AssistantToolNames.WorkspaceContinue,
+                        ArgumentsJson = "{}",
+                        Label = "Continue workspace"
+                    });
+                _routeTrace = new AssistantRouteTrace
+                {
+                    RouteId = match.RouteId,
+                    FastPathKind = LocalFastPathKind.NeedsJudgment,
+                    CalledJev = true
+                };
+                return await ExecuteLocalFastPathAsync(match, requiresConfirmation: true, cancellationToken)
+                    .ConfigureAwait(false);
+            }
+
+            case JevNextStep.Suggest when allowAuto || _jevVerdict?.Kind == JevSafetyKind.SuggestOnly:
+            {
+                var match = LocalFastPathMatch.Run(
+                    "jev_suggest",
+                    new LocalFastPathStep
+                    {
+                        ToolName = AssistantToolNames.ScheduleRecommend,
+                        ArgumentsJson = "{}",
+                        Label = "Schedule suggestion"
+                    });
+                _routeTrace = new AssistantRouteTrace
+                {
+                    RouteId = match.RouteId,
+                    FastPathKind = LocalFastPathKind.NeedsJudgment,
+                    CalledJev = true
+                };
+                return await ExecuteLocalFastPathAsync(match, requiresConfirmation: false, cancellationToken)
+                    .ConfigureAwait(false);
+            }
+
+            default:
+                return null;
+        }
+    }
+
+    private AssistantRouteTrace FinalizeTrace(
+        bool completedLocally,
+        bool succeeded,
+        string? fallbackReason = null,
+        string? confirmationReason = null) =>
+        new()
+        {
+            RouteId = _routeTrace.RouteId,
+            FastPathKind = _routeTrace.FastPathKind,
+            CompletedLocally = completedLocally,
+            CalledJev = _routeTrace.CalledJev,
+            CalledConversationModel = _routeTrace.CalledConversationModel,
+            ConversationProviderId = _routeTrace.ConversationProviderId,
+            FallbackReason = fallbackReason ?? _routeTrace.FallbackReason,
+            ConfirmationReason = confirmationReason ?? _routeTrace.ConfirmationReason,
+            ElapsedMilliseconds = _turnClock.ElapsedMilliseconds,
+            Succeeded = succeeded
+        };
+
+    private static string Truncate(string? text, int max)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return string.Empty;
+        }
+
+        return text.Length <= max ? text : text[..max];
     }
 
     public async Task<AssistantTurnResult> ConfirmPendingAsync(CancellationToken cancellationToken = default)
@@ -415,6 +765,13 @@ public sealed class AssistantService : IAssistantService
             return;
         }
 
+        _routeTrace = new AssistantRouteTrace
+        {
+            RouteId = _routeTrace.RouteId,
+            FastPathKind = _routeTrace.FastPathKind,
+            CalledJev = true
+        };
+
         JevDecisionOutcome outcome;
         try
         {
@@ -440,6 +797,13 @@ public sealed class AssistantService : IAssistantService
                 Domain = "Jev",
                 Status = AssistantActivityStatus.Failed
             });
+            _routeTrace = new AssistantRouteTrace
+            {
+                RouteId = _routeTrace.RouteId,
+                FastPathKind = _routeTrace.FastPathKind,
+                CalledJev = true,
+                FallbackReason = "Jev exception — local rule, no automatic action"
+            };
             return;
         }
 
@@ -458,6 +822,17 @@ public sealed class AssistantService : IAssistantService
         if (!outcome.UsedFallback)
         {
             _jevVerdict = outcome.Verdict;
+            _jevNextStep = outcome.Decision.NextStep;
+        }
+        else
+        {
+            _routeTrace = new AssistantRouteTrace
+            {
+                RouteId = _routeTrace.RouteId,
+                FastPathKind = _routeTrace.FastPathKind,
+                CalledJev = true,
+                FallbackReason = "Jev unavailable — local rule, no automatic action"
+            };
         }
     }
 
@@ -476,6 +851,17 @@ public sealed class AssistantService : IAssistantService
             hasGeminiKey: string.Equals(provider.ProviderId, AssistantProviderIds.Gemini, StringComparison.OrdinalIgnoreCase));
         var model = runtime.Model;
         var maxRounds = Math.Min(MaxToolRounds, Math.Max(1, settings.MaxSteps));
+        _routeTrace = new AssistantRouteTrace
+        {
+            RouteId = string.IsNullOrWhiteSpace(_routeTrace.RouteId) || _routeTrace.RouteId == "none"
+                ? "conversation_model"
+                : _routeTrace.RouteId,
+            FastPathKind = _routeTrace.FastPathKind,
+            CalledJev = _routeTrace.CalledJev,
+            CalledConversationModel = true,
+            ConversationProviderId = provider.ProviderId,
+            FallbackReason = _routeTrace.FallbackReason
+        };
 
         for (var round = 0; round < maxRounds; round++)
         {
@@ -983,7 +1369,8 @@ public sealed class AssistantService : IAssistantService
             ShouldOpenCursorAtFolder = _lastLaunch?.ShouldOpenCursorAtFolder ?? false,
             CursorFolderPath = _lastLaunch?.CursorFolderPath,
             EnsureWidgetType = _ensureWidgetType,
-            ShouldArrangeDesktop = _shouldArrangeDesktop
+            ShouldArrangeDesktop = _shouldArrangeDesktop,
+            RouteTrace = AttachTrace(result.RouteTrace, result.Succeeded)
         });
     }
 
@@ -1009,8 +1396,25 @@ public sealed class AssistantService : IAssistantService
             ShouldOpenCursorAtFolder = result.ShouldOpenCursorAtFolder,
             CursorFolderPath = result.CursorFolderPath,
             EnsureWidgetType = result.EnsureWidgetType ?? _ensureWidgetType,
-            ShouldArrangeDesktop = result.ShouldArrangeDesktop || _shouldArrangeDesktop
+            ShouldArrangeDesktop = result.ShouldArrangeDesktop || _shouldArrangeDesktop,
+            RouteTrace = AttachTrace(result.RouteTrace, result.Succeeded)
         };
+
+    private AssistantRouteTrace AttachTrace(AssistantRouteTrace? existing, bool succeeded)
+    {
+        if (existing is not null && existing.ElapsedMilliseconds > 0)
+        {
+            return existing;
+        }
+
+        return FinalizeTrace(
+            completedLocally: existing?.CompletedLocally
+                              ?? (!_routeTrace.CalledConversationModel && !_routeTrace.CalledJev
+                                  || _routeTrace.CompletedLocally),
+            succeeded: succeeded,
+            fallbackReason: existing?.FallbackReason ?? _routeTrace.FallbackReason,
+            confirmationReason: existing?.ConfirmationReason ?? _routeTrace.ConfirmationReason);
+    }
 
     private IReadOnlyList<AiMessage> BuildModelMessages()
     {
@@ -1116,7 +1520,7 @@ public sealed class AssistantService : IAssistantService
         AssistantToolNames.IntegrationOpen => AssistantActivityDomains.Integration,
         AssistantToolNames.AppsList or AssistantToolNames.AppsOpen => AssistantActivityDomains.Apps,
         AssistantToolNames.MusicSearch or AssistantToolNames.MusicGetState
-            or AssistantToolNames.MusicPlay => AssistantActivityDomains.Music,
+            or AssistantToolNames.MusicPlay or AssistantToolNames.MusicPause => AssistantActivityDomains.Music,
         AssistantToolNames.WorkspacePrepare or AssistantToolNames.WorkspaceContinue
             or AssistantToolNames.WorkspaceOpenNamed or AssistantToolNames.CodingEnvironmentSetup =>
             AssistantActivityDomains.Workspace,

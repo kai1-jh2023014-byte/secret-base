@@ -44,6 +44,9 @@ public sealed class CalendarCommand
 
     public bool IsAllDay { get; init; }
 
+    /// <summary>Days ahead of local today for AddEvent (0 = today, max 14).</summary>
+    public int DayOffset { get; init; }
+
     public string? EventId { get; init; }
 
     /// <summary>
@@ -70,7 +73,8 @@ public sealed class CalendarCommand
         int minute = 0,
         int durationMinutes = 60,
         bool isAllDay = false,
-        string? destination = null) =>
+        string? destination = null,
+        int dayOffset = 0) =>
         new()
         {
             Kind = CalendarCommandKind.AddEvent,
@@ -79,6 +83,7 @@ public sealed class CalendarCommand
             Minute = minute,
             DurationMinutes = durationMinutes,
             IsAllDay = isAllDay,
+            DayOffset = Math.Clamp(dayOffset, 0, 14),
             Destination = CalendarEventDestinations.Normalize(destination)
         };
 
