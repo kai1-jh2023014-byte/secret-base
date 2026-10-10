@@ -18,10 +18,12 @@ User
 Assistant Widget
  ↓
 Assistant Service
+ ├─ Local Fast Path (clear reads / Safe Auto / confirms — no Jev / no LLM)
  ├─ Context
  ├─ Planner
+ ├─ Jev (situational judgment + Action/Suggestion gate — not a chat provider)
  ├─ Tool Registry
- └─ Conversation
+ └─ Conversation (Gemini / OpenAI / Local) — complex inference only
  ↓
 Command
  ↓
@@ -32,7 +34,7 @@ Host (ITargetLaunchService / ICursorLaunchService / browser)
 
 The LLM never calls `Process.Start`, PowerShell, the filesystem, Host Bridge, or WebView2.
 
-Jev is a separate decision layer, not another chat provider. See [jev-decision.md](jev-decision.md).
+**Routing:** clear agenda / project list / todo list / music pause / timed schedule writes complete locally. Jev decides situation / next_step / gate when the request is situational or an Action/Suggestion still needs the model. Gemini (and other conversation providers) are for ambiguous or multi-step inference — not for “今日の予定を見せて”. See [jev-decision.md](jev-decision.md). `AssistantTurnResult.RouteTrace` records route id, local completion, and whether Jev / the conversation model ran (no secrets).
 
 See also:
 

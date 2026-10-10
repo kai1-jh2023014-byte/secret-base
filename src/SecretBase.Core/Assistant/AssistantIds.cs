@@ -34,6 +34,7 @@ public static class AssistantToolNames
     public const string MusicSearch = "music_search";
     public const string MusicGetState = "music_get_state";
     public const string MusicPlay = "music_play";
+    public const string MusicPause = "music_pause";
     public const string ProjectRecommend = "project_recommend";
     public const string ScheduleRecommend = "schedule_recommend";
     public const string MusicRecommend = "music_recommend";

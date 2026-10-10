@@ -46,6 +46,7 @@ RequiresConfirmation
 |------|----------|
 | `workspace_prepare` | Build a workspace card from registered data. No launch. |
 | `focus_start` | Open Pomodoro widget + start/show local timer. No launch. |
+| `music_pause` | Pause current playback when supported. No launch. |
 | `coding_environment_setup` | Composite: prepare Workspace, start Pomodoro, ensure Creative/Pomodoro/Workspace widgets, arrange desktop. No OS launch. |
 
 ### Suggest
@@ -69,6 +70,7 @@ RequiresConfirmation
 | `integration_open` | `IntegrationCommandService` (`classroom` / `calendar`) |
 | `apps_open` | `app_id` or `name` → My App / Block / known target via allowlist → Host |
 | `music_play` | `track_id` or `query` → Music widget; on Premium/API failure opens Spotify track/search page |
+| `music_pause` | Pause playback when a provider supports it (**Safe Auto**) |
 | `workspace_open_named` | Open Block item / My App / Creative Project by **name** |
 | `workspace_continue` | Open the prepared workspace's registered project. Apps are listed, not auto-launched. |
 | `todo_add` | Local todo. Not Google Tasks. |

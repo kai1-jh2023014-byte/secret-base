@@ -344,6 +344,14 @@ public sealed class BuiltinAssistantToolRegistry : IAiToolRegistry
         },
         new()
         {
+            Name = AssistantToolNames.MusicPause,
+            Description =
+                "Pause current music playback when a connected provider supports pause. Safe Auto — does not launch OS.",
+            RiskLevel = ActionPrivilege.Observation,
+            Capability = AssistantToolCapability.SafeAuto
+        },
+        new()
+        {
             Name = AssistantToolNames.WorkspaceOpenNamed,
             Description =
                 "Open a registered Block item, My App, or Creative Project by display name (not a file path). Requires confirmation.",

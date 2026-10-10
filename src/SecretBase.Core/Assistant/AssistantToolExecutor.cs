@@ -97,6 +97,7 @@ public sealed class AssistantToolExecutor : IAiToolExecutor
             AssistantToolNames.MusicSearch => await MusicSearchAsync(root, cancellationToken).ConfigureAwait(false),
             AssistantToolNames.MusicGetState => MusicGetState(),
             AssistantToolNames.MusicPlay => await MusicPlayAsync(root, cancellationToken).ConfigureAwait(false),
+            AssistantToolNames.MusicPause => await MusicPauseAsync(cancellationToken).ConfigureAwait(false),
             AssistantToolNames.ProjectRecommend => await ProjectRecommendAsync(cancellationToken).ConfigureAwait(false),
             AssistantToolNames.ScheduleRecommend => await ScheduleRecommendAsync(cancellationToken).ConfigureAwait(false),
             AssistantToolNames.MusicRecommend => await MusicRecommendAsync(root, cancellationToken).ConfigureAwait(false),
@@ -221,7 +222,8 @@ public sealed class AssistantToolExecutor : IAiToolExecutor
         AssistantToolArgumentValidator.TryGetString(root, "destination", required: false, out var destinationRaw, out _);
         var destination = CalendarEventDestinations.Normalize(destinationRaw);
 
-        var drafts = new List<(string Title, int Hour, int Minute, int Duration)>();
+        AssistantToolArgumentValidator.TryGetInt(root, "day_offset", 0, 0, 14, out var rootDayOffset, out _);
+        var drafts = new List<(string Title, int Hour, int Minute, int Duration, int DayOffset)>();
         if (root.TryGetProperty("events", out var eventsEl) && eventsEl.ValueKind == JsonValueKind.Array)
         {
             foreach (var item in eventsEl.EnumerateArray())
@@ -254,7 +256,8 @@ public sealed class AssistantToolExecutor : IAiToolExecutor
                     return AssistantToolResult.Fail(eventError, activityDomain: AssistantActivityDomains.Calendar);
                 }
 
-                drafts.Add((eventTitle, eventHour, eventMinute, eventDuration));
+                AssistantToolArgumentValidator.TryGetInt(item, "day_offset", rootDayOffset, 0, 14, out var eventDay, out _);
+                drafts.Add((eventTitle, eventHour, eventMinute, eventDuration, eventDay));
             }
         }
 
@@ -283,7 +286,7 @@ public sealed class AssistantToolExecutor : IAiToolExecutor
                 return AssistantToolResult.Fail(error, activityDomain: AssistantActivityDomains.Calendar);
             }
 
-            drafts.Add((title, hour, minute, duration));
+            drafts.Add((title, hour, minute, duration, rootDayOffset));
         }
 
         if (drafts.Count > 12)
@@ -303,7 +306,8 @@ public sealed class AssistantToolExecutor : IAiToolExecutor
                         draft.Hour,
                         draft.Minute,
                         draft.Duration,
-                        destination: destination),
+                        destination: destination,
+                        dayOffset: draft.DayOffset),
                     cancellationToken)
                 .ConfigureAwait(false);
             if (!result.Succeeded)
@@ -849,6 +853,29 @@ public sealed class AssistantToolExecutor : IAiToolExecutor
             + "note=Demo catalog is not Spotify/YouTube API playback.";
         return AssistantToolResult.Ok(
             fallbackBody,
+            activity: "Music ✓",
+            activityDomain: AssistantActivityDomains.Music);
+    }
+
+    private async Task<AssistantToolResult> MusicPauseAsync(CancellationToken cancellationToken)
+    {
+        if (_music is null)
+        {
+            return AssistantToolResult.Fail(
+                AssistantUserMessages.ToolUnavailable,
+                activityDomain: AssistantActivityDomains.Music);
+        }
+
+        var result = await _music.ExecuteAsync(MusicCommand.Pause(), cancellationToken).ConfigureAwait(false);
+        if (!result.Succeeded)
+        {
+            return AssistantToolResult.Fail(
+                result.ErrorMessage ?? "Could not pause music.",
+                activityDomain: AssistantActivityDomains.Music);
+        }
+
+        return AssistantToolResult.Ok(
+            "Paused music playback.",
             activity: "Music ✓",
             activityDomain: AssistantActivityDomains.Music);
     }
