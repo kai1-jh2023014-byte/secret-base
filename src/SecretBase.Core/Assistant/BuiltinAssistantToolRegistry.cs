@@ -500,6 +500,142 @@ public sealed class BuiltinAssistantToolRegistry : IAiToolRegistry
         },
         new()
         {
+            Name = AssistantToolNames.FocusStop,
+            Description =
+                "Stop the local Pomodoro / focus timer and clear the session. Safe Auto — does not launch apps.",
+            RiskLevel = ActionPrivilege.Observation,
+            Capability = AssistantToolCapability.SafeAuto
+        },
+        new()
+        {
+            Name = AssistantToolNames.FocusGetState,
+            Description = "Read the current Pomodoro / focus timer state. Read-only.",
+            RiskLevel = ActionPrivilege.Observation,
+            Capability = AssistantToolCapability.ReadOnly
+        },
+        new()
+        {
+            Name = AssistantToolNames.WidgetEnsure,
+            Description =
+                "Ensure a built-in Secret Base widget is on the desktop (add if missing). "
+                + "widget_type: clock, text, web, calendar, music, creative, ai, apps, assistant, workspace, pomodoro, progress. Safe Auto.",
+            Parameters =
+            [
+                new AssistantToolParameter
+                {
+                    Name = "widget_type",
+                    Type = "string",
+                    Description = "Built-in WidgetTypes id such as calendar or pomodoro.",
+                    Required = true
+                }
+            ],
+            RiskLevel = ActionPrivilege.Observation,
+            Capability = AssistantToolCapability.SafeAuto
+        },
+        new()
+        {
+            Name = AssistantToolNames.WidgetArrange,
+            Description =
+                "Ask the host to arrange desktop widgets in a simple grid and optionally ensure widget types first. Safe Auto.",
+            Parameters =
+            [
+                new AssistantToolParameter
+                {
+                    Name = "widget_types",
+                    Type = "string",
+                    Description =
+                        "Optional comma-separated WidgetTypes to ensure before arranging (e.g. calendar,pomodoro).",
+                    Required = false
+                }
+            ],
+            RiskLevel = ActionPrivilege.Observation,
+            Capability = AssistantToolCapability.SafeAuto
+        },
+        new()
+        {
+            Name = AssistantToolNames.ProjectFileList,
+            Description =
+                "List files under a registered Creative Project root folder (relative paths only, depth-limited). Read-only.",
+            Parameters =
+            [
+                new AssistantToolParameter
+                {
+                    Name = "project_id",
+                    Type = "string",
+                    Description = "Creative project id from creative_list_projects.",
+                    Required = true
+                },
+                new AssistantToolParameter
+                {
+                    Name = "relative_path",
+                    Type = "string",
+                    Description = "Optional relative directory under the project root.",
+                    Required = false
+                }
+            ],
+            RiskLevel = ActionPrivilege.Observation,
+            Capability = AssistantToolCapability.ReadOnly
+        },
+        new()
+        {
+            Name = AssistantToolNames.ProjectFileRead,
+            Description =
+                "Read a text file under a registered Creative Project root (relative path, allowlisted extensions, size-capped). Read-only.",
+            Parameters =
+            [
+                new AssistantToolParameter
+                {
+                    Name = "project_id",
+                    Type = "string",
+                    Description = "Creative project id.",
+                    Required = true
+                },
+                new AssistantToolParameter
+                {
+                    Name = "relative_path",
+                    Type = "string",
+                    Description = "Relative file path under the project root (e.g. README.md).",
+                    Required = true
+                }
+            ],
+            RiskLevel = ActionPrivilege.Observation,
+            Capability = AssistantToolCapability.ReadOnly
+        },
+        new()
+        {
+            Name = AssistantToolNames.ProjectFileWrite,
+            Description =
+                "Create or overwrite a text file under a registered Creative Project root. "
+                + "Relative path only, allowlisted extensions, size-capped. Requires confirmation. Never deletes.",
+            Parameters =
+            [
+                new AssistantToolParameter
+                {
+                    Name = "project_id",
+                    Type = "string",
+                    Description = "Creative project id.",
+                    Required = true
+                },
+                new AssistantToolParameter
+                {
+                    Name = "relative_path",
+                    Type = "string",
+                    Description = "Relative file path under the project root.",
+                    Required = true
+                },
+                new AssistantToolParameter
+                {
+                    Name = "content",
+                    Type = "string",
+                    Description = "UTF-8 text content to write.",
+                    Required = true
+                }
+            ],
+            RiskLevel = ActionPrivilege.SafeAction,
+            Capability = AssistantToolCapability.RequiresConfirmation
+        },
+        new()
+        {
             Name = AssistantToolNames.CodingEnvironmentSetup,
             Description =
                 "Composite Safe Auto for a programming / coding environment: prepare Workspace, "

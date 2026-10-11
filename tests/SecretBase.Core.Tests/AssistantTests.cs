@@ -22,15 +22,29 @@ public class AssistantToolRegistryTests
     public void BuiltinRegistry_ListsMvpTools_WithConfirmationPolicy()
     {
         var registry = BuiltinAssistantToolRegistry.Instance;
-        Assert.Equal(30, registry.Tools.Count);
+        Assert.Equal(37, registry.Tools.Count);
         Assert.NotNull(registry.Find(AssistantToolNames.CalendarAddEvent));
         Assert.NotNull(registry.Find(AssistantToolNames.CalendarApplyUsual));
         Assert.NotNull(registry.Find(AssistantToolNames.WorkspaceOpenNamed));
         Assert.NotNull(registry.Find(AssistantToolNames.WorkspacePrepare));
         Assert.NotNull(registry.Find(AssistantToolNames.WorkspaceContinue));
         Assert.NotNull(registry.Find(AssistantToolNames.FilesSuggestCleanup));
+        Assert.NotNull(registry.Find(AssistantToolNames.FocusStop));
+        Assert.NotNull(registry.Find(AssistantToolNames.FocusGetState));
+        Assert.NotNull(registry.Find(AssistantToolNames.WidgetEnsure));
+        Assert.NotNull(registry.Find(AssistantToolNames.WidgetArrange));
+        Assert.NotNull(registry.Find(AssistantToolNames.ProjectFileList));
+        Assert.NotNull(registry.Find(AssistantToolNames.ProjectFileRead));
+        Assert.NotNull(registry.Find(AssistantToolNames.ProjectFileWrite));
         Assert.Equal(AssistantToolCapability.SafeAuto, registry.Find(AssistantToolNames.WorkspacePrepare)!.Capability);
         Assert.Equal(AssistantToolCapability.SafeAuto, registry.Find(AssistantToolNames.FocusStart)!.Capability);
+        Assert.Equal(AssistantToolCapability.SafeAuto, registry.Find(AssistantToolNames.FocusStop)!.Capability);
+        Assert.Equal(AssistantToolCapability.SafeAuto, registry.Find(AssistantToolNames.WidgetEnsure)!.Capability);
+        Assert.Equal(AssistantToolCapability.SafeAuto, registry.Find(AssistantToolNames.WidgetArrange)!.Capability);
+        Assert.Equal(AssistantToolCapability.ReadOnly, registry.Find(AssistantToolNames.FocusGetState)!.Capability);
+        Assert.Equal(AssistantToolCapability.ReadOnly, registry.Find(AssistantToolNames.ProjectFileList)!.Capability);
+        Assert.Equal(AssistantToolCapability.ReadOnly, registry.Find(AssistantToolNames.ProjectFileRead)!.Capability);
+        Assert.Equal(AssistantToolCapability.RequiresConfirmation, registry.Find(AssistantToolNames.ProjectFileWrite)!.Capability);
         Assert.True(AssistantConfirmationPolicy.CanAutoExecute(registry.Find(AssistantToolNames.WorkspacePrepare)!));
         Assert.True(registry.Find(AssistantToolNames.WorkspaceContinue)!.RequiresConfirmation);
         Assert.True(registry.Find(AssistantToolNames.TodoAdd)!.RequiresConfirmation);
@@ -71,6 +85,9 @@ public class AssistantToolRegistryTests
         Assert.True(registry.Find(AssistantToolNames.WorkspaceOpenNamed)!.RequiresConfirmation);
         Assert.True(registry.Find(AssistantToolNames.WorkspaceRemove)!.RequiresConfirmation);
         Assert.True(registry.Find(AssistantToolNames.FilesDelete)!.RequiresConfirmation);
+        Assert.True(registry.Find(AssistantToolNames.ProjectFileWrite)!.RequiresConfirmation);
+        Assert.False(registry.Find(AssistantToolNames.FocusStop)!.RequiresConfirmation);
+        Assert.False(registry.Find(AssistantToolNames.WidgetEnsure)!.RequiresConfirmation);
 
         Assert.Equal(ActionPrivilege.Observation, registry.Find(AssistantToolNames.CalendarGetToday)!.RiskLevel);
         Assert.Equal(ActionPrivilege.UserConfirmationRequired, registry.Find(AssistantToolNames.CursorOpenProject)!.RiskLevel);

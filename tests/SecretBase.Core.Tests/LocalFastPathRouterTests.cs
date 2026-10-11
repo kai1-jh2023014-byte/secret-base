@@ -65,6 +65,32 @@ public class LocalFastPathRouterTests
     }
 
     [Fact]
+    public void FocusStop_IsLocalRun()
+    {
+        var match = LocalFastPathRouter.TryMatch("ポモドーロを止めて", AssistantIntentKind.ActionRequest);
+        Assert.Equal(LocalFastPathKind.RunTools, match.Kind);
+        Assert.Equal(AssistantToolNames.FocusStop, match.Steps[0].ToolName);
+        Assert.False(LocalFastPathRouter.NeedsJev(match, AssistantIntentKind.ActionRequest, "ポモドーロを止めて"));
+    }
+
+    [Fact]
+    public void WidgetEnsure_Calendar_IsLocalRun()
+    {
+        var match = LocalFastPathRouter.TryMatch("カレンダーを出して", AssistantIntentKind.ActionRequest);
+        Assert.Equal(LocalFastPathKind.RunTools, match.Kind);
+        Assert.Equal(AssistantToolNames.WidgetEnsure, match.Steps[0].ToolName);
+        Assert.Contains("calendar", match.Steps[0].ArgumentsJson, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void WidgetArrange_IsLocalRun()
+    {
+        var match = LocalFastPathRouter.TryMatch("ウィジェットを並べて", AssistantIntentKind.ActionRequest);
+        Assert.Equal(LocalFastPathKind.RunTools, match.Kind);
+        Assert.Equal(AssistantToolNames.WidgetArrange, match.Steps[0].ToolName);
+    }
+
+    [Fact]
     public void ComplexQuestion_NeedsConversationModel_NotJev()
     {
         var match = LocalFastPathRouter.TryMatch("Pokemonについて教えて", AssistantIntentKind.Question);

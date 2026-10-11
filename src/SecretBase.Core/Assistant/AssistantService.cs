@@ -1524,7 +1524,11 @@ public sealed class AssistantService : IAssistantService
         AssistantToolNames.WorkspacePrepare or AssistantToolNames.WorkspaceContinue
             or AssistantToolNames.WorkspaceOpenNamed or AssistantToolNames.CodingEnvironmentSetup =>
             AssistantActivityDomains.Workspace,
-        AssistantToolNames.FocusStart => AssistantActivityDomains.Focus,
+        AssistantToolNames.FocusStart or AssistantToolNames.FocusStop
+            or AssistantToolNames.FocusGetState => AssistantActivityDomains.Focus,
+        AssistantToolNames.WidgetEnsure or AssistantToolNames.WidgetArrange => AssistantActivityDomains.Workspace,
+        AssistantToolNames.ProjectFileList or AssistantToolNames.ProjectFileRead
+            or AssistantToolNames.ProjectFileWrite => AssistantActivityDomains.Files,
         AssistantToolNames.TodoList or AssistantToolNames.TodoAdd => AssistantActivityDomains.Todo,
         _ => "Action"
     };

@@ -109,6 +109,13 @@ public sealed class AssistantToolExecutor : IAiToolExecutor
             AssistantToolNames.TodoList => TodoList(),
             AssistantToolNames.TodoAdd => TodoAdd(root),
             AssistantToolNames.FocusStart => FocusStart(root),
+            AssistantToolNames.FocusStop => FocusStop(),
+            AssistantToolNames.FocusGetState => FocusGetState(),
+            AssistantToolNames.WidgetEnsure => WidgetEnsure(root),
+            AssistantToolNames.WidgetArrange => WidgetArrange(root),
+            AssistantToolNames.ProjectFileList => ProjectFileList(root),
+            AssistantToolNames.ProjectFileRead => ProjectFileRead(root),
+            AssistantToolNames.ProjectFileWrite => ProjectFileWrite(root),
             AssistantToolNames.CodingEnvironmentSetup => CodingEnvironmentSetup(root),
             AssistantToolNames.FilesSuggestCleanup => FilesSuggestCleanup(),
             _ => AssistantToolResult.Fail(AssistantUserMessages.ToolUnavailable)
@@ -1388,6 +1395,245 @@ public sealed class AssistantToolExecutor : IAiToolExecutor
             activity: "Focus ✓",
             activityDomain: AssistantActivityDomains.Focus,
             ensureWidgetType: WidgetTypes.Pomodoro);
+    }
+
+    private AssistantToolResult FocusStop()
+    {
+        if (_base is null)
+        {
+            return AssistantToolResult.Fail(
+                AssistantUserMessages.ToolUnavailable,
+                activityDomain: AssistantActivityDomains.Focus);
+        }
+
+        var before = _base.Focus.Current;
+        if (!before.IsRunning)
+        {
+            return AssistantToolResult.Ok(
+                "No Pomodoro session was running.",
+                activity: "Focus ✓",
+                activityDomain: AssistantActivityDomains.Focus,
+                ensureWidgetType: WidgetTypes.Pomodoro);
+        }
+
+        _base.Focus.Stop();
+        return AssistantToolResult.Ok(
+            $"Stopped {before.Label} ({before.PhaseLabel}).",
+            activity: "Focus ✓",
+            activityDomain: AssistantActivityDomains.Focus,
+            ensureWidgetType: WidgetTypes.Pomodoro);
+    }
+
+    private AssistantToolResult FocusGetState()
+    {
+        if (_base is null)
+        {
+            return AssistantToolResult.Fail(
+                AssistantUserMessages.ToolUnavailable,
+                activityDomain: AssistantActivityDomains.Focus);
+        }
+
+        var session = _base.Focus.Current;
+        var body = session.IsRunning
+            ? session.StatusLine(_base.Now) + " · " + session.RoundProgressLine
+            : "Pomodoro idle (not running).";
+        return AssistantToolResult.Ok(
+            body,
+            activity: "Focus ✓",
+            activityDomain: AssistantActivityDomains.Focus);
+    }
+
+    private static readonly HashSet<string> AllowedWidgetTypes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        WidgetTypes.Clock,
+        WidgetTypes.Text,
+        WidgetTypes.Web,
+        WidgetTypes.Calendar,
+        WidgetTypes.Music,
+        WidgetTypes.Creative,
+        WidgetTypes.Ai,
+        WidgetTypes.Apps,
+        WidgetTypes.Assistant,
+        WidgetTypes.Workspace,
+        WidgetTypes.Pomodoro,
+        WidgetTypes.Progress
+    };
+
+    private AssistantToolResult WidgetEnsure(JsonElement root)
+    {
+        if (!AssistantToolArgumentValidator.TryGetString(root, "widget_type", required: true, out var type, out var error)
+            || string.IsNullOrWhiteSpace(type))
+        {
+            return AssistantToolResult.Fail(
+                error.Length > 0 ? error : "Missing widget_type.",
+                activityDomain: AssistantActivityDomains.Workspace);
+        }
+
+        type = type.Trim().ToLowerInvariant();
+        if (!AllowedWidgetTypes.Contains(type))
+        {
+            return AssistantToolResult.Fail(
+                "Unknown widget_type. Use a built-in WidgetTypes id.",
+                activityDomain: AssistantActivityDomains.Workspace);
+        }
+
+        return AssistantToolResult.Ok(
+            $"Ensuring widget '{type}' is on the desktop.",
+            activity: "Widget ✓",
+            activityDomain: AssistantActivityDomains.Workspace,
+            ensureWidgetType: type);
+    }
+
+    private AssistantToolResult WidgetArrange(JsonElement root)
+    {
+        AssistantToolArgumentValidator.TryGetString(root, "widget_types", required: false, out var types, out _);
+        string? ensure = null;
+        if (!string.IsNullOrWhiteSpace(types))
+        {
+            var parts = types.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Select(t => t.ToLowerInvariant())
+                .Where(t => AllowedWidgetTypes.Contains(t))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            if (parts.Count == 0)
+            {
+                return AssistantToolResult.Fail(
+                    "No valid widget_types to ensure.",
+                    activityDomain: AssistantActivityDomains.Workspace);
+            }
+
+            ensure = string.Join(',', parts);
+        }
+
+        return AssistantToolResult.Ok(
+            ensure is null
+                ? "Arranging desktop widgets in a simple grid."
+                : $"Ensuring [{ensure}] then arranging desktop widgets.",
+            activity: "Widget ✓",
+            activityDomain: AssistantActivityDomains.Workspace,
+            ensureWidgetType: ensure,
+            shouldArrangeDesktop: true);
+    }
+
+    private AssistantToolResult ProjectFileList(JsonElement root)
+    {
+        if (_base is null)
+        {
+            return AssistantToolResult.Fail(
+                AssistantUserMessages.ToolUnavailable,
+                activityDomain: AssistantActivityDomains.Files);
+        }
+
+        if (!AssistantToolArgumentValidator.TryGetString(root, "project_id", required: true, out var projectId, out var error))
+        {
+            return AssistantToolResult.Fail(error, activityDomain: AssistantActivityDomains.Files);
+        }
+
+        AssistantToolArgumentValidator.TryGetRelativePath(root, "relative_path", required: false, out var relative, out _);
+        if (!ProjectFileAccess.TryResolveProject(_base.ListProjects(), projectId, out var project, out error)
+            || project is null)
+        {
+            return AssistantToolResult.Fail(error, activityDomain: AssistantActivityDomains.Files);
+        }
+
+        var listing = ProjectFileAccess.ListRelative(project.RootFolder!, relative, out error);
+        if (!string.IsNullOrEmpty(error))
+        {
+            return AssistantToolResult.Fail(error, activityDomain: AssistantActivityDomains.Files);
+        }
+
+        return AssistantToolResult.Ok(
+            $"Project {project.Name} files:\n{listing}",
+            activity: "Files ✓",
+            activityDomain: AssistantActivityDomains.Files);
+    }
+
+    private AssistantToolResult ProjectFileRead(JsonElement root)
+    {
+        if (_base is null)
+        {
+            return AssistantToolResult.Fail(
+                AssistantUserMessages.ToolUnavailable,
+                activityDomain: AssistantActivityDomains.Files);
+        }
+
+        if (!AssistantToolArgumentValidator.TryGetString(root, "project_id", required: true, out var projectId, out var error)
+            || !AssistantToolArgumentValidator.TryGetRelativePath(root, "relative_path", required: true, out var relative, out error))
+        {
+            return AssistantToolResult.Fail(error, activityDomain: AssistantActivityDomains.Files);
+        }
+
+        if (!ProjectFileAccess.TryResolveProject(_base.ListProjects(), projectId, out var project, out error)
+            || project is null)
+        {
+            return AssistantToolResult.Fail(error, activityDomain: AssistantActivityDomains.Files);
+        }
+
+        if (!ProjectFileAccess.TryResolveUnderRoot(project.RootFolder!, relative, out var full, out error))
+        {
+            return AssistantToolResult.Fail(error, activityDomain: AssistantActivityDomains.Files);
+        }
+
+        var text = ProjectFileAccess.ReadText(full, out error);
+        if (!string.IsNullOrEmpty(error))
+        {
+            return AssistantToolResult.Fail(error, activityDomain: AssistantActivityDomains.Files);
+        }
+
+        return AssistantToolResult.Ok(
+            $"Read {relative} ({text.Length} chars):\n{text}",
+            activity: "Files ✓",
+            activityDomain: AssistantActivityDomains.Files);
+    }
+
+    private AssistantToolResult ProjectFileWrite(JsonElement root)
+    {
+        if (_base is null)
+        {
+            return AssistantToolResult.Fail(
+                AssistantUserMessages.ToolUnavailable,
+                activityDomain: AssistantActivityDomains.Files);
+        }
+
+        if (!AssistantToolArgumentValidator.TryGetString(root, "project_id", required: true, out var projectId, out var error)
+            || !AssistantToolArgumentValidator.TryGetRelativePath(root, "relative_path", required: true, out var relative, out error)
+            || !AssistantToolArgumentValidator.TryGetContent(root, "content", required: true, out var content, out error))
+        {
+            return AssistantToolResult.Fail(error, activityDomain: AssistantActivityDomains.Files);
+        }
+
+        if (!ProjectFileAccess.TryResolveProject(_base.ListProjects(), projectId, out var project, out error)
+            || project is null)
+        {
+            return AssistantToolResult.Fail(error, activityDomain: AssistantActivityDomains.Files);
+        }
+
+        if (!ProjectFileAccess.TryResolveUnderRoot(project.RootFolder!, relative, out var full, out error))
+        {
+            return AssistantToolResult.Fail(error, activityDomain: AssistantActivityDomains.Files);
+        }
+
+        if (!ProjectFileAccess.WriteText(full, content, out error, out var previous))
+        {
+            return AssistantToolResult.Fail(error, activityDomain: AssistantActivityDomains.Files);
+        }
+
+        // Verify by reading back.
+        var readBack = ProjectFileAccess.ReadText(full, out var verifyError);
+        if (!string.IsNullOrEmpty(verifyError) || readBack != content)
+        {
+            return AssistantToolResult.Fail(
+                verifyError.Length > 0 ? verifyError : "Write verification failed.",
+                activityDomain: AssistantActivityDomains.Files);
+        }
+
+        var note = previous is null
+            ? $"Wrote new file {relative} ({content.Length} chars)."
+            : $"Updated {relative} ({content.Length} chars; previous {previous.Length} chars kept in memory for this reply only).";
+        return AssistantToolResult.Ok(
+            note,
+            activity: "Files ✓",
+            activityDomain: AssistantActivityDomains.Files);
     }
 
     /// <summary>

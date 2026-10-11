@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using SecretBase.Core.Widgets;
 
 namespace SecretBase.Core.Assistant;
 
@@ -104,6 +105,32 @@ public static partial class LocalFastPathRouter
         if (LooksLikeSituationalJudgment(text))
         {
             return LocalFastPathMatch.Judgment("situational");
+        }
+
+        if (LooksLikeFocusStop(text))
+        {
+            return LocalFastPathMatch.Run(
+                "focus_stop",
+                Step(AssistantToolNames.FocusStop, "{}", "Stop Pomodoro"));
+        }
+
+        if (LooksLikeFocusState(text))
+        {
+            return LocalFastPathMatch.Run(
+                "focus_state",
+                Step(AssistantToolNames.FocusGetState, "{}", "Focus state"));
+        }
+
+        if (LooksLikeWidgetArrange(text))
+        {
+            return LocalFastPathMatch.Run(
+                "widget_arrange",
+                Step(AssistantToolNames.WidgetArrange, "{}", "Arrange widgets"));
+        }
+
+        if (TryMatchWidgetEnsure(text, out var ensureMatch))
+        {
+            return ensureMatch;
         }
 
         if (LooksLikeMusicPause(text))
@@ -235,6 +262,101 @@ public static partial class LocalFastPathRouter
             && !text.Contains("プログラミング環境", StringComparison.Ordinal)
             && !text.Contains("開発環境", StringComparison.Ordinal)
             && !text.Contains("コーディング環境", StringComparison.Ordinal));
+
+    private static bool LooksLikeFocusStop(string text) =>
+        (text.Contains("ポモ", StringComparison.Ordinal)
+         || text.Contains("ぽも", StringComparison.Ordinal)
+         || text.Contains("pomodoro", StringComparison.OrdinalIgnoreCase)
+         || text.Contains("タイマー", StringComparison.Ordinal)
+         || text.Contains("timer", StringComparison.OrdinalIgnoreCase)
+         || text.Contains("フォーカス", StringComparison.Ordinal)
+         || text.Contains("focus", StringComparison.OrdinalIgnoreCase))
+        && (text.Contains("止め", StringComparison.Ordinal)
+            || text.Contains("停止", StringComparison.Ordinal)
+            || text.Contains("終了", StringComparison.Ordinal)
+            || text.Contains("stop", StringComparison.OrdinalIgnoreCase)
+            || text.Contains("cancel", StringComparison.OrdinalIgnoreCase));
+
+    private static bool LooksLikeFocusState(string text) =>
+        text.Contains("タイマーの状態", StringComparison.Ordinal)
+        || text.Contains("ポモドーロの状態", StringComparison.Ordinal)
+        || text.Contains("focus state", StringComparison.OrdinalIgnoreCase)
+        || text.Contains("timer status", StringComparison.OrdinalIgnoreCase)
+        || ((text.Contains("ポモ", StringComparison.Ordinal) || text.Contains("タイマー", StringComparison.Ordinal))
+            && (text.Contains("残り", StringComparison.Ordinal) || text.Contains("どうなって", StringComparison.Ordinal)));
+
+    private static bool LooksLikeWidgetArrange(string text) =>
+        text.Contains("ウィジェットを並べ", StringComparison.Ordinal)
+        || text.Contains("ウィジェットを整列", StringComparison.Ordinal)
+        || text.Contains("デスクトップを並べ", StringComparison.Ordinal)
+        || text.Contains("arrange widgets", StringComparison.OrdinalIgnoreCase)
+        || text.Contains("arrange the desktop", StringComparison.OrdinalIgnoreCase);
+
+    private static bool TryMatchWidgetEnsure(string text, out LocalFastPathMatch match)
+    {
+        match = LocalFastPathMatch.None();
+        var show = text.Contains("出して", StringComparison.Ordinal)
+                   || text.Contains("表示", StringComparison.Ordinal)
+                   || text.Contains("見せて", StringComparison.Ordinal)
+                   || text.Contains("開いて", StringComparison.Ordinal)
+                   || text.Contains("show", StringComparison.OrdinalIgnoreCase)
+                   || text.Contains("open", StringComparison.OrdinalIgnoreCase);
+        if (!show)
+        {
+            return false;
+        }
+
+        string? type = null;
+        if (text.Contains("カレンダー", StringComparison.Ordinal) || text.Contains("calendar", StringComparison.OrdinalIgnoreCase))
+        {
+            type = WidgetTypes.Calendar;
+        }
+        else if (text.Contains("ポモ", StringComparison.Ordinal) || text.Contains("pomodoro", StringComparison.OrdinalIgnoreCase))
+        {
+            type = WidgetTypes.Pomodoro;
+        }
+        else if (text.Contains("音楽", StringComparison.Ordinal) || text.Contains("music", StringComparison.OrdinalIgnoreCase))
+        {
+            type = WidgetTypes.Music;
+        }
+        else if (text.Contains("時計", StringComparison.Ordinal) || text.Contains("clock", StringComparison.OrdinalIgnoreCase))
+        {
+            type = WidgetTypes.Clock;
+        }
+        else if (text.Contains("ワークスペース", StringComparison.Ordinal)
+                 || text.Contains("workspace", StringComparison.OrdinalIgnoreCase))
+        {
+            type = WidgetTypes.Workspace;
+        }
+        else if (text.Contains("ウィジェット", StringComparison.Ordinal) || text.Contains("widget", StringComparison.OrdinalIgnoreCase))
+        {
+            // Too vague — ask.
+            match = LocalFastPathMatch.Clarify(
+                "widget_ensure",
+                "Which widget should I show? (calendar, pomodoro, music, clock, workspace, …)");
+            return true;
+        }
+
+        if (type is null)
+        {
+            return false;
+        }
+
+        // Avoid stealing "open calendar in browser" / music play.
+        if (type == WidgetTypes.Music
+            && (text.Contains("かけて", StringComparison.Ordinal)
+                || text.Contains("再生", StringComparison.Ordinal)
+                || text.Contains("play", StringComparison.OrdinalIgnoreCase)))
+        {
+            return false;
+        }
+
+        var args = JsonSerializer.Serialize(new Dictionary<string, string> { ["widget_type"] = type });
+        match = LocalFastPathMatch.Run(
+            "widget_ensure",
+            Step(AssistantToolNames.WidgetEnsure, args, $"Show {type} widget"));
+        return true;
+    }
 
     private static bool LooksLikeMusicPause(string text) =>
         ((text.Contains("音楽", StringComparison.Ordinal)

@@ -39,6 +39,9 @@ RequiresConfirmation
 | `music_search` | `MusicCommand.SearchTrack` (if Search capability) |
 | `music_get_state` | Context / MusicService state |
 | `todo_list` | Local todos |
+| `focus_get_state` | Pomodoro / focus timer state |
+| `project_file_list` | Relative listing under a registered Creative Project root (depth/size capped) |
+| `project_file_read` | Read allowlisted text under a Creative Project root (size capped) |
 
 ### SafeAuto
 
@@ -46,7 +49,10 @@ RequiresConfirmation
 |------|----------|
 | `workspace_prepare` | Build a workspace card from registered data. No launch. |
 | `focus_start` | Open Pomodoro widget + start/show local timer. No launch. |
+| `focus_stop` | Stop the local Pomodoro / focus timer. No launch. |
 | `music_pause` | Pause current playback when supported. No launch. |
+| `widget_ensure` | Ensure a built-in widget is on the desktop (add if missing). |
+| `widget_arrange` | Arrange desktop widgets in a simple grid; optional ensure list first. |
 | `coding_environment_setup` | Composite: prepare Workspace, start Pomodoro, ensure Creative/Pomodoro/Workspace widgets, arrange desktop. No OS launch. |
 
 ### Suggest
@@ -74,6 +80,7 @@ RequiresConfirmation
 | `workspace_open_named` | Open Block item / My App / Creative Project by **name** |
 | `workspace_continue` | Open the prepared workspace's registered project. Apps are listed, not auto-launched. |
 | `todo_add` | Local todo. Not Google Tasks. |
+| `project_file_write` | Create/overwrite allowlisted text under a Creative Project root (relative path, size capped). Never deletes. |
 | `workspace_remove` / `files_delete` | Return Block item to Desktop or unregister. **Never OS `File.Delete`.** |
 
 ## Argument validation
@@ -81,6 +88,7 @@ RequiresConfirmation
 - JSON object only
 - Rejects path-like / scheme-like / command-line-looking strings
 - Bounded lengths
+- `project_file_*`: relative paths only (no `..`, no absolute/drive paths); allowlisted extensions; read/write capped at 64 KiB
 
 ## Music honesty
 
@@ -90,7 +98,7 @@ Connected integrations (Spotify, Google Calendar) are remembered in `settings/in
 
 ## Disk safety
 
-`files_delete` and `workspace_remove` never call OS `File.Delete` on user files. They return a hidden Block item to Desktop or unregister a Secret Base item. Unregistered disk paths are refused.
+`files_delete` and `workspace_remove` never call OS `File.Delete` on user files. They return a hidden Block item to Desktop or unregister a Secret Base item. Unregistered disk paths are refused. `project_file_write` may create/overwrite text only under a registered Creative Project `RootFolder`; it never deletes and never leaves that root.
 
 ## Multi-tool / multi-action
 

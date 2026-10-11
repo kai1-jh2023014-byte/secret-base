@@ -90,8 +90,26 @@ public static class AssistantConfirmationPolicy
             AssistantToolNames.WorkspaceContinue => "Continue the prepared workspace (open the matched project).",
             AssistantToolNames.TodoAdd => "Add this task to Secret Base Todo.",
             AssistantToolNames.CalendarAddEvent => LabelCalendarAdd(root),
+            AssistantToolNames.ProjectFileWrite => LabelProjectFileWrite(root),
             _ => "Run this Secret Base action."
         };
+    }
+
+    private static string LabelProjectFileWrite(JsonElement root)
+    {
+        AssistantToolArgumentValidator.TryGetRelativePath(root, "relative_path", required: false, out var path, out _);
+        AssistantToolArgumentValidator.TryGetString(root, "project_id", required: false, out var projectId, out _);
+        if (!string.IsNullOrWhiteSpace(path) && !string.IsNullOrWhiteSpace(projectId))
+        {
+            return $"Write '{path}' under project '{projectId}' (sandboxed Creative root).";
+        }
+
+        if (!string.IsNullOrWhiteSpace(path))
+        {
+            return $"Write '{path}' under the project root (sandboxed).";
+        }
+
+        return "Write a text file under a registered Creative Project root.";
     }
 
     private static string LabelCalendarAdd(JsonElement root)
