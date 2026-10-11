@@ -69,6 +69,9 @@ public sealed class AssistantTurnResult
     /// <summary>Host may arrange desktop widgets after ensuring types.</summary>
     public bool ShouldArrangeDesktop { get; init; }
 
+    /// <summary>Routing / provider call metrics for this turn (no secrets).</summary>
+    public AssistantRouteTrace? RouteTrace { get; init; }
+
     public static AssistantTurnResult Ok(
         string? text,
         IReadOnlyList<AssistantActivity>? activities = null,
@@ -85,7 +88,8 @@ public sealed class AssistantTurnResult
         bool shouldOpenCursorAtFolder = false,
         string? cursorFolderPath = null,
         string? ensureWidgetType = null,
-        bool shouldArrangeDesktop = false) =>
+        bool shouldArrangeDesktop = false,
+        AssistantRouteTrace? routeTrace = null) =>
         new()
         {
             Succeeded = true,
@@ -107,14 +111,16 @@ public sealed class AssistantTurnResult
             ShouldOpenCursorAtFolder = shouldOpenCursorAtFolder,
             CursorFolderPath = cursorFolderPath,
             EnsureWidgetType = ensureWidgetType,
-            ShouldArrangeDesktop = shouldArrangeDesktop
+            ShouldArrangeDesktop = shouldArrangeDesktop,
+            RouteTrace = routeTrace
         };
 
     public static AssistantTurnResult Confirm(
         AssistantPendingConfirmation pending,
         IReadOnlyList<AssistantActivity>? activities = null,
         AssistantPlan? plan = null,
-        AssistantIntentKind intent = AssistantIntentKind.ActionRequest) =>
+        AssistantIntentKind intent = AssistantIntentKind.ActionRequest,
+        AssistantRouteTrace? routeTrace = null) =>
         new()
         {
             Succeeded = true,
@@ -122,7 +128,8 @@ public sealed class AssistantTurnResult
             Intent = intent,
             Plan = plan,
             PendingConfirmation = pending,
-            Activities = activities ?? Array.Empty<AssistantActivity>()
+            Activities = activities ?? Array.Empty<AssistantActivity>(),
+            RouteTrace = routeTrace
         };
 
     public static AssistantTurnResult Fail(
@@ -132,7 +139,8 @@ public sealed class AssistantTurnResult
         AssistantPlan? plan = null,
         bool canRetry = false,
         string? retryUserText = null,
-        bool showOpenSettingsAction = false) =>
+        bool showOpenSettingsAction = false,
+        AssistantRouteTrace? routeTrace = null) =>
         new()
         {
             Succeeded = false,
@@ -143,7 +151,8 @@ public sealed class AssistantTurnResult
             Plan = plan,
             CanRetry = canRetry,
             RetryUserText = retryUserText,
-            ShowOpenSettingsAction = showOpenSettingsAction || needsConfiguration
+            ShowOpenSettingsAction = showOpenSettingsAction || needsConfiguration,
+            RouteTrace = routeTrace
         };
 }
 

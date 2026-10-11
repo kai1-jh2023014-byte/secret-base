@@ -34,6 +34,7 @@ public static class AssistantToolNames
     public const string MusicSearch = "music_search";
     public const string MusicGetState = "music_get_state";
     public const string MusicPlay = "music_play";
+    public const string MusicPause = "music_pause";
     public const string ProjectRecommend = "project_recommend";
     public const string ScheduleRecommend = "schedule_recommend";
     public const string MusicRecommend = "music_recommend";
@@ -45,6 +46,13 @@ public static class AssistantToolNames
     public const string TodoList = "todo_list";
     public const string TodoAdd = "todo_add";
     public const string FocusStart = "focus_start";
+    public const string FocusStop = "focus_stop";
+    public const string FocusGetState = "focus_get_state";
+    public const string WidgetEnsure = "widget_ensure";
+    public const string WidgetArrange = "widget_arrange";
+    public const string ProjectFileList = "project_file_list";
+    public const string ProjectFileRead = "project_file_read";
+    public const string ProjectFileWrite = "project_file_write";
     public const string CodingEnvironmentSetup = "coding_environment_setup";
     public const string FilesSuggestCleanup = "files_suggest_cleanup";
 }

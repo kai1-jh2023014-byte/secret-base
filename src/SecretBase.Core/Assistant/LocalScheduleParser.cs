@@ -49,6 +49,7 @@ public static partial class LocalScheduleParser
         }
 
         var cleaned = Normalize(text);
+        var dayOffset = DetectDayOffset(cleaned);
         var drafts = new List<(int Hour, int Minute, int? Duration, string Title)>();
 
         // Prefer explicit ranges: 22:00から23:00まで英語 / 22時から23時まで英語
@@ -175,11 +176,29 @@ public static partial class LocalScheduleParser
                 }
             }
 
-            list.Add(new LocalScheduleEvent(current.Title, current.Hour, current.Minute, duration));
+            list.Add(new LocalScheduleEvent(current.Title, current.Hour, current.Minute, duration, dayOffset));
         }
 
         events = list;
         return true;
+    }
+
+    /// <summary>0 = today, 1 = tomorrow. Unknown relative days stay 0.</summary>
+    public static int DetectDayOffset(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return 0;
+        }
+
+        if (text.Contains("明日", StringComparison.Ordinal)
+            || text.Contains("あした", StringComparison.Ordinal)
+            || text.Contains("tomorrow", StringComparison.OrdinalIgnoreCase))
+        {
+            return 1;
+        }
+
+        return 0;
     }
 
     /// <summary>Builds calendar_add_event arguments JSON (local destination + events[]).</summary>
@@ -200,6 +219,11 @@ public static partial class LocalScheduleParser
                 writer.WriteNumber("hour", ev.Hour);
                 writer.WriteNumber("minute", ev.Minute);
                 writer.WriteNumber("duration_minutes", ev.DurationMinutes);
+                if (ev.DayOffset > 0)
+                {
+                    writer.WriteNumber("day_offset", Math.Clamp(ev.DayOffset, 0, 14));
+                }
+
                 writer.WriteEndObject();
             }
 
@@ -217,11 +241,13 @@ public static partial class LocalScheduleParser
             return "Add events to today's local calendar.";
         }
 
+        var dayOffset = events[0].DayOffset;
+        var dayLabel = dayOffset <= 0 ? "today's" : dayOffset == 1 ? "tomorrow's" : $"day+{dayOffset}";
         var parts = events.Select(e =>
             e.Minute == 0
                 ? $"{e.Hour:00}:00 {e.Title}"
                 : $"{e.Hour:00}:{e.Minute:00} {e.Title}");
-        return $"Add {events.Count} event(s) to today's local calendar: {string.Join(", ", parts)}.";
+        return $"Add {events.Count} event(s) to {dayLabel} local calendar: {string.Join(", ", parts)}.";
     }
 
     private static bool TryReadClock(string hourText, string minuteText, out int hour, out int minute)
@@ -354,8 +380,13 @@ public static partial class LocalScheduleParser
     {
         var t = raw.Trim().Trim('、', ',', '・', ' ', '　');
         t = TrailingRequest().Replace(t, string.Empty).Trim();
-        // Strip leading connectors from「まで、英語」style captures.
+        // Strip leading connectors from「まで、英語」 / 「から英語」 style captures.
         t = t.TrimStart('、', ',', '・', ' ', '　');
+        if (t.StartsWith("から", StringComparison.Ordinal))
+        {
+            t = t[2..].Trim();
+        }
+
         t = t.Trim('を', 'に', 'へ', 'は', 'が');
         // Drop residual range words stuck to titles.
         t = t.Replace("まで", string.Empty, StringComparison.Ordinal).Trim();
@@ -398,5 +429,10 @@ public static partial class LocalScheduleParser
     private static partial Regex TrailingCalendarNoise();
 }
 
-/// <summary>One parsed local schedule slot.</summary>
-public readonly record struct LocalScheduleEvent(string Title, int Hour, int Minute, int DurationMinutes);
+/// <summary>One parsed local schedule slot. <see cref="DayOffset"/> is days ahead of local today.</summary>
+public readonly record struct LocalScheduleEvent(
+    string Title,
+    int Hour,
+    int Minute,
+    int DurationMinutes,
+    int DayOffset = 0);

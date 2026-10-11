@@ -5,8 +5,9 @@ namespace SecretBase.Core.Assistant;
 /// <summary>Validates tool JSON arguments. Rejects paths, schemes, and unknown tools.</summary>
 public static class AssistantToolArgumentValidator
 {
-    public const int MaxJsonLength = 4000;
+    public const int MaxJsonLength = 80_000;
     public const int MaxStringLength = 200;
+    public const int MaxContentLength = 64 * 1024;
 
     public static bool TryParseObject(string? json, out JsonElement root, out string error)
     {
@@ -103,4 +104,87 @@ public static class AssistantToolArgumentValidator
         || text.Contains('|')
         || text.Contains('&')
         || text.Contains(".exe ", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>Long UTF-8 content for project_file_write (bounded, not path-checked).</summary>
+    public static bool TryGetContent(JsonElement root, string name, bool required, out string value, out string error)
+    {
+        value = string.Empty;
+        error = string.Empty;
+        if (!root.TryGetProperty(name, out var el) || el.ValueKind == JsonValueKind.Null)
+        {
+            if (required)
+            {
+                error = $"Missing {name}.";
+                return false;
+            }
+
+            return true;
+        }
+
+        if (el.ValueKind != JsonValueKind.String)
+        {
+            error = $"{name} must be a string.";
+            return false;
+        }
+
+        value = el.GetString() ?? string.Empty;
+        if (value.Length > MaxContentLength)
+        {
+            error = $"{name} is too long.";
+            return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Relative project path (may contain <c>/</c>). Rejects absolute / traversal / schemes.
+    /// </summary>
+    public static bool TryGetRelativePath(
+        JsonElement root,
+        string name,
+        bool required,
+        out string value,
+        out string error)
+    {
+        value = string.Empty;
+        error = string.Empty;
+        if (!root.TryGetProperty(name, out var el) || el.ValueKind == JsonValueKind.Null)
+        {
+            if (required)
+            {
+                error = $"Missing {name}.";
+                return false;
+            }
+
+            return true;
+        }
+
+        if (el.ValueKind != JsonValueKind.String)
+        {
+            error = $"{name} must be a string.";
+            return false;
+        }
+
+        var text = (el.GetString() ?? string.Empty).Trim().Replace('\\', '/');
+        if (text.Length > MaxStringLength)
+        {
+            error = $"{name} is too long.";
+            return false;
+        }
+
+        if (text.Contains("://", StringComparison.Ordinal)
+            || text.Contains("..", StringComparison.Ordinal)
+            || text.StartsWith('/')
+            || (text.Length >= 2 && text[1] == ':')
+            || text.Contains('|')
+            || text.Contains('&'))
+        {
+            error = "Use a relative path under the project root.";
+            return false;
+        }
+
+        value = text;
+        return true;
+    }
 }

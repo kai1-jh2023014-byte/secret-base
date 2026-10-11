@@ -2070,7 +2070,10 @@ public sealed partial class DesktopPage : Page
             }
         }
 
-        // Arrange-widgets UI removed; AI desktop-arrange requests are ignored.
+        if (result.ShouldArrangeDesktop)
+        {
+            ArrangeDesktopWidgetsEvenly();
+        }
 
         if (result.ShouldOpenCursorAtFolder && !string.IsNullOrWhiteSpace(result.CursorFolderPath))
         {
@@ -2690,6 +2693,64 @@ public sealed partial class DesktopPage : Page
         {
             _logger?.Info("widget", $"Brought {type} widget to front (z={_frontZIndex}).");
         }
+    }
+
+    /// <summary>
+    /// Simple left-to-right / top-to-bottom grid for AI <c>widget_arrange</c>.
+    /// Does not move Blocks. Persists layout after moving WidgetFrames.
+    /// </summary>
+    private void ArrangeDesktopWidgetsEvenly()
+    {
+        if (_layout is null)
+        {
+            return;
+        }
+
+        var frames = WidgetCanvas.Children.OfType<WidgetFrame>().ToList();
+        if (frames.Count == 0)
+        {
+            return;
+        }
+
+        const double margin = 48;
+        const double gap = 24;
+        var maxWidth = WidgetCanvas.ActualWidth;
+        if (maxWidth < 200)
+        {
+            maxWidth = Math.Max(ActualWidth, 1200);
+        }
+
+        var x = margin;
+        var y = margin;
+        var rowHeight = 0.0;
+        foreach (var frame in frames)
+        {
+            var w = frame.Width > 0 ? frame.Width : 320;
+            var h = frame.Height > 0 ? frame.Height : 240;
+            if (x > margin && x + w + margin > maxWidth)
+            {
+                x = margin;
+                y += rowHeight + gap;
+                rowHeight = 0;
+            }
+
+            Canvas.SetLeft(frame, x);
+            Canvas.SetTop(frame, y);
+            var instance = _layout.Widgets.FirstOrDefault(w => w.Id == frame.WidgetId);
+            if (instance is not null)
+            {
+                instance.Position.X = x;
+                instance.Position.Y = y;
+            }
+
+            x += w + gap;
+            rowHeight = Math.Max(rowHeight, h);
+        }
+
+        PersistLayoutNow();
+        SyncInteractiveInputRegions();
+        ShowHostStatus($"Arranged {frames.Count} widget(s).");
+        _logger?.Info("widget", $"Arranged {frames.Count} widgets in a simple grid.");
     }
 
     private async Task ShowAddBlockDialogAsync()
