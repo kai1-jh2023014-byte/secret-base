@@ -53,7 +53,7 @@ Core has no Win32 / WinUI references.
 
 ## Security
 
-- Target must be an **absolute path** chosen by the user (drag/drop or future picker).
+- Target must be an **absolute path** chosen by the user (drag/drop or Block header **+** picker).
 - No command-line arguments, no PowerShell scripting, no admin elevation.
 - Launch via documented `ProcessStartInfo.UseShellExecute = true` only.
 - Forbidden: Explorer/WorkerW/Taskbar COM/shell injection/undocumented APIs.
@@ -61,11 +61,13 @@ Core has no Win32 / WinUI references.
 ## UX (V1)
 
 - Always-visible **+** button (bottom-left) opens Add Block dialog
-- Block header **Grid** button arranges icons evenly; also auto-arranges after drop / resize
-- Drop **Desktop files and shortcuts** (including Desktop `.exe`) → **moved** into `%LocalAppData%\SecretBase\block-items\` so the Desktop original is hidden
+- Block header **+** picks an `.lnk` / `.exe` / file into the Block (works when Explorer drop has no path)
+- Block header arrange button tidies icons; also auto-arranges after drop / resize
+- Drop **Desktop files and shortcuts** (including Desktop `.exe`) → **moved** into a per-Block folder under `%LocalAppData%\SecretBase\block-items\`
+- Async Explorer drops use a WinUI drop deferral so intake is not cancelled mid-flight
 - Right-click: **Open**, **Return to Desktop** (hidden items), or **Remove from Block** (linked items — original is not deleted). Deleting a Block restores hidden items first
 - Folders, `.app` bundles, and Program Files / Applications stay as path **links** only
-- Real shell icons via `IFileIconService`; click to launch; drag to fine-tune then **Grid** to re-even
+- Real shell icons via `IFileIconService`; click to launch; drag to fine-tune then arrange to re-even
 
 ## Shared with widgets
 

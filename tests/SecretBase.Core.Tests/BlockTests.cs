@@ -298,3 +298,79 @@ public class BlockModelTests
         Assert.Empty(layout.Blocks[1].Items);
     }
 }
+
+public class BlockItemAdderTests
+{
+    [Fact]
+    public void TryAppend_AddsLinkedApp_AndRejectsDuplicate()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "sb-adder-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var exe = Path.Combine(root, "Game.exe");
+            File.WriteAllText(exe, "mz");
+            var block = DefaultBlockFactory.Create("Apps");
+            var itemId = Guid.NewGuid();
+            var intake = new BlockItemAdder.IntakeSnapshot(
+                Succeeded: true,
+                TargetPath: exe,
+                MovedFromSource: false,
+                ErrorMessage: null,
+                DesktopOriginPath: null);
+
+            Assert.True(BlockItemAdder.TryAppend(
+                block,
+                exe,
+                sourceIsDirectory: false,
+                itemId,
+                intake,
+                out var item,
+                out var error,
+                out var duplicate));
+            Assert.False(duplicate);
+            Assert.Equal(string.Empty, error);
+            Assert.NotNull(item);
+            Assert.Single(block.Items);
+            Assert.Equal("Game.exe", item!.Name);
+
+            Assert.False(BlockItemAdder.TryAppend(
+                block,
+                exe,
+                sourceIsDirectory: false,
+                Guid.NewGuid(),
+                intake,
+                out _,
+                out error,
+                out duplicate));
+            Assert.True(duplicate);
+            Assert.Contains("already", error, StringComparison.OrdinalIgnoreCase);
+            Assert.Single(block.Items);
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public void TryAppend_FailsWhenIntakeDidNotSucceed()
+    {
+        var block = DefaultBlockFactory.Create("Apps");
+        var path = Path.Combine(Path.GetTempPath(), "missing-app.exe");
+        Assert.False(BlockItemAdder.TryAppend(
+            block,
+            path,
+            sourceIsDirectory: false,
+            Guid.NewGuid(),
+            new BlockItemAdder.IntakeSnapshot(false, null, false, "Source file was not found.", null),
+            out _,
+            out var error,
+            out _));
+        Assert.Contains("not found", error, StringComparison.OrdinalIgnoreCase);
+        Assert.Empty(block.Items);
+    }
+}

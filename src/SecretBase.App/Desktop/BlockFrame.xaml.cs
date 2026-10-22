@@ -43,6 +43,7 @@ public sealed partial class BlockFrame : UserControl
     private BlockItem? _activeItem;
     private FrameworkElement? _activeTile;
     private Button StyleButton = null!;
+    private Button AddButton = null!;
     private readonly BlockItemPointerGesture _itemGesture = new();
     private readonly TargetLaunchCoalescer _launchCoalescer = new();
     private Point _itemLastPoint;
@@ -77,7 +78,7 @@ public sealed partial class BlockFrame : UserControl
         _onStatus = onStatus;
 
         // Built in code (not XAML) so the WinUI markup compiler cannot NRE on new chrome.
-        InsertStyleButton();
+        InsertHeaderActionButtons();
 
         Width = block.Size.Width;
         Height = block.Size.Height;
@@ -99,7 +100,7 @@ public sealed partial class BlockFrame : UserControl
     private const double HeaderIconButtonSize = 20;
     private const double HeaderIconScale = 0.62;
 
-    private void InsertStyleButton()
+    private void InsertHeaderActionButtons()
     {
         StyleButton = new Button
         {
@@ -110,12 +111,24 @@ public sealed partial class BlockFrame : UserControl
         StyleButton.Click += StyleButton_Click;
         ToolTipService.SetToolTip(StyleButton, "Icon style: white silhouette / fashion rail");
 
-        // Name | Style | Arrange | Del — compact white silhouette icons.
+        AddButton = new Button
+        {
+            Content = CreateCompactHeaderIcon(Symbol.Add),
+            Margin = new Thickness(0, 0, 2, 0)
+        };
+        SizeHeaderIconButton(AddButton);
+        AddButton.Click += AddButton_Click;
+        ToolTipService.SetToolTip(AddButton, "Add app / shortcut / file to this Block");
+
+        // Name | Style | Add | Arrange | Del — compact white silhouette icons.
         HeaderRow.ColumnDefinitions.Insert(1, new ColumnDefinition { Width = GridLength.Auto });
-        Grid.SetColumn(ArrangeButton, 2);
-        Grid.SetColumn(DeleteButton, 3);
+        HeaderRow.ColumnDefinitions.Insert(2, new ColumnDefinition { Width = GridLength.Auto });
         Grid.SetColumn(StyleButton, 1);
+        Grid.SetColumn(AddButton, 2);
+        Grid.SetColumn(ArrangeButton, 3);
+        Grid.SetColumn(DeleteButton, 4);
         HeaderRow.Children.Insert(1, StyleButton);
+        HeaderRow.Children.Insert(2, AddButton);
         SizeHeaderIconButton(ArrangeButton);
         SizeHeaderIconButton(DeleteButton);
     }
@@ -176,15 +189,19 @@ public sealed partial class BlockFrame : UserControl
         WidgetSurfaceStyle.ApplyIconButton(DeleteButton, theme);
         WidgetSurfaceStyle.ApplyIconButton(ArrangeButton, theme);
         WidgetSurfaceStyle.ApplyIconButton(StyleButton, theme);
+        WidgetSurfaceStyle.ApplyIconButton(AddButton, theme);
         // ApplyIconButton pads for shelf chips — keep Block header chrome compact.
         SizeHeaderIconButton(DeleteButton);
         SizeHeaderIconButton(ArrangeButton);
         SizeHeaderIconButton(StyleButton);
+        SizeHeaderIconButton(AddButton);
         StyleButton.Content = CreateCompactHeaderIcon(
             BlockIconStyle.IsSilhouette(_block.IconStyle) ? Symbol.OutlineStar : Symbol.Pictures);
+        AddButton.Content = CreateCompactHeaderIcon(Symbol.Add);
         ArrangeButton.Content = CreateCompactHeaderIcon(rail ? Symbol.List : Symbol.ViewAll);
         DeleteButton.Content = CreateCompactHeaderIcon(Symbol.Delete);
         TintHeaderIcon(StyleButton, theme, 0.9);
+        TintHeaderIcon(AddButton, theme, 0.9);
         TintHeaderIcon(ArrangeButton, theme, 0.9);
         TintHeaderIcon(DeleteButton, theme, 0.9);
         ToolTipService.SetToolTip(
@@ -192,6 +209,7 @@ public sealed partial class BlockFrame : UserControl
             BlockIconStyle.IsSilhouette(_block.IconStyle)
                 ? "White silhouette icons — change style / layout"
                 : "Color icons — change style / layout");
+        ToolTipService.SetToolTip(AddButton, "Add app / shortcut / file to this Block");
         ToolTipService.SetToolTip(
             ArrangeButton,
             rail ? "Fashion rail — arrange icons" : "Grid layout — arrange icons evenly");
@@ -1265,14 +1283,70 @@ public sealed partial class BlockFrame : UserControl
     private void DeleteButton_Click(object sender, RoutedEventArgs e) =>
         _onDeleteRequested(_block);
 
-    private void Root_DragOver(object sender, DragEventArgs e)
+    private async void AddButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_pathPicker is null)
+        {
+            _onStatus?.Invoke("File picker is unavailable.");
+            return;
+        }
+
+        PathPickResult pick;
+        using (_dialogInput?.Enter())
+        {
+            pick = await _pathPicker.PickFileAsync();
+        }
+
+        if (pick.Cancelled)
+        {
+            return;
+        }
+
+        if (!pick.Succeeded || string.IsNullOrWhiteSpace(pick.Path))
+        {
+            _onStatus?.Invoke(pick.ErrorMessage ?? "Could not pick a file.");
+            return;
+        }
+
+        var added = TryAddAbsolutePath(pick.Path, Directory.Exists(pick.Path), out var moved, out var error);
+        if (!added)
+        {
+            _onStatus?.Invoke(error);
+            return;
+        }
+
+        RefreshItems(arrangeIfNeeded: true);
+        _onLayoutCommitted();
+        _onBoundsChanged?.Invoke();
+        if (moved)
+        {
+            var folder = _intake.EnsureBlockFolder(_block.Id, _block.Name);
+            _onStatus?.Invoke($"Moved into Block folder:\n{folder}");
+        }
+        else
+        {
+            _onStatus?.Invoke($"Added to '{_block.Name}'.");
+        }
+    }
+
+    private void Root_DragEnter(object sender, DragEventArgs e)
+    {
+        // Explorer drags often skip PointerEntered — force hit-testable glass while hovering a drop.
+        SetChromeEmphasis(emphasized: true);
+        AcceptStorageDrop(e);
+    }
+
+    private void Root_DragOver(object sender, DragEventArgs e) => AcceptStorageDrop(e);
+
+    private static void AcceptStorageDrop(DragEventArgs e)
     {
         if (e.DataView.Contains(StandardDataFormats.StorageItems))
         {
             // Prefer Move so Explorer can remove Desktop shortcuts after a successful intake move.
             e.AcceptedOperation = DataPackageOperation.Move | DataPackageOperation.Copy;
-            e.DragUIOverride.Caption = "Move into Block";
+            e.DragUIOverride.Caption = "Add to Block";
             e.DragUIOverride.IsCaptionVisible = true;
+            e.Handled = true;
         }
         else
         {
@@ -1287,105 +1361,134 @@ public sealed partial class BlockFrame : UserControl
             return;
         }
 
-        IReadOnlyList<IStorageItem> items;
+        // WinUI requires a deferral for async Drop work; without it GetStorageItemsAsync
+        // often returns empty / fails and the app never appears in the Block.
+        var deferral = e.GetDeferral();
+        var preferredOp = DataPackageOperation.Copy;
         try
         {
-            items = await e.DataView.GetStorageItemsAsync();
-        }
-        catch (Exception ex)
-        {
-            _onStatus?.Invoke(ex.Message);
-            return;
-        }
-
-        var added = 0;
-        var moved = 0;
-        foreach (var storageItem in items)
-        {
-            var path = storageItem.Path;
-            if (string.IsNullOrWhiteSpace(path))
+            IReadOnlyList<IStorageItem> items;
+            try
             {
-                continue;
+                items = await e.DataView.GetStorageItemsAsync();
+            }
+            catch (Exception ex)
+            {
+                _onStatus?.Invoke(ex.Message);
+                return;
             }
 
-            var isDirectory = storageItem is StorageFolder;
-            var type = BlockTargetValidator.InferType(path, isDirectory);
-            if (!BlockTargetValidator.TryValidate(path, type, out var normalized, out var error))
+            if (items.Count == 0)
             {
-                _onStatus?.Invoke(error);
-                continue;
+                _onStatus?.Invoke("Nothing was dropped. Use + to pick an app instead.");
+                return;
             }
 
-            var itemId = Guid.NewGuid();
-            var intake = _intake.TryIntake(normalized, _block.Id, itemId, _block.Name);
-            if (!intake.Succeeded || string.IsNullOrWhiteSpace(intake.TargetPath))
+            var added = 0;
+            var moved = 0;
+            var skippedEmptyPath = 0;
+            string? lastError = null;
+            foreach (var storageItem in items)
             {
-                _onStatus?.Invoke(intake.ErrorMessage ?? "Could not add item.");
-                continue;
+                var path = storageItem.Path;
+                if (string.IsNullOrWhiteSpace(path))
+                {
+                    skippedEmptyPath++;
+                    continue;
+                }
+
+                if (TryAddAbsolutePath(path, storageItem is StorageFolder, out var itemMoved, out var error))
+                {
+                    added++;
+                    if (itemMoved)
+                    {
+                        moved++;
+                    }
+                }
+                else
+                {
+                    lastError = error;
+                }
             }
 
-            if (!BlockTargetValidator.TryValidate(intake.TargetPath, type, out var target, out var targetError))
+            if (added > 0)
             {
-                _onStatus?.Invoke(targetError);
-                continue;
+                preferredOp = moved > 0 ? DataPackageOperation.Move : DataPackageOperation.Copy;
+                RefreshItems(arrangeIfNeeded: true);
+                _onLayoutCommitted();
+                _onBoundsChanged?.Invoke();
+                if (moved > 0)
+                {
+                    var folder = _intake.EnsureBlockFolder(_block.Id, _block.Name);
+                    _onStatus?.Invoke(
+                        $"Moved {moved} item(s) into Block folder:\n{folder}");
+                }
+                else
+                {
+                    _onStatus?.Invoke($"Linked {added} item(s) into '{_block.Name}'.");
+                }
             }
-
-            if (_block.Items.Any(i => string.Equals(i.Target, target, StringComparison.OrdinalIgnoreCase)))
+            else if (skippedEmptyPath > 0)
             {
-                continue;
-            }
-
-            // Re-infer type from final target (moved .lnk stays Shortcut).
-            type = BlockTargetValidator.InferType(target, Directory.Exists(target));
-            var item = new BlockItem
-            {
-                Id = itemId,
-                Name = BlockTargetValidator.InferDisplayName(
-                    intake.MovedFromSource ? normalized : target),
-                Type = type,
-                Target = target,
-                Icon = string.Empty,
-                DesktopOriginPath = intake.DesktopOriginPath,
-                HiddenFromDesktop = intake.MovedFromSource,
-                X = -1,
-                Y = -1
-            };
-
-            // Preserve friendly name from original Desktop shortcut file name.
-            if (intake.MovedFromSource)
-            {
-                item.Name = BlockTargetValidator.InferDisplayName(normalized);
-            }
-
-            _block.Items.Add(item);
-            added++;
-            if (intake.MovedFromSource)
-            {
-                moved++;
-            }
-            else if (!string.IsNullOrWhiteSpace(intake.ErrorMessage))
-            {
-                _onStatus?.Invoke(intake.ErrorMessage);
-            }
-        }
-
-        if (added > 0)
-        {
-            e.AcceptedOperation = moved > 0 ? DataPackageOperation.Move : DataPackageOperation.Copy;
-            RefreshItems(arrangeIfNeeded: true);
-            _onLayoutCommitted();
-            _onBoundsChanged?.Invoke();
-            if (moved > 0)
-            {
-                var folder = _intake.EnsureBlockFolder(_block.Id, _block.Name);
                 _onStatus?.Invoke(
-                    $"Moved {moved} item(s) into Block folder:\n{folder}");
+                    "That shortcut has no file path (Start Menu / Store apps). Use + to pick an .exe or Desktop .lnk.");
+            }
+            else if (!string.IsNullOrWhiteSpace(lastError))
+            {
+                _onStatus?.Invoke(lastError);
             }
             else
             {
-                _onStatus?.Invoke($"Linked {added} item(s) into '{_block.Name}'.");
+                _onStatus?.Invoke("Could not add the dropped item.");
             }
         }
+        finally
+        {
+            try
+            {
+                e.AcceptedOperation = preferredOp;
+            }
+            catch
+            {
+                // DragEventArgs may already be invalid after async — intake already applied.
+            }
+
+            deferral.Complete();
+        }
+    }
+
+    /// <summary>Intake + append one absolute path into this Block. Returns false on validation/intake failure.</summary>
+    private bool TryAddAbsolutePath(string path, bool isDirectory, out bool movedFromSource, out string error)
+    {
+        movedFromSource = false;
+        var itemId = Guid.NewGuid();
+        var type = BlockTargetValidator.InferType(path, isDirectory);
+        if (!BlockTargetValidator.TryValidate(path, type, out var normalized, out error))
+        {
+            return false;
+        }
+
+        var intake = _intake.TryIntake(normalized, _block.Id, itemId, _block.Name);
+        var ok = BlockItemAdder.TryAppend(
+            _block,
+            normalized,
+            isDirectory,
+            itemId,
+            new BlockItemAdder.IntakeSnapshot(
+                intake.Succeeded,
+                intake.TargetPath,
+                intake.MovedFromSource,
+                intake.ErrorMessage,
+                intake.DesktopOriginPath),
+            out _,
+            out error,
+            out _);
+        if (ok)
+        {
+            movedFromSource = intake.MovedFromSource;
+        }
+
+        return ok;
     }
 
     private void ClampToParentCanvas(ref double x, ref double y, double width, double height)
