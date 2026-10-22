@@ -7,14 +7,19 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     Background="Transparent"
     AllowDrop="True"
+    DragEnter="Root_DragEnter"
     DragOver="Root_DragOver"
     Drop="Root_Drop"
     mc:Ignorable="d">
 
-    <!-- Desktop "room": drag / resize chrome + movable item canvas. -->
+    <!-- Desktop "room": move / resize chrome + movable item icons + drop / pick intake. -->
     <Grid
         x:Name="RootGrid"
         Background="Transparent"
+        AllowDrop="True"
+        DragEnter="Root_DragEnter"
+        DragOver="Root_DragOver"
+        Drop="Root_Drop"
         PointerEntered="RootGrid_PointerEntered"
         PointerExited="RootGrid_PointerExited">
         <Grid.RowDefinitions>
@@ -45,7 +50,12 @@
             x:Name="Surface"
             Grid.Row="1"
             Padding="8,4,8,8"
-            CornerRadius="0,0,14,14">
+            CornerRadius="0,0,14,14"
+            Background="Transparent"
+            AllowDrop="True"
+            DragEnter="Root_DragEnter"
+            DragOver="Root_DragOver"
+            Drop="Root_Drop">
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
@@ -113,13 +123,14 @@
                     Grid.Row="1"
                     Background="Transparent"
                     AllowDrop="True"
+                    DragEnter="Root_DragEnter"
                     DragOver="Root_DragOver"
                     Drop="Root_Drop" />
 
                 <TextBlock
                     x:Name="EmptyHint"
                     Grid.Row="1"
-                    Text="Drop Desktop shortcuts here (moved in). Use Arrange to tidy icons."
+                    Text="Drop a Desktop shortcut here, or tap + to pick an app."
                     FontSize="12"
                     Opacity="0.65"
                     HorizontalAlignment="Center"

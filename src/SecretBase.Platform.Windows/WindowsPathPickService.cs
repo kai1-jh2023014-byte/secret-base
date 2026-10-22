@@ -25,7 +25,14 @@ public sealed class WindowsPathPickService : IPathPickService
             var picker = new FileOpenPicker();
             InitializeWithWindow.Initialize(picker, _hwnd);
             picker.ViewMode = PickerViewMode.List;
-            picker.SuggestedStartLocation = PickerLocationId.DocumentsLibrary;
+            picker.SuggestedStartLocation = PickerLocationId.ComputerFolder;
+            // Explicit filters first — "*" alone is unreliable for .lnk/.exe on some Windows builds.
+            picker.FileTypeFilter.Add(".lnk");
+            picker.FileTypeFilter.Add(".exe");
+            picker.FileTypeFilter.Add(".url");
+            picker.FileTypeFilter.Add(".bat");
+            picker.FileTypeFilter.Add(".cmd");
+            picker.FileTypeFilter.Add(".com");
             picker.FileTypeFilter.Add("*");
 
             var file = await picker.PickSingleFileAsync();
@@ -37,7 +44,12 @@ public sealed class WindowsPathPickService : IPathPickService
             var path = file.Path;
             if (string.IsNullOrWhiteSpace(path))
             {
-                return new PathPickResult(false, false, null, false, "Selected file has no path.");
+                return new PathPickResult(
+                    false,
+                    false,
+                    null,
+                    false,
+                    "Selected item has no file path. Pick a Desktop .lnk or .exe instead of a Start Menu / Store app.");
             }
 
             return new PathPickResult(true, false, path, false, null);
